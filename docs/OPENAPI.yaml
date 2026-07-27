@@ -287,15 +287,14 @@ paths:
     get:
       tags: [members]
       summary: Listar miembros de mi organización (members.read)
-      parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: Éxito
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MemberPage" }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
     post:
       tags: [members]
       summary: Invitar un miembro (members.invite)
@@ -379,15 +378,14 @@ paths:
     get:
       tags: [installations]
       summary: Listar instalaciones (con alcance aplicado, PERMISSIONS.md sección 2)
-      parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: Éxito
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/InstallationPage" }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Installation" }
     post:
       tags: [installations]
       summary: Crear instalación
@@ -514,15 +512,14 @@ paths:
   /gateways:
     get:
       tags: [gateways]
-      parameters:
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: Éxito
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GatewayPage" }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Gateway" }
     post:
       tags: [gateways]
       summary: Pre-registrar un gateway (concentrador LoRa o estación directa, ADR-0004)
@@ -784,14 +781,14 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [open, acknowledged, resolved] }
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: Éxito
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AlertPage" }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Alert" }
 
   /alerts/{alertId}/acknowledge:
     post:
@@ -970,14 +967,6 @@ components:
       required: true
       schema: { type: string, format: uuid }
       description: Identificador de la ruta (nombre real varía por endpoint, p. ej. installationId, gatewayId)
-    Page:
-      name: page
-      in: query
-      schema: { type: integer, minimum: 1, default: 1 }
-    PageSize:
-      name: pageSize
-      in: query
-      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
     Cursor:
       name: cursor
       in: query
@@ -1135,12 +1124,6 @@ components:
         email: { type: string, format: email }
         roleCode: { type: string, enum: [org_admin, technician, operator, read_only] }
 
-    MemberPage:
-      type: object
-      properties:
-        data: { type: array, items: { $ref: "#/components/schemas/Member" } }
-        meta: { $ref: "#/components/schemas/PageMeta" }
-
     Installation:
       type: object
       properties:
@@ -1159,12 +1142,6 @@ components:
         locationText: { type: string, nullable: true }
         latitude: { type: number, nullable: true }
         longitude: { type: number, nullable: true }
-
-    InstallationPage:
-      type: object
-      properties:
-        data: { type: array, items: { $ref: "#/components/schemas/Installation" } }
-        meta: { $ref: "#/components/schemas/PageMeta" }
 
     Zone:
       type: object
@@ -1210,12 +1187,6 @@ components:
             credentialSecret:
               type: string
               description: Solo se devuelve en esta respuesta (API_DESIGN.md sección 7)
-
-    GatewayPage:
-      type: object
-      properties:
-        data: { type: array, items: { $ref: "#/components/schemas/Gateway" } }
-        meta: { $ref: "#/components/schemas/PageMeta" }
 
     Device:
       type: object
@@ -1303,12 +1274,6 @@ components:
         deviceName: { type: string, nullable: true, description: "Solo presente si alertType=offline y la causa es un dispositivo." }
         gatewayName: { type: string, nullable: true, description: "Solo presente si alertType=offline y la causa es un gateway." }
 
-    AlertPage:
-      type: object
-      properties:
-        data: { type: array, items: { $ref: "#/components/schemas/Alert" } }
-        meta: { $ref: "#/components/schemas/PageMeta" }
-
     AuditLogEntry:
       type: object
       properties:
@@ -1334,13 +1299,6 @@ components:
         name: { type: string }
         contactEmail: { type: string, format: email }
         firstAdminEmail: { type: string, format: email }
-
-    PageMeta:
-      type: object
-      properties:
-        page: { type: integer }
-        pageSize: { type: integer }
-        total: { type: integer }
 
     CursorMeta:
       type: object
