@@ -58,6 +58,17 @@ class DirectoryScreen extends ConsumerWidget {
                           .map((z) => ListTile(
                                 title: Text(z.name),
                                 subtitle: z.zoneType != null ? Text(z.zoneType!) : null,
+                                trailing: canManage
+                                    ? PopupMenuButton<String>(
+                                        onSelected: (action) => action == 'edit'
+                                            ? _showEditZoneDialog(context, ref, z)
+                                            : _confirmDeleteZone(context, ref, z),
+                                        itemBuilder: (context) => const [
+                                          PopupMenuItem(value: 'edit', child: Text('Editar')),
+                                          PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+                                        ],
+                                      )
+                                    : null,
                               ))
                           .toList(),
                     ),
@@ -177,6 +188,85 @@ class DirectoryScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _showEditZoneDialog(BuildContext context, WidgetRef ref, Zone zone) async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: zone.name);
+    final zoneTypeController = TextEditingController(text: zone.zoneType ?? '');
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar zona'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+              ),
+              TextFormField(
+                controller: zoneTypeController,
+                decoration: const InputDecoration(labelText: 'Tipo (opcional)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await ref.read(directoryApiProvider).updateZone(
+                      zone.id,
+                      name: nameController.text.trim(),
+                      zoneType: zoneTypeController.text.trim(),
+                    );
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('No se pudo guardar la zona.\n$error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      ref.invalidate(zonesForInstallationProvider(installationId));
+    }
+  }
+
+  Future<void> _confirmDeleteZone(BuildContext context, WidgetRef ref, Zone zone) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Eliminar zona',
+      message: '¿Seguro que quieres eliminar "${zone.name}"? Esta acción es una baja lógica.',
+    );
+    if (!confirmed) return;
+    try {
+      await ref.read(directoryApiProvider).deleteZone(zone.id);
+      ref.invalidate(zonesForInstallationProvider(installationId));
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo eliminar la zona.\n$error')),
+        );
+      }
+    }
+  }
+
   Future<void> _showCreateGatewayDialog(BuildContext context, WidgetRef ref) async {
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController();
@@ -248,6 +338,33 @@ class DirectoryScreen extends ConsumerWidget {
       if (context.mounted) await showGatewayCredentialDialog(context, credential);
     }
   }
+}
+
+/// Confirmación genérica antes de una baja/deshabilitación — compartida
+/// entre zona/gateway/dispositivo/sensor.
+Future<bool> showConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Confirmar'),
+        ),
+      ],
+    ),
+  );
+  return confirmed ?? false;
 }
 
 /// Muestra la credencial una única vez (SECURITY.md §6) — no se puede

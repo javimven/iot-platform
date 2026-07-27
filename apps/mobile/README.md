@@ -7,10 +7,10 @@ Arquitectura de procesos y auth: [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 Login (con selección de organización si aplica) → lista de instalaciones →
 última lectura de cada canal → gráfica histórica (24h/7d/30d) → alertas
 (filtro por estado, reconocer/resolver) → **Directorio IoT completo**:
-instalación → zonas + gateways (alta de ambos) → dispositivos (alta) →
-sensores (alta) → canales (edición de umbral). Gateway muestra su
-credencial una única vez al crearlo o rotarlo (no se puede recuperar
-después).
+instalación → zonas (alta/edición/baja) + gateways (alta/edición/
+deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
+baja) → canales (edición de umbral). Gateway muestra su credencial una
+única vez al crearlo o rotarlo (no se puede recuperar después).
 
 Botones de alta/edición solo se muestran si el rol lo permitiría
 (`org_admin`/`technician`) — es una pista de UI, el control de acceso real
@@ -85,11 +85,13 @@ lib/
   necesite ADR — es una librería de UI, no de arquitectura); puro Dart,
   sin dependencias nativas, mantenida activamente, funciona igual en
   web/Android/iOS.
-- **Directorio IoT: alta de zona/gateway/dispositivo/sensor y edición de
-  umbral de canal, pero sin edición/baja de zona/gateway/dispositivo/
-  sensor todavía** — ese resto (editar nombre, deshabilitar, baja lógica)
-  es un paso más pequeño y se deja para cuando haga falta, no bloquea el
-  flujo principal de alta de una instalación nueva.
+- **Directorio IoT completo salvo reasignar zona de un dispositivo desde
+  la app**: el backend sí lo permite (`DeviceUpdateDto.zoneId`), pero
+  requeriría que esta pantalla conociera la instalación del dispositivo
+  (hoy solo se llega por `deviceId`) para poder ofrecer el desplegable de
+  zonas — se deja para cuando haga falta, no bloquea el flujo principal de
+  alta de una instalación nueva. Sensor no tiene edición en el backend
+  (solo alta/baja), por eso tampoco la tiene aquí.
 - **`GET /gateways` no filtra por instalación** (backend, `BACKLOG.md` #13,
   resuelto documentando la realidad en vez de paginar): `DirectoryApi.
   gatewaysForInstallation` pide todos los gateways de la organización y

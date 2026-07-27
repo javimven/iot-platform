@@ -19,6 +19,17 @@ class DirectoryApi {
     return Zone.fromJson(json);
   }
 
+  Future<Zone> updateZone(String id, {required String name, String? zoneType}) async {
+    final json = await _client.patchJson(
+      '/zones/$id',
+      body: {'name': name, if (zoneType != null && zoneType.isNotEmpty) 'zoneType': zoneType},
+    );
+    return Zone.fromJson(json);
+  }
+
+  /// Baja lógica (FUNCTIONAL_REQUIREMENTS.md §4) — no física.
+  Future<void> deleteZone(String id) => _client.delete('/zones/$id');
+
   /// `GET /gateways` no acepta filtro por instalación (backend, gap conocido
   /// — ver BACKLOG.md #13 sobre paginación/filtrado de listados); se filtra
   /// aquí porque a esta escala (≤500 dispositivos, NON_FUNCTIONAL_REQUIREMENTS.md
@@ -58,6 +69,15 @@ class DirectoryApi {
     return GatewayCredential.fromJson(json);
   }
 
+  Future<Gateway> updateGateway(String id, {required String name}) async {
+    final json = await _client.patchJson('/gateways/$id', body: {'name': name});
+    return Gateway.fromJson(json);
+  }
+
+  /// No es baja lógica ni física — pasa a `status: disabled` (deja de
+  /// aceptar tráfico MQTT) pero permanece visible (DATA_MODEL.md §4).
+  Future<void> disableGateway(String id) => _client.delete('/gateways/$id');
+
   Future<List<Device>> devicesForGateway(String gatewayId) async {
     final list = await _client.getJsonList('/gateways/$gatewayId/devices');
     return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
@@ -81,6 +101,17 @@ class DirectoryApi {
     return Device.fromJson(json);
   }
 
+  /// Reasignar de zona no está expuesto todavía en la UI (requeriría
+  /// conocer la instalación del dispositivo desde esta pantalla) — el
+  /// backend sí lo permite (`DeviceUpdateDto.zoneId`), solo se envía `name`.
+  Future<Device> updateDevice(String id, {required String name}) async {
+    final json = await _client.patchJson('/devices/$id', body: {'name': name});
+    return Device.fromJson(json);
+  }
+
+  /// Deshabilitar, no borrar — mismo criterio que `disableGateway`.
+  Future<void> disableDevice(String id) => _client.delete('/devices/$id');
+
   Future<List<Sensor>> sensorsForDevice(String deviceId) async {
     final list = await _client.getJsonList('/devices/$deviceId/sensors');
     return list.map((e) => Sensor.fromJson(e as Map<String, dynamic>)).toList();
@@ -103,6 +134,10 @@ class DirectoryApi {
     );
     return Sensor.fromJson(json);
   }
+
+  /// Baja lógica — no hay edición de sensor en el backend (solo
+  /// alta/baja), a diferencia de zona/gateway/dispositivo.
+  Future<void> deleteSensor(String id) => _client.delete('/sensors/$id');
 
   Future<List<Channel>> channelsForSensor(String sensorId) async {
     final list = await _client.getJsonList('/sensors/$sensorId/channels');
