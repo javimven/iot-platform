@@ -47,4 +47,23 @@ void main() {
       expect(channel.alertThresholdMax, isNull);
     });
   });
+
+  group('GatewayCredential.fromJson', () {
+    test('parsea la credencial devuelta al crear o rotar un gateway', () {
+      final credential = GatewayCredential.fromJson({
+        'id': 'gw-1',
+        'installationId': 'inst-1',
+        'name': 'Gateway Norte',
+        'connectivityType': 'lora_concentrator',
+        'status': 'not_provisioned',
+        'lastSeenAt': null,
+        'credentialUsername': 'gw-abc123',
+        'credentialSecret': 'super-secret-value',
+      });
+
+      expect(credential.gateway.name, 'Gateway Norte');
+      expect(credential.credentialUsername, 'gw-abc123');
+      expect(credential.credentialSecret, 'super-secret-value');
+    });
+  });
 }

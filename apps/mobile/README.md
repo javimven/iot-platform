@@ -6,15 +6,18 @@ Arquitectura de procesos y auth: [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 ## Estado
 Login (con selección de organización si aplica) → lista de instalaciones →
 última lectura de cada canal → gráfica histórica (24h/7d/30d) → alertas
-(filtro por estado, reconocer/resolver) → **Directorio IoT de solo
-lectura**: instalación → zonas + gateways → dispositivos → sensores →
-canales (con su umbral de alerta configurado, si tiene uno propio).
+(filtro por estado, reconocer/resolver) → **Directorio IoT completo**:
+instalación → zonas + gateways (alta de ambos) → dispositivos (alta) →
+sensores (alta) → canales (edición de umbral). Gateway muestra su
+credencial una única vez al crearlo o rotarlo (no se puede recuperar
+después).
 
-**Alta/edición/baja desde la app quedan para un siguiente paso** — esta
-etapa es explícitamente de solo lectura (ver "Decisiones de esta etapa").
+Botones de alta/edición solo se muestran si el rol lo permitiría
+(`org_admin`/`technician`) — es una pista de UI, el control de acceso real
+lo sigue haciendo el backend (`RequirePermission`), nunca el cliente.
 
 **Validado** (2026-07-27, Flutter 3.44.8 estable): el SDK está instalado en
-este entorno; `flutter analyze` sin incidencias, `flutter test` (11/11 en
+este entorno; `flutter analyze` sin incidencias, `flutter test` (12/12 en
 verde) y `flutter build web` compilan. iOS solo se puede **compilar** de
 verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`, no
 compilado ni ejecutado.
@@ -25,8 +28,8 @@ fallado en producción):
 - `GET /installations` devuelve un array plano, no el sobre `{data, meta}`
   que `installations_api.dart` esperaba — habría lanzado un `TypeError` en
   tiempo de ejecución la primera vez que alguien abriera la lista de
-  instalaciones. Ver `API_DESIGN.md` §5 para el detalle (paginación
-  documentada pero no implementada en ningún listado salvo auditoría).
+  instalaciones. `API_DESIGN.md` §5/`OPENAPI.yaml` ya corregidos para
+  documentar el array plano real (`BACKLOG.md` #13).
 - `GET /installations/:id/latest-readings` no devolvía `channelTypeCode`
   pese a que `OPENAPI.yaml` lo documenta y el cliente ya lo esperaba —
   cada lectura se habría mostrado sin etiqueta. Corregido en
@@ -64,8 +67,8 @@ lib/
     installations/   Listado y detalle de instalación (últimas lecturas)
     alerts/          Lista de alertas, filtro por estado, reconocer/resolver
     readings/        Gráfica histórica de un canal + etiquetas del catálogo
-    directory/       Directorio IoT de solo lectura: zonas/gateways/
-                     dispositivos/sensores/canales (umbral incluido)
+    directory/       Directorio IoT completo: zonas/gateways/dispositivos/
+                     sensores (alta) + canales (edición de umbral)
 ```
 
 ## Decisiones de esta etapa
@@ -82,15 +85,18 @@ lib/
   necesite ADR — es una librería de UI, no de arquitectura); puro Dart,
   sin dependencias nativas, mantenida activamente, funciona igual en
   web/Android/iOS.
-- **Directorio IoT deliberadamente solo lectura en esta etapa**: alta de
-  zona/gateway/dispositivo/sensor, edición y baja, y edición de umbral de
-  canal, son formularios adicionales (5 entidades × crear/editar/borrar)
-  que se tratan como un paso propio en vez de mezclarlos con la vista de
-  solo lectura — mismo criterio de "una función completa y acotada por
-  commit" que Alertas/Gráficas.
-- **`GET /gateways` no filtra por instalación** (backend, ver
-  `BACKLOG.md` #13): `DirectoryApi.gatewaysForInstallation` pide todos los
-  gateways de la organización y filtra en cliente por `installationId`.
-  Aceptable a la escala del MVP (`NON_FUNCTIONAL_REQUIREMENTS.md` §2,
-  ≤500 dispositivos); se revisaría si se decide implementar paginación
-  real (mismo BACKLOG.md #13, todavía sin decidir).
+- **Directorio IoT: alta de zona/gateway/dispositivo/sensor y edición de
+  umbral de canal, pero sin edición/baja de zona/gateway/dispositivo/
+  sensor todavía** — ese resto (editar nombre, deshabilitar, baja lógica)
+  es un paso más pequeño y se deja para cuando haga falta, no bloquea el
+  flujo principal de alta de una instalación nueva.
+- **`GET /gateways` no filtra por instalación** (backend, `BACKLOG.md` #13,
+  resuelto documentando la realidad en vez de paginar): `DirectoryApi.
+  gatewaysForInstallation` pide todos los gateways de la organización y
+  filtra en cliente por `installationId`. Aceptable a la escala del MVP
+  (`NON_FUNCTIONAL_REQUIREMENTS.md` §2, ≤500 dispositivos).
+- **Credencial de gateway mostrada una vez** (`showGatewayCredentialDialog`,
+  compartido entre alta y rotación): `SelectableText` + botón de copiar al
+  portapapeles, diálogo no descartable por accidente (`barrierDismissible:
+  false`) — coherente con que el backend nunca la vuelve a exponer
+  (SECURITY.md §6).

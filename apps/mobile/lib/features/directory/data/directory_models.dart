@@ -1,7 +1,6 @@
 /// Espejos de `Zone`/`Gateway`/`Device`/`Sensor`/`Channel` (OPENAPI.yaml,
-/// DATA_MODEL.md) — solo los campos que esta vista de solo-lectura necesita
-/// mostrar (FUNCTIONAL_REQUIREMENTS.md §4-9). Alta/edición/baja quedan para
-/// un siguiente paso (README.md).
+/// DATA_MODEL.md) — solo los campos que esta vista necesita mostrar
+/// (FUNCTIONAL_REQUIREMENTS.md §4-9).
 class Zone {
   final String id;
   final String name;
@@ -44,6 +43,28 @@ class Gateway {
       lastSeenAt: lastSeenRaw == null ? null : DateTime.parse(lastSeenRaw),
     );
   }
+}
+
+/// Credencial de un gateway (SECURITY.md §6): el secreto solo llega en la
+/// respuesta de creación o rotación, nunca se puede recuperar después — el
+/// llamador es responsable de mostrarlo una única vez y avisar de que no
+/// se volverá a ver.
+class GatewayCredential {
+  final Gateway gateway;
+  final String credentialUsername;
+  final String credentialSecret;
+
+  const GatewayCredential({
+    required this.gateway,
+    required this.credentialUsername,
+    required this.credentialSecret,
+  });
+
+  factory GatewayCredential.fromJson(Map<String, dynamic> json) => GatewayCredential(
+        gateway: Gateway.fromJson(json),
+        credentialUsername: json['credentialUsername'] as String,
+        credentialSecret: json['credentialSecret'] as String,
+      );
 }
 
 class Device {

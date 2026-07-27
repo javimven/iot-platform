@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../auth/application/auth_controller.dart';
 import '../application/directory_controller.dart';
 
 class DeviceDetailScreen extends ConsumerWidget {
@@ -15,6 +16,8 @@ class DeviceDetailScreen extends ConsumerWidget {
     final device = ref.watch(deviceProvider(deviceId));
     final sensors = ref.watch(sensorsForDeviceProvider(deviceId));
     final timeFormat = DateFormat('dd/MM HH:mm');
+    final roleCode = ref.watch(authControllerProvider).roleCode;
+    final canManage = roleCode == 'org_admin' || roleCode == 'technician';
 
     return Scaffold(
       appBar: AppBar(
@@ -53,9 +56,20 @@ class DeviceDetailScreen extends ConsumerWidget {
               ),
             ),
             const Divider(),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Text('Sensores', style: TextStyle(fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Sensores', style: TextStyle(fontWeight: FontWeight.bold)),
+                  if (canManage)
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      tooltip: 'Nuevo sensor',
+                      onPressed: () => _showCreateSensorDialog(context, ref),
+                    ),
+                ],
+              ),
             ),
             sensors.when(
               data: (items) => items.isEmpty
@@ -86,5 +100,72 @@ class DeviceDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showCreateSensorDialog(BuildContext context, WidgetRef ref) async {
+    final formKey = GlobalKey<FormState>();
+    final identifierController = TextEditingController();
+    final labelController = TextEditingController();
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Nuevo sensor'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: identifierController,
+                decoration: const InputDecoration(labelText: 'Identificador'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+              ),
+              TextFormField(
+                controller: labelController,
+                decoration: const InputDecoration(labelText: 'Etiqueta (opcional)'),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Máximo 4 sensores por dispositivo.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await ref.read(directoryApiProvider).createSensor(
+                      deviceId,
+                      externalIdentifier: identifierController.text.trim(),
+                      label: labelController.text.trim(),
+                    );
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('No se pudo crear el sensor.\n$error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Crear'),
+          ),
+        ],
+      ),
+    );
+
+    if (created == true) {
+      ref.invalidate(sensorsForDeviceProvider(deviceId));
+    }
   }
 }
