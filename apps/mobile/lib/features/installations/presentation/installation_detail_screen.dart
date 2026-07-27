@@ -27,6 +27,13 @@ class InstallationDetailScreen extends ConsumerWidget {
           loading: () => const Text('Instalación'),
           error: (_, __) => const Text('Instalación'),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.dns_outlined),
+            tooltip: 'Directorio',
+            onPressed: () => context.push('/installations/$installationId/directory'),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(latestReadingsProvider(installationId).future),

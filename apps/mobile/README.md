@@ -5,13 +5,16 @@ Arquitectura de procesos y auth: [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 
 ## Estado
 Login (con selección de organización si aplica) → lista de instalaciones →
-última lectura de cada canal de una instalación → gráfica histórica de un
-canal (24h/7d/30d) → lista de alertas (filtro por estado, reconocer/
-resolver). Directorio IoT completo (zonas, gateways, dispositivos,
-sensores, canales) queda para el siguiente paso.
+última lectura de cada canal → gráfica histórica (24h/7d/30d) → alertas
+(filtro por estado, reconocer/resolver) → **Directorio IoT de solo
+lectura**: instalación → zonas + gateways → dispositivos → sensores →
+canales (con su umbral de alerta configurado, si tiene uno propio).
+
+**Alta/edición/baja desde la app quedan para un siguiente paso** — esta
+etapa es explícitamente de solo lectura (ver "Decisiones de esta etapa").
 
 **Validado** (2026-07-27, Flutter 3.44.8 estable): el SDK está instalado en
-este entorno; `flutter analyze` sin incidencias, `flutter test` (8/8 en
+este entorno; `flutter analyze` sin incidencias, `flutter test` (11/11 en
 verde) y `flutter build web` compilan. iOS solo se puede **compilar** de
 verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`, no
 compilado ni ejecutado.
@@ -61,6 +64,8 @@ lib/
     installations/   Listado y detalle de instalación (últimas lecturas)
     alerts/          Lista de alertas, filtro por estado, reconocer/resolver
     readings/        Gráfica histórica de un canal + etiquetas del catálogo
+    directory/       Directorio IoT de solo lectura: zonas/gateways/
+                     dispositivos/sensores/canales (umbral incluido)
 ```
 
 ## Decisiones de esta etapa
@@ -77,3 +82,15 @@ lib/
   necesite ADR — es una librería de UI, no de arquitectura); puro Dart,
   sin dependencias nativas, mantenida activamente, funciona igual en
   web/Android/iOS.
+- **Directorio IoT deliberadamente solo lectura en esta etapa**: alta de
+  zona/gateway/dispositivo/sensor, edición y baja, y edición de umbral de
+  canal, son formularios adicionales (5 entidades × crear/editar/borrar)
+  que se tratan como un paso propio en vez de mezclarlos con la vista de
+  solo lectura — mismo criterio de "una función completa y acotada por
+  commit" que Alertas/Gráficas.
+- **`GET /gateways` no filtra por instalación** (backend, ver
+  `BACKLOG.md` #13): `DirectoryApi.gatewaysForInstallation` pide todos los
+  gateways de la organización y filtra en cliente por `installationId`.
+  Aceptable a la escala del MVP (`NON_FUNCTIONAL_REQUIREMENTS.md` §2,
+  ≤500 dispositivos); se revisaría si se decide implementar paginación
+  real (mismo BACKLOG.md #13, todavía sin decidir).

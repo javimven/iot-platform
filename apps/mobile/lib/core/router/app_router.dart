@@ -7,6 +7,10 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/application/auth_state.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/select_organization_screen.dart';
+import '../../features/directory/presentation/device_detail_screen.dart';
+import '../../features/directory/presentation/directory_screen.dart';
+import '../../features/directory/presentation/gateway_detail_screen.dart';
+import '../../features/directory/presentation/sensor_detail_screen.dart';
 import '../../features/installations/presentation/installation_detail_screen.dart';
 import '../../features/installations/presentation/installations_list_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
@@ -75,6 +79,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           channelId: state.pathParameters['channelId']!,
           channelTypeCode: state.extra as String? ?? '',
         ),
+      ),
+      GoRoute(
+        path: '/installations/:id/directory',
+        builder: (context, state) => DirectoryScreen(
+          installationId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/gateways/:id',
+        builder: (context, state) => GatewayDetailScreen(gatewayId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/devices/:id',
+        builder: (context, state) => DeviceDetailScreen(deviceId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/sensors/:id',
+        builder: (context, state) => SensorDetailScreen(sensorId: state.pathParameters['id']!),
       ),
     ],
   );
