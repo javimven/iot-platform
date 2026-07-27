@@ -1296,6 +1296,12 @@ components:
         acknowledgedAt: { type: string, format: date-time, nullable: true }
         resolvedAt: { type: string, format: date-time, nullable: true }
         details: { type: object, additionalProperties: true, nullable: true }
+        installationId:
+          { type: string, format: uuid, nullable: true, description: "Aditivo (Etapa 14): instalación a la que pertenece la causa de la alerta, cualquiera que sea (canal/dispositivo/gateway)." }
+        installationName: { type: string, nullable: true }
+        channelTypeCode: { type: string, nullable: true, description: "Solo presente si alertType=threshold." }
+        deviceName: { type: string, nullable: true, description: "Solo presente si alertType=offline y la causa es un dispositivo." }
+        gatewayName: { type: string, nullable: true, description: "Solo presente si alertType=offline y la causa es un gateway." }
 
     AlertPage:
       type: object

@@ -20,12 +20,15 @@ export class ReadingsService {
     const tenantContext = { userId: user.sub, organizationId: user.organizationId };
     await this.assertChannelInScope(user, channelId);
     const reading = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.latestReading.findUnique({ where: { channelId } }),
+      tx.latestReading.findUnique({
+        where: { channelId },
+        include: { channel: { select: { channelTypeCode: true } } },
+      }),
     );
     if (!reading) {
       throw new NotFoundException('No reading recorded for this channel yet');
     }
-    return reading;
+    return this.flattenChannelTypeCode(reading);
   }
 
   async getLatestForInstallation(user: AccessTokenClaims, installationId: string) {
@@ -38,11 +41,26 @@ export class ReadingsService {
     if (scope !== 'all' && !scope.includes(installationId)) {
       throw new ForbiddenException('Installation is outside your assigned scope');
     }
-    return this.prisma.runInTenantContext(tenantContext, (tx) =>
+    const readings = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.latestReading.findMany({
         where: { channel: { sensor: { device: { zone: { installationId } } } } },
+        include: { channel: { select: { channelTypeCode: true } } },
       }),
     );
+    return readings.map((reading) => this.flattenChannelTypeCode(reading));
+  }
+
+  /**
+   * OPENAPI.yaml documenta `channelTypeCode` como campo plano de
+   * `LatestReading` (necesario para que el cliente muestre una etiqueta sin
+   * una segunda llamada) — `latest_readings` no lo desnormaliza en columna
+   * propia (DATA_MODEL.md), así que se aplana aquí desde el `include`.
+   */
+  private flattenChannelTypeCode<T extends { channel: { channelTypeCode: string } }>(
+    reading: T,
+  ): Omit<T, 'channel'> & { channelTypeCode: string } {
+    const { channel, ...rest } = reading;
+    return { ...rest, channelTypeCode: channel.channelTypeCode };
   }
 
   async getHistory(

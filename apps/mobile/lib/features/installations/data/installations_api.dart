@@ -7,9 +7,12 @@ class InstallationsApi {
   InstallationsApi(this._client);
 
   Future<List<Installation>> list() async {
-    final json = await _client.getJson('/installations');
-    final data = json['data'] as List<dynamic>;
-    return data.map((e) => Installation.fromJson(e as Map<String, dynamic>)).toList();
+    // `GET /installations` devuelve hoy un array plano, no el sobre
+    // `{data, meta}` que documenta OPENAPI.yaml (paginación aún sin
+    // implementar en el backend para ningún listado salvo auditoría —
+    // gap real de contrato, ver BACKLOG.md).
+    final list = await _client.getJsonList('/installations');
+    return list.map((e) => Installation.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<Installation> getOne(String id) async {

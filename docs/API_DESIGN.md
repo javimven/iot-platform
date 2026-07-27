@@ -66,8 +66,10 @@ sequenceDiagram
 
 ## 5. Paginación
 
-- **Offset** (instalaciones, zonas, gateways, dispositivos, sensores, miembros — catálogos pequeños, Etapa 2): `?page=1&pageSize=20` (pageSize por defecto 20, máximo 100) → `{ "data": [...], "meta": { "page", "pageSize", "total" } }`.
+- **Offset** (instalaciones, zonas, gateways, dispositivos, sensores, miembros, alertas — catálogos pequeños, Etapa 2): `?page=1&pageSize=20` (pageSize por defecto 20, máximo 100) → `{ "data": [...], "meta": { "page", "pageSize", "total" } }`.
 - **Cursor** (telemetría histórica, auditoría — colecciones que crecen sin límite práctico): `?cursor=...&limit=50` (límite por defecto 50, máximo 200) → `{ "data": [...], "meta": { "nextCursor": "..." | null } }`.
+
+> **Gap real, descubierto en Etapa 14 (2026-07-27)**: ninguno de los listados de paginación offset de arriba está realmente implementado en `apps/backend` — cada `findAll()` (instalaciones, zonas, gateways, dispositivos, sensores, miembros, alertas) devuelve hoy un array plano vía `findMany()` sin `skip`/`take` ni el sobre `{data, meta}`. Solo la paginación por cursor de auditoría es real. Se detectó al construir el cliente Flutter contra el backend real por primera vez: `installations_api.dart` esperaba el sobre documentado y habría fallado en tiempo de ejecución contra la respuesta real (corregido — el cliente ahora espera el array plano que el backend realmente devuelve). **No se retrofita la paginación real ahora** — es un cambio a través de ~7 endpoints que merece su propio paso dedicado, no colarlo dentro de otra tarea; a esta escala (≤500 dispositivos, `NON_FUNCTIONAL_REQUIREMENTS.md` §2) un array sin paginar no es un problema de rendimiento todavía, solo una divergencia de contrato. Pendiente: o se implementa de verdad, o se simplifica este documento para reflejar la realidad — decisión aplazada, no tomada por omisión.
 
 ## 6. Idempotencia en escritura
 

@@ -66,6 +66,15 @@ Captura continua de ideas/funcionalidades que surgen durante el diseño, fuera d
 
 ---
 
+## Deuda técnica descubierta durante la implementación
+
+Distinto de las ideas de producto de arriba: esto no son funciones nuevas, son divergencias entre lo documentado y lo realmente construido, encontradas al verificar código ya dado por "terminado" contra la realidad (backend real + Flutter SDK real, Etapa 14).
+
+### 13. Paginación offset documentada pero no implementada
+**Sin decidir.** `API_DESIGN.md` §5 documenta paginación offset (`?page&pageSize` → `{data, meta}`) para instalaciones, zonas, gateways, dispositivos, sensores, miembros y alertas — ninguno de esos ~7 endpoints la implementa de verdad en `apps/backend`, todos devuelven un array plano. Descubierto al conectar el cliente Flutter de instalaciones contra el backend real: esperaba el sobre `{data,...}` documentado y habría fallado en tiempo de ejecución (ya corregido en el cliente, ver `API_DESIGN.md` §5). A esta escala no es un problema de rendimiento, solo de contrato. Decidir: ¿se implementa la paginación real en los ~7 endpoints, o se simplifica la documentación para reflejar el array plano actual? Cualquiera de las dos es aceptable — lo que no es aceptable es dejarlo como está (documentado pero falso).
+
+---
+
 ## Pregunta pendiente: alcance de "control de qué ve cada usuario"
 
 Tu frase: *"la configuración de que ve cada usuario y capacidad de modificarlo siempre la voy a tener yo como administrador y que los usuarios no puedan cambiar lo que ven"*. Esto admite dos lecturas muy distintas y quiero confirmar cuál antes de detallarlo:

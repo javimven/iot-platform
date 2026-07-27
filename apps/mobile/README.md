@@ -4,19 +4,30 @@ Contrato: [`API_DESIGN.md`](../../docs/API_DESIGN.md) / [`OPENAPI.yaml`](../../d
 Arquitectura de procesos y auth: [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) sección 6.
 
 ## Estado
-Vertical delgada end-to-end: login (con selección de organización si aplica) →
-lista de instalaciones → última lectura de cada canal de una instalación.
-Directorio IoT completo (zonas, gateways, dispositivos, sensores, canales,
-gráficas, alertas) queda para el siguiente paso.
+Login (con selección de organización si aplica) → lista de instalaciones →
+última lectura de cada canal de una instalación → lista de alertas (filtro
+por estado, reconocer/resolver). Directorio IoT completo (zonas, gateways,
+dispositivos, sensores, canales) y gráficas históricas quedan para el
+siguiente paso.
 
-**Validado** (2026-07-27, Flutter 3.44.8 estable): el código original se
-escribió sin SDK disponible y solo se había revisado línea a línea a mano.
-Ya se instaló el SDK, se generó el andamiaje nativo (`android/`, `ios/`,
-`web/`, org `com.iotplatform`) y se ejecutó `flutter analyze` (sin
-incidencias), `flutter test` (4/4 tests en verde) y `flutter build web`
-(compila y genera `build/web`). iOS solo se puede **compilar** de verdad
-en macOS (Xcode) — aquí solo se ha podido generar el proyecto `ios/`, no
-compilarlo ni ejecutarlo.
+**Validado** (2026-07-27, Flutter 3.44.8 estable): el SDK está instalado en
+este entorno; `flutter analyze` sin incidencias, `flutter test` (6/6 en
+verde) y `flutter build web` compilan. iOS solo se puede **compilar** de
+verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`, no
+compilado ni ejecutado.
+
+Al conectar el módulo de Alertas contra el backend real se encontraron y
+corrigieron dos divergencias de contrato reales (no hipotéticas — habrían
+fallado en producción):
+- `GET /installations` devuelve un array plano, no el sobre `{data, meta}`
+  que `installations_api.dart` esperaba — habría lanzado un `TypeError` en
+  tiempo de ejecución la primera vez que alguien abriera la lista de
+  instalaciones. Ver `API_DESIGN.md` §5 para el detalle (paginación
+  documentada pero no implementada en ningún listado salvo auditoría).
+- `GET /installations/:id/latest-readings` no devolvía `channelTypeCode`
+  pese a que `OPENAPI.yaml` lo documenta y el cliente ya lo esperaba —
+  cada lectura se habría mostrado sin etiqueta. Corregido en
+  `ReadingsService` (backend).
 
 ## Puesta en marcha
 
@@ -48,6 +59,7 @@ lib/
   features/
     auth/           Login, selección de organización, refresh (API_DESIGN.md §3)
     installations/   Listado y detalle de instalación (últimas lecturas)
+    alerts/          Lista de alertas, filtro por estado, reconocer/resolver
     readings/        Etiquetas de presentación del catálogo de canales
 ```
 

@@ -19,7 +19,7 @@ export class AlertsService {
     // El alcance por instalación (PERMISSIONS.md §2) se aplica también a
     // alertas: se filtra a través de la cadena canal/dispositivo/gateway ->
     // zona -> instalación, según cuál de los tres esté presente.
-    return this.prisma.runInTenantContext(tenantContext, (tx) =>
+    const alerts = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.alert.findMany({
         where: {
           ...(status ? { status } : {}),
@@ -34,8 +34,50 @@ export class AlertsService {
               }),
         },
         orderBy: { openedAt: 'desc' },
+        include: {
+          channel: {
+            include: {
+              sensor: {
+                include: { device: { include: { zone: { include: { installation: true } } } } },
+              },
+            },
+          },
+          device: { include: { zone: { include: { installation: true } } } },
+          gateway: { include: { installation: true } },
+        },
       }),
     );
+    return alerts.map((alert) => this.withDisplayContext(alert));
+  }
+
+  /**
+   * Campos adicionales para que el cliente muestre algo legible sin una
+   * segunda llamada por alerta (id/UUID en crudo no es aceptable en una
+   * lista de alertas) — aditivo sobre `Alert` (OPENAPI.yaml), no rompe el
+   * contrato existente.
+   */
+  private withDisplayContext(alert: {
+    channel: {
+      channelTypeCode: string;
+      sensor: { device: { zone: { installation: { id: string; name: string } } } };
+    } | null;
+    device: { name: string; zone: { installation: { id: string; name: string } } } | null;
+    gateway: { name: string; installation: { id: string; name: string } } | null;
+    [key: string]: unknown;
+  }) {
+    const { channel, device, gateway, ...rest } = alert;
+    const installation =
+      channel?.sensor.device.zone.installation ??
+      device?.zone.installation ??
+      gateway?.installation;
+    return {
+      ...rest,
+      installationId: installation?.id ?? null,
+      installationName: installation?.name ?? null,
+      channelTypeCode: channel?.channelTypeCode ?? null,
+      deviceName: device?.name ?? null,
+      gatewayName: gateway?.name ?? null,
+    };
   }
 
   async acknowledge(user: AccessTokenClaims, id: string) {
