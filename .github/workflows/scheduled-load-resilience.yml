@@ -1,0 +1,47 @@
+# Pruebas de carga y resiliencia programadas (Etapa 11, TESTING_STRATEGY.md
+# secciones 10-11). No corren en cada PR: son caras/lentas y su objetivo es
+# detectar degradación a lo largo del tiempo, no bloquear cada cambio.
+# Los pasos de ejecución real (scripts k6/emqtt_bench, manipulación de
+# contenedores) se añaden en Etapa 13 cuando exista el entorno de staging real.
+
+name: scheduled-load-resilience
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Lunes 03:00 UTC — semanal, fuera de horario de oficina
+  workflow_dispatch: {} # Permite lanzarlo manualmente antes de un cambio sensible
+
+jobs:
+  load-http:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar k6
+        run: |
+          curl -s https://github.com/grafana/k6/releases/latest/download/k6-linux-amd64.tar.gz -L | tar xz --strip-components 1
+      - name: Carga HTTP contra staging (NON_FUNCTIONAL_REQUIREMENTS.md §3-5)
+        run: echo "./k6 run scripts/load/api-load.js --env TARGET=https://staging-api.example.com (Etapa 13)"
+
+  load-mqtt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Carga MQTT con emqtt_bench (MQTT_PROTOCOL.md §15)
+        run: echo "emqtt_bench pub -h staging-mqtt.example.com -p 8883 -c 2000 -I 15000 (Etapa 13, cifras exactas de NON_FUNCTIONAL_REQUIREMENTS.md)"
+
+  resilience:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Matar worker con jobs en cola y verificar recuperación
+        run: echo "docker compose kill worker && sleep 10 && docker compose up -d worker (Etapa 13 añade las aserciones)"
+      - name: Reiniciar EMQX y verificar reconexión de gateways de prueba
+        run: echo "docker compose restart emqx (Etapa 13 añade las aserciones)"
+
+  report:
+    needs: [load-http, load-mqtt, resilience]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publicar resultados en el canal del equipo
+        run: echo "Resumen semanal de carga/resiliencia -> Slack/email (OBSERVABILITY.md)"

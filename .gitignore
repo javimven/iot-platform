@@ -1,0 +1,30 @@
+# Reglas comunes a todo el repo. Cada app (`apps/backend`, `apps/mobile`)
+# tiene su propio `.gitignore` más específico — este cubre lo que queda
+# fuera de esas carpetas o lo que conviene reforzar a nivel raíz.
+
+# Nunca commitear secretos reales (SECURITY.md §7) — solo *.example.
+.env
+.env.*
+!.env.example
+!*/.env.example
+*.pem
+*.key
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Dependencias e builds — se regeneran con `npm install`/`flutter pub get`.
+node_modules/
+dist/
+build/
+coverage/
+
+# IDE local (no se comparte entre máquinas/editores distintos).
+.idea/
+.vscode/
+
+# Sistema operativo.
+.DS_Store
+Thumbs.db

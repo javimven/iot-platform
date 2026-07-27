@@ -1,0 +1,124 @@
+# Entorno de desarrollo local (Etapa 9, DEPLOYMENT.md sección 5).
+# api/ingestion/worker ya usan el código real de apps/backend (Etapa 13).
+# Requiere apps/backend/.env.development (copiar de .env.example, nunca
+# commitear — SECURITY.md §7) con al menos el par de claves JWT de desarrollo.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: iot_platform
+      POSTGRES_PASSWORD: dev_only_password
+      POSTGRES_DB: iot_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iot_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  emqx:
+    image: emqx/emqx:5.4
+    environment:
+      EMQX_NAME: iot-platform-dev
+    ports:
+      - "1883:1883"   # MQTT (sin TLS, solo desarrollo local)
+      - "8883:8883"   # MQTTS
+      - "18083:18083" # Dashboard de administración
+    volumes:
+      - emqx_data:/opt/emqx/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: dev_access_key
+      MINIO_ROOT_PASSWORD: dev_secret_key
+    ports:
+      - "9000:9000"   # API S3-compatible
+      - "9001:9001"   # Consola web
+    volumes:
+      - minio_data:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025" # SMTP falso (worker envía aquí en desarrollo)
+      - "8025:8025" # Interfaz web para ver los emails capturados
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./infra/otel/otel-collector-dev.yaml:/etc/otelcol/config.yaml
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: runtime
+    env_file: [apps/backend/.env.development]
+    environment:
+      PROCESS_ROLE: api
+      NODE_ENV: development
+      DATABASE_URL: postgres://iot_platform:dev_only_password@postgres:5432/iot_platform
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "3000:3000"
+    depends_on: [postgres, redis, otel-collector]
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: runtime
+    env_file: [apps/backend/.env.development]
+    environment:
+      PROCESS_ROLE: ingestion
+      NODE_ENV: development
+      MQTT_BROKER_URL: mqtt://emqx:1883
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on: [emqx, redis, otel-collector]
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: runtime
+    env_file: [apps/backend/.env.development]
+    environment:
+      PROCESS_ROLE: worker
+      NODE_ENV: development
+      DATABASE_URL: postgres://iot_platform:dev_only_password@postgres:5432/iot_platform
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on: [postgres, redis, mailpit, otel-collector]
+
+volumes:
+  postgres_data:
+  redis_data:
+  emqx_data:
+  minio_data:

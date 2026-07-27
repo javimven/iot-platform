@@ -1,0 +1,21 @@
+# ADR-0005: Admin de plataforma con gestión global del Directorio IoT (excepción explícita y auditada al aislamiento)
+
+- Estado: Aceptada
+- Fecha: 2026-07-27
+
+## Contexto
+Hasta ahora (Etapa 1, nota ¹; Etapa 4, matriz de `PERMISSIONS.md`) el Admin de plataforma no tenía acceso a ningún dato dentro de una organización, ni siquiera de lectura — solo podía crear/suspender la organización completa. El usuario ha confirmado que, en la práctica, su empresa (como Admin de plataforma) va a **dar de alta y gestionar estaciones y sensores de cualquier organización directamente**, sin pasar por ser miembro (Admin de organización/Técnico) de cada una — típicamente porque es su propia empresa quien instala físicamente el equipo en la finca del cliente.
+
+## Decisión
+El Admin de plataforma obtiene capacidad **global** (todas las organizaciones) sobre exactamente el grupo de acciones "Directorio IoT" y "Seguridad de dispositivos" de `PERMISSIONS.md` (instalaciones, zonas, gateways, credenciales de gateway, dispositivos, sensores, canales — creación, lectura, actualización, baja, rotación de credencial). **No se amplía nada más**: telemetría, alertas, miembros, sesiones y auditoría de negocio de una organización siguen totalmente fuera de alcance del Admin de plataforma, igual que antes.
+
+Toda acción del Admin de plataforma sobre la infraestructura de una organización se registra en el **`audit_log` de esa organización** (no solo en un log de plataforma aparte) — el Admin de organización del cliente puede ver en su propia auditoría que fue el Admin de plataforma quien creó/modificó un gateway o sensor. Nunca es una acción invisible para el cliente.
+
+## Alternativas consideradas
+- **Mantener el aislamiento estricto** y que el Admin de plataforma tenga que darse de alta como miembro (Técnico) de cada organización para hacer esto: descartado por el usuario — añade fricción operativa (gestionar una membresía por cada cliente) sin beneficio de seguridad real, dado que es su propia empresa la que instala el hardware.
+- **"Modo soporte" genérico** (acceso de lectura a todo, bajo consentimiento puntual) tal como se había dejado como backlog en Etapa 1: descartado para este caso concreto — el usuario no pide leer telemetría/alertas de sus clientes, pide gestionar infraestructura, que es un permiso mucho más acotado y no requiere consentimiento puntual del cliente para cada acción (es parte del servicio contratado de instalación/soporte).
+
+## Consecuencias
+- **RLS** (`DATA_MODEL.md` sección 7): las tablas de Directorio IoT y credenciales de gateway añaden una segunda condición a su política (`organization_id = current_org OR es_admin_de_plataforma`), mientras que `telemetry`, `alerts`, `members`, `sessions` y `audit_log` mantienen la política estricta sin excepción. Requiere una nueva variable de sesión, `app.is_platform_admin`, fijada por `SET LOCAL` solo en peticiones autenticadas como Admin de plataforma.
+- **API** (a detallar en Etapa 7): las peticiones del Admin de plataforma sobre infraestructura deben indicar explícitamente sobre qué organización actúan (p. ej. `POST /platform/organizations/{orgId}/gateways`), a diferencia de un miembro normal, cuya organización activa ya viene implícita en su JWT.
+- Se marca como aplazable (V2/Futuro) exigir un motivo o referencia (p. ej. número de ticket de soporte) al ejecutar estas acciones — hoy basta con que quede auditado con quién y cuándo, sin justificación textual obligatoria.

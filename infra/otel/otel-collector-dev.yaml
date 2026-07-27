@@ -1,0 +1,36 @@
+# Collector de referencia para desarrollo local (Etapa 10, OBSERVABILITY.md sección 2).
+# Sin dependencia externa: exporta a consola para poder ver logs/métricas/trazas
+# localmente sin necesitar una cuenta de Grafana Cloud en desarrollo.
+# Staging/producción usan una configuración equivalente que reenvía a Grafana
+# Cloud vía OTLP con una clave inyectada como secreto (DEPLOYMENT.md sección 4),
+# no versionada aquí.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

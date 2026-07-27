@@ -1,0 +1,162 @@
+# Pipeline de referencia (Etapa 9, DEPLOYMENT.md sección 9).
+# Los pasos que referencian "apps/backend" o "apps/mobile" se activan
+# a partir de la Etapa 13/14, cuando esas carpetas existan con código real.
+
+name: ci-cd
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # 1-3: Formateo, lint, análisis estático
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci --prefix apps/backend
+      - name: Formateo (prettier --check)
+        run: npm run format:check --prefix apps/backend
+      - name: Lint (eslint)
+        run: npm run lint --prefix apps/backend
+      - name: Análisis estático (tsc --noEmit)
+        run: npm run typecheck --prefix apps/backend
+
+  # 4: Pruebas unitarias
+  unit-tests:
+    needs: static-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci --prefix apps/backend
+      - run: npm run test:unit --prefix apps/backend
+
+  # 5: Pruebas de integración (contra Postgres/Redis/EMQX de servicio)
+  integration-tests:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: iot_platform
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: iot_platform_test
+        ports: ["5432:5432"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci --prefix apps/backend
+      - run: npm run test:integration --prefix apps/backend
+        env:
+          DATABASE_URL: postgres://iot_platform:ci_only_password@localhost:5432/iot_platform_test
+          REDIS_URL: redis://localhost:6379
+
+  # 6: Construcción
+  build:
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci --prefix apps/backend
+      - run: npm run build --prefix apps/backend
+
+  # 7: Escaneo de dependencias (SECURITY.md sección 10)
+  dependency-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: npm audit (falla en crítico/alto)
+        run: npm audit --audit-level=high --prefix apps/backend
+      - name: Escaneo de secretos en el repositorio
+        uses: gitleaks/gitleaks-action@v2
+
+  # 8: Creación de imagen Docker
+  docker-image:
+    needs: dependency-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "image_tag=ghcr.io/${{ github.repository }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile
+          push: true
+          tags: ${{ steps.tag.outputs.image_tag }}
+      - name: Escaneo de la imagen (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.tag.outputs.image_tag }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+
+  # 9: Despliegue en staging (automático al fusionar a main)
+  deploy-staging:
+    if: github.ref == 'refs/heads/main'
+    needs: docker-image
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Desplegar en la VPS de staging (SSH + docker compose pull/up)
+        run: echo "Deploy ${{ needs.docker-image.outputs.image_tag }} a staging (Etapa 13 añade el script real)"
+
+  # 10: Pruebas end-to-end contra staging
+  e2e-staging:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Ejecutar suite E2E contra https://staging-api.example.com (Etapa 11)"
+
+  # 11-12: Aprobación de producción (revisor obligatorio vía protección del environment) + despliegue
+  deploy-production:
+    needs: e2e-staging
+    runs-on: ubuntu-latest
+    environment: production # Revisores obligatorios configurados en GitHub (DEPLOYMENT.md sección 9)
+    steps:
+      - name: Desplegar en producción (una réplica de api cada vez, DEPLOYMENT.md sección 8)
+        run: echo "Deploy ${{ needs.docker-image.outputs.image_tag }} a producción (Etapa 13 añade el script real)"
+
+  # 13: Verificación posterior
+  post-deploy-check:
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke test (/health + endpoint autenticado de bajo riesgo)
+        id: smoke
+        run: echo "curl a /health y verificación de métricas OTel (Etapa 10)"
+
+  # 14: Rollback automático si falla la verificación posterior
+  rollback:
+    needs: post-deploy-check
+    if: failure()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Volver a desplegar la imagen anterior
+        run: echo "Rollback a la etiqueta previa (DEPLOYMENT.md sección 8)"

@@ -1,0 +1,1342 @@
+openapi: 3.0.3
+info:
+  title: IoT Monitoring Platform API
+  version: "1.0.0-draft"
+  description: >
+    Contrato de referencia de la Etapa 7 (API_DESIGN.md). Cubre el alcance del MVP
+    (Etapa 1/PRODUCT_REQUIREMENTS.md sección 9.1). No incluye comandos remotos,
+    firmware, API keys ni informes (V2/Futuro). Los recursos de Directorio IoT bajo
+    /platform se muestran solo con `gateways` como representativo; el resto de
+    recursos (installations, zones, devices, sensors, channels) se mecaniza igual
+    (ver API_DESIGN.md sección 2).
+servers:
+  - url: https://api.example.com/v1
+    description: Producción (dominio real a definir en Etapa 9)
+  - url: https://staging-api.example.com/v1
+    description: Staging
+
+tags:
+  - name: auth
+  - name: me
+  - name: organization
+  - name: members
+  - name: installations
+  - name: zones
+  - name: gateways
+  - name: devices
+  - name: sensors
+  - name: channels
+  - name: readings
+  - name: alerts
+  - name: audit
+  - name: platform
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Iniciar sesión con email y contraseña
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: >
+            Éxito. Si el usuario tiene una única organización activa (o ninguna,
+            Admin de plataforma), devuelve AuthSuccess. Si tiene varias, devuelve
+            AuthOrgSelection (ver API_DESIGN.md sección 3).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AuthSuccess"
+                  - $ref: "#/components/schemas/AuthOrgSelection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/select-organization:
+    post:
+      tags: [auth]
+      summary: Completar el login eligiendo la organización activa
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preAuthToken, organizationId]
+              properties:
+                preAuthToken: { type: string }
+                organizationId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSuccess" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Renovar el access token (refresh token rotativo)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, secret]
+              properties:
+                sessionId: { type: string, format: uuid }
+                secret: { type: string }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSuccess" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revocar la sesión actual
+      responses:
+        "204": { description: Sin contenido }
+
+  /auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Solicitar recuperación de contraseña
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202":
+          description: Aceptado (siempre, exista o no el email — no filtra existencia de cuentas)
+
+  /auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Confirmar recuperación de contraseña con token de un solo uso
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, format: password }
+      responses:
+        "200": { description: Contraseña actualizada }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /auth/sessions:
+    get:
+      tags: [auth]
+      summary: Listar mis sesiones activas
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Session" }
+
+  /auth/sessions/{sessionId}:
+    delete:
+      tags: [auth]
+      summary: Revocar una sesión propia (o de un miembro de mi organización, si tengo sessions.revoke_others)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204": { description: Sin contenido }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /me:
+    get:
+      tags: [me]
+      summary: Perfil propio, rol y organización activa
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+
+  /me/permissions:
+    get:
+      tags: [me]
+      summary: Acciones permitidas para el rol activo (PERMISSIONS.md sección 5)
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items: { type: string }
+                    example: ["installations.read", "alerts.acknowledge"]
+
+  /organization:
+    get:
+      tags: [organization]
+      summary: Perfil de la organización activa
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+    patch:
+      tags: [organization]
+      summary: Actualizar nombre/email de contacto (org.profile.update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationUpdate" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /organization/features:
+    get:
+      tags: [organization]
+      summary: Feature flags activos para mi organización (org_features.read)
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrganizationFeature" }
+
+  /organization/channel-thresholds/{channelTypeCode}:
+    put:
+      tags: [organization]
+      summary: Definir el umbral por defecto de un tipo de canal para mi organización
+      parameters:
+        - name: channelTypeCode
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                defaultMin: { type: number, nullable: true }
+                defaultMax: { type: number, nullable: true }
+      responses:
+        "200": { description: Éxito }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /channel-types:
+    get:
+      tags: [organization]
+      summary: Catálogo de tipos de canal disponibles en la plataforma
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelType" }
+
+  /members:
+    get:
+      tags: [members]
+      summary: Listar miembros de mi organización (members.read)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemberPage" }
+    post:
+      tags: [members]
+      summary: Invitar un miembro (members.invite)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberInvite" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /members/{memberId}:
+    patch:
+      tags: [members]
+      summary: Cambiar rol o estado de un miembro
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleCode: { type: string, enum: [org_admin, technician, operator, read_only] }
+                status: { type: string, enum: [active, suspended] }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Member" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [members]
+      summary: Dar de baja a un miembro (baja lógica)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204": { description: Sin contenido }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /members/{memberId}/scope:
+    get:
+      tags: [members]
+      summary: Alcance de instalaciones asignado a un miembro
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: "Éxito. Array vacío = sin restricción (todas las instalaciones), PERMISSIONS.md sección 2"
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string, format: uuid }
+    put:
+      tags: [members]
+      summary: Reemplazar el conjunto de instalaciones asignadas a un miembro
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { type: string, format: uuid }
+      responses:
+        "200": { description: Éxito }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /installations:
+    get:
+      tags: [installations]
+      summary: Listar instalaciones (con alcance aplicado, PERMISSIONS.md sección 2)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstallationPage" }
+    post:
+      tags: [installations]
+      summary: Crear instalación
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstallationCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Installation" }
+
+  /installations/{installationId}:
+    get:
+      tags: [installations]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Installation" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [installations]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstallationCreate" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Installation" }
+    delete:
+      tags: [installations]
+      summary: Baja lógica
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Sin contenido }
+
+  /installations/{installationId}/zones:
+    get:
+      tags: [zones]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Zone" }
+    post:
+      tags: [zones]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ZoneCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Zone" }
+
+  /installations/{installationId}/latest-readings:
+    get:
+      tags: [readings]
+      summary: Últimas lecturas de todos los canales de una instalación (dashboard)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LatestReading" }
+
+  /zones/{zoneId}:
+    get:
+      tags: [zones]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Zone" }
+    patch:
+      tags: [zones]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ZoneCreate" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Zone" }
+    delete:
+      tags: [zones]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Sin contenido }
+
+  /gateways:
+    get:
+      tags: [gateways]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayPage" }
+    post:
+      tags: [gateways]
+      summary: Pre-registrar un gateway (concentrador LoRa o estación directa, ADR-0004)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GatewayCreate" }
+      responses:
+        "201":
+          description: >
+            Creado. El campo `credentialSecret` solo aparece en esta respuesta
+            (API_DESIGN.md sección 7) — no se puede recuperar después.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayCreated" }
+
+  /gateways/{gatewayId}:
+    get:
+      tags: [gateways]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gateway" }
+    patch:
+      tags: [gateways]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                heartbeatIntervalSeconds: { type: integer, nullable: true }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gateway" }
+    delete:
+      tags: [gateways]
+      summary: Deshabilitar gateway
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Sin contenido }
+
+  /gateways/{gatewayId}/rotate-credential:
+    post:
+      tags: [gateways]
+      summary: Revocar la credencial activa y emitir una nueva
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: "Éxito. Igual que en la creación, el secreto solo se muestra aquí."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayCreated" }
+
+  /gateways/{gatewayId}/devices:
+    get:
+      tags: [devices]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Device" }
+    post:
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+
+  /devices/{deviceId}:
+    get:
+      tags: [devices]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+    patch:
+      tags: [devices]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                zoneId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+    delete:
+      tags: [devices]
+      summary: Deshabilitar dispositivo
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Sin contenido }
+
+  /devices/{deviceId}/sensors:
+    get:
+      tags: [sensors]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Sensor" }
+    post:
+      tags: [sensors]
+      summary: Registrar un sensor (máximo 4 por dispositivo, FUNCTIONAL_REQUIREMENTS.md sección 7)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SensorCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sensor" }
+
+  /sensors/{sensorId}:
+    get:
+      tags: [sensors]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sensor" }
+    delete:
+      tags: [sensors]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Sin contenido }
+
+  /sensors/{sensorId}/channels:
+    get:
+      tags: [channels]
+      summary: Canales del sensor (creados automáticamente por ingestión, MQTT_PROTOCOL.md sección 9)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+
+  /channels/{channelId}:
+    patch:
+      tags: [channels]
+      summary: Sobrescribir el umbral de alerta de este canal (override del valor por defecto de la organización)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alertThresholdMin: { type: number, nullable: true }
+                alertThresholdMax: { type: number, nullable: true }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Channel" }
+
+  /channels/{channelId}/latest-reading:
+    get:
+      tags: [readings]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LatestReading" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /channels/{channelId}/readings:
+    get:
+      tags: [readings]
+      summary: Histórico de lecturas (API_DESIGN.md sección 8)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          schema: { type: string, enum: [raw, hourly, daily], default: raw }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadingPage" }
+        "400":
+          description: "granularity=raw con un rango mayor a 7 días"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /alerts:
+    get:
+      tags: [alerts]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, acknowledged, resolved] }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertPage" }
+
+  /alerts/{alertId}/acknowledge:
+    post:
+      tags: [alerts]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Alert" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /alerts/{alertId}/resolve:
+    post:
+      tags: [alerts]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Alert" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /audit-log:
+    get:
+      tags: [audit]
+      summary: Auditoría de mi organización (audit.read_full / audit.read_technical)
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditLogPage" }
+
+  /platform/organizations:
+    get:
+      tags: [platform]
+      summary: Listar organizaciones (Admin de plataforma)
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Organization" }
+    post:
+      tags: [platform]
+      summary: Alta de organización (incluye invitación al primer Admin de organización)
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformOrganizationCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+
+  /platform/organizations/{organizationId}/suspend:
+    post:
+      tags: [platform]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200": { description: Éxito }
+
+  /platform/organizations/{organizationId}/reactivate:
+    post:
+      tags: [platform]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200": { description: Éxito }
+
+  /platform/organizations/{organizationId}/features:
+    get:
+      tags: [platform]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrganizationFeature" }
+    put:
+      tags: [platform]
+      summary: Activar/desactivar features de una organización (org_features.update, PERMISSIONS.md sección 14)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  featureCode: { type: string }
+                  enabled: { type: boolean }
+      responses:
+        "200": { description: Éxito }
+
+  /platform/organizations/{organizationId}/gateways:
+    get:
+      tags: [platform]
+      summary: >
+        Directorio IoT global (ADR-0005) — representativo de instalaciones/zonas/
+        dispositivos/sensores/canales, que se mecanizan igual (API_DESIGN.md sección 16).
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Gateway" }
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GatewayCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayCreated" }
+
+  /platform/audit-log:
+    get:
+      tags: [platform]
+      summary: Auditoría de plataforma (platform.audit.read) — altas/bajas de organizaciones
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditLogPage" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: Identificador de la ruta (nombre real varía por endpoint, p. ej. installationId, gatewayId)
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: API_DESIGN.md sección 6
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Autenticado pero sin permiso (PERMISSIONS.md)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Error de validación de campos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, example: "validation-error" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    AuthSuccess:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken:
+          type: object
+          properties:
+            sessionId: { type: string, format: uuid }
+            secret: { type: string }
+
+    AuthOrgSelection:
+      type: object
+      properties:
+        preAuthToken: { type: string }
+        organizations:
+          type: array
+          items:
+            type: object
+            properties:
+              organizationId: { type: string, format: uuid }
+              name: { type: string }
+              roleCode: { type: string }
+
+    Session:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userAgent: { type: string, nullable: true }
+        ipAddress: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time }
+
+    Me:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        isPlatformAdmin: { type: boolean }
+        activeOrganizationId: { type: string, format: uuid, nullable: true }
+        roleCode: { type: string, nullable: true }
+        memberships:
+          type: array
+          items:
+            type: object
+            properties:
+              organizationId: { type: string, format: uuid }
+              organizationName: { type: string }
+              roleCode: { type: string }
+
+    Organization:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        contactEmail: { type: string, format: email }
+        status: { type: string, enum: [active, suspended] }
+        createdAt: { type: string, format: date-time }
+
+    OrganizationUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        contactEmail: { type: string, format: email }
+
+    OrganizationFeature:
+      type: object
+      properties:
+        featureCode: { type: string }
+        enabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+
+    ChannelType:
+      type: object
+      properties:
+        code: { type: string }
+        unit: { type: string }
+        dataType: { type: string, enum: [continuous, boolean, counter] }
+        defaultAggregation: { type: string, enum: [average, sum, count_true] }
+        minValid: { type: number, nullable: true }
+        maxValid: { type: number, nullable: true }
+
+    Member:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        roleCode: { type: string, enum: [org_admin, technician, operator, read_only] }
+        status: { type: string, enum: [invited, active, suspended] }
+        invitedAt: { type: string, format: date-time, nullable: true }
+        activatedAt: { type: string, format: date-time, nullable: true }
+
+    MemberInvite:
+      type: object
+      required: [email, roleCode]
+      properties:
+        email: { type: string, format: email }
+        roleCode: { type: string, enum: [org_admin, technician, operator, read_only] }
+
+    MemberPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Member" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Installation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        locationText: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    InstallationCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        locationText: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+
+    InstallationPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Installation" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Zone:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        installationId: { type: string, format: uuid }
+        name: { type: string }
+        zoneType: { type: string, nullable: true }
+
+    ZoneCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        zoneType: { type: string, nullable: true }
+
+    Gateway:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        installationId: { type: string, format: uuid }
+        externalIdentifier: { type: string }
+        name: { type: string }
+        connectivityType: { type: string, enum: [lora_concentrator, direct_nbiot, direct_other] }
+        status: { type: string, enum: [not_provisioned, online, offline, disabled] }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+        heartbeatIntervalSeconds: { type: integer, nullable: true }
+
+    GatewayCreate:
+      type: object
+      required: [installationId, name, connectivityType]
+      properties:
+        installationId: { type: string, format: uuid }
+        name: { type: string }
+        connectivityType: { type: string, enum: [lora_concentrator, direct_nbiot, direct_other] }
+
+    GatewayCreated:
+      allOf:
+        - $ref: "#/components/schemas/Gateway"
+        - type: object
+          properties:
+            credentialUsername: { type: string }
+            credentialSecret:
+              type: string
+              description: Solo se devuelve en esta respuesta (API_DESIGN.md sección 7)
+
+    GatewayPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Gateway" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Device:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        gatewayId: { type: string, format: uuid }
+        zoneId: { type: string, format: uuid }
+        externalIdentifier: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [not_provisioned, online, offline, disabled] }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+
+    DeviceCreate:
+      type: object
+      required: [zoneId, externalIdentifier, name]
+      properties:
+        zoneId: { type: string, format: uuid }
+        externalIdentifier: { type: string }
+        name: { type: string }
+
+    Sensor:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        externalIdentifier: { type: string }
+        label: { type: string, nullable: true }
+
+    SensorCreate:
+      type: object
+      required: [externalIdentifier]
+      properties:
+        externalIdentifier: { type: string }
+        label: { type: string, nullable: true }
+
+    Channel:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sensorId: { type: string, format: uuid }
+        channelTypeCode: { type: string }
+        alertThresholdMin: { type: number, nullable: true }
+        alertThresholdMax: { type: number, nullable: true }
+
+    LatestReading:
+      type: object
+      properties:
+        channelId: { type: string, format: uuid }
+        channelTypeCode: { type: string }
+        value: { type: number }
+        tsOrigin: { type: string, format: date-time }
+        tsReceived: { type: string, format: date-time }
+
+    Reading:
+      type: object
+      properties:
+        tsOrigin: { type: string, format: date-time }
+        value: { type: number }
+        min: { type: number, nullable: true, description: "Solo presente si granularity != raw y el canal es de tipo average" }
+        max: { type: number, nullable: true }
+
+    ReadingPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Reading" } }
+        meta: { $ref: "#/components/schemas/CursorMeta" }
+
+    Alert:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        alertType: { type: string, enum: [threshold, offline] }
+        channelId: { type: string, format: uuid, nullable: true }
+        deviceId: { type: string, format: uuid, nullable: true }
+        gatewayId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [open, acknowledged, resolved] }
+        openedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        details: { type: object, additionalProperties: true, nullable: true }
+
+    AlertPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Alert" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        organizationId: { type: string, format: uuid, nullable: true }
+        actorUserId: { type: string, format: uuid, nullable: true }
+        action: { type: string }
+        targetType: { type: string, nullable: true }
+        targetId: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    AuditLogPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AuditLogEntry" } }
+        meta: { $ref: "#/components/schemas/CursorMeta" }
+
+    PlatformOrganizationCreate:
+      type: object
+      required: [name, contactEmail, firstAdminEmail]
+      properties:
+        name: { type: string }
+        contactEmail: { type: string, format: email }
+        firstAdminEmail: { type: string, format: email }
+
+    PageMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    CursorMeta:
+      type: object
+      properties:
+        nextCursor: { type: string, nullable: true }

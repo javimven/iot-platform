@@ -1,0 +1,20 @@
+# Estándar de un proyecto Flutter — android/, ios/ y web/ SÍ se versionan
+# normalmente (llevan configuración propia con el tiempo, no son solo
+# artefactos generados); aquí no existen todavía porque se crean con
+# `flutter create` (README.md), no porque deban ignorarse para siempre.
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+
+# Artefactos de build específicos de plataforma (sí se ignoran siempre).
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec

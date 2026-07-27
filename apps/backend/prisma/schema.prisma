@@ -1,0 +1,506 @@
+// Traducción de DATA_MODEL.md a Prisma. Decisión de ORM (Etapa 13, aplazada desde
+// la Etapa 5): Prisma sobre Drizzle — mejor DX/generación de tipos y comunidad más
+// amplia para un equipo de 3-6 personas empezando desde cero; el control fino que
+// Drizzle da sobre el SQL no compensa para este equipo, y las piezas que Prisma no
+// modela de forma nativa (RLS, índices únicos parciales, el trigger de integridad
+// Zona<->Gateway, el particionado de `telemetry`) se añaden en migraciones SQL
+// escritas a mano (ver migrations/0002_rls_and_constraints/migration.sql) — algo
+// necesario con cualquiera de los dos ORM, no es una desventaja específica de Prisma.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// IAM (DATA_MODEL.md §3)
+// ---------------------------------------------------------------------------
+
+enum OrganizationStatus {
+  active
+  suspended
+}
+
+model Organization {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug         String             @unique
+  name         String
+  contactEmail String             @map("contact_email")
+  status       OrganizationStatus @default(active)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  deletedAt    DateTime?          @map("deleted_at")
+
+  members             Member[]
+  installations        Installation[]
+  sessions             Session[]
+  orgChannelThresholds OrgChannelThreshold[]
+  organizationFeatures OrganizationFeature[]
+  auditLogEntries      AuditLogEntry[]
+
+  @@map("organizations")
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+model User {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  fullName     String     @map("full_name")
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  deletedAt    DateTime?  @map("deleted_at")
+
+  platformAdmin  PlatformAdmin?
+  members        Member[]
+  sessions       Session[]
+  invitedMembers Member[] @relation("MemberInvitedBy")
+
+  @@map("users")
+}
+
+model PlatformAdmin {
+  userId    String   @id @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  grantedAt DateTime @default(now()) @map("granted_at")
+  grantedBy String?  @map("granted_by") @db.Uuid
+
+  @@map("platform_admins")
+}
+
+// Etapa 5: catálogo fijo (4 filas), no un enum — permite añadir un rol futuro
+// sin ALTER TYPE. Sembrado por prisma/seed.ts, nunca editable vía API en el MVP.
+model Role {
+  code  String @id
+  label String
+
+  members Member[]
+
+  @@map("roles")
+}
+
+enum MemberStatus {
+  invited
+  active
+  suspended
+}
+
+model Member {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  roleCode       String       @map("role_code")
+  status         MemberStatus @default(invited)
+  invitedById    String?      @map("invited_by") @db.Uuid
+  invitedAt      DateTime?    @map("invited_at")
+  activatedAt    DateTime?    @map("activated_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  deletedAt      DateTime?    @map("deleted_at")
+
+  user             User                     @relation(fields: [userId], references: [id])
+  organization     Organization             @relation(fields: [organizationId], references: [id])
+  role             Role                     @relation(fields: [roleCode], references: [code])
+  invitedBy        User?                    @relation("MemberInvitedBy", fields: [invitedById], references: [id])
+  installationScope MemberInstallationScope[]
+
+  @@unique([userId, organizationId]) // Etapa 5 §3: un único rol por organización
+  @@index([organizationId])
+  @@map("members")
+}
+
+model MemberInstallationScope {
+  memberId       String   @map("member_id") @db.Uuid
+  installationId String   @map("installation_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  member       Member       @relation(fields: [memberId], references: [id])
+  installation Installation @relation(fields: [installationId], references: [id])
+
+  @@id([memberId, installationId])
+  @@map("member_installation_scope")
+}
+
+model Session {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String       @map("user_id") @db.Uuid
+  organizationId     String?      @map("organization_id") @db.Uuid
+  refreshSecretHash  String       @map("refresh_secret_hash")
+  userAgent          String?      @map("user_agent")
+  ipAddress          String?      @map("ip_address")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  lastUsedAt         DateTime     @default(now()) @map("last_used_at")
+  expiresAt          DateTime     @map("expires_at")
+  revokedAt          DateTime?    @map("revoked_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Directorio IoT (DATA_MODEL.md §4) — esqueleto de modelo para que Member/
+// Session compilen ya; el módulo de negocio se implementa en el siguiente
+// paso de la Etapa 13 (ver PROJECT_STATUS.md).
+// ---------------------------------------------------------------------------
+
+enum InstallationStatus {
+  active
+  inactive
+}
+
+model Installation {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  name         String
+  locationText String?            @map("location_text")
+  latitude     Float?
+  longitude    Float?
+  status       InstallationStatus @default(active)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  deletedAt    DateTime?          @map("deleted_at")
+
+  organization      Organization              @relation(fields: [organizationId], references: [id])
+  zones             Zone[]
+  gateways          Gateway[]
+  memberScopes      MemberInstallationScope[]
+
+  @@index([organizationId])
+  @@map("installations")
+}
+
+model Zone {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  installationId String    @map("installation_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  zoneType       String?   @map("zone_type")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  installation Installation @relation(fields: [installationId], references: [id])
+  devices      Device[]
+
+  @@index([installationId])
+  @@index([organizationId])
+  @@map("zones")
+}
+
+enum ConnectivityType {
+  lora_concentrator
+  direct_nbiot
+  direct_other
+}
+
+enum GatewayStatus {
+  not_provisioned
+  online
+  offline
+  disabled
+}
+
+model Gateway {
+  id                       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String           @map("organization_id") @db.Uuid
+  installationId           String           @map("installation_id") @db.Uuid
+  externalIdentifier       String           @unique @map("external_identifier")
+  name                     String
+  connectivityType         ConnectivityType @map("connectivity_type")
+  status                   GatewayStatus    @default(not_provisioned)
+  lastSeenAt               DateTime?        @map("last_seen_at")
+  heartbeatIntervalSeconds Int?             @map("heartbeat_interval_seconds")
+  createdAt                DateTime         @default(now()) @map("created_at")
+  updatedAt                DateTime         @updatedAt @map("updated_at")
+  deletedAt                DateTime?        @map("deleted_at")
+
+  installation Installation        @relation(fields: [installationId], references: [id])
+  credentials  GatewayCredential[]
+  devices      Device[]
+  alerts       Alert[]
+
+  @@index([organizationId])
+  @@index([installationId])
+  @@map("gateways")
+}
+
+enum CredentialStatus {
+  active
+  revoked
+}
+
+model GatewayCredential {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gatewayId  String            @map("gateway_id") @db.Uuid
+  secretHash String            @map("secret_hash")
+  status     CredentialStatus  @default(active)
+  createdAt  DateTime          @default(now()) @map("created_at")
+  revokedAt  DateTime?         @map("revoked_at")
+
+  gateway Gateway @relation(fields: [gatewayId], references: [id])
+
+  @@map("gateway_credentials")
+  // Índice único parcial (gateway_id) WHERE status='active' -> migración SQL manual
+}
+
+model Device {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String        @map("organization_id") @db.Uuid
+  gatewayId          String        @map("gateway_id") @db.Uuid
+  zoneId             String        @map("zone_id") @db.Uuid
+  externalIdentifier String        @map("external_identifier")
+  name               String
+  status             GatewayStatus @default(not_provisioned)
+  lastSeenAt         DateTime?     @map("last_seen_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  deletedAt          DateTime?     @map("deleted_at")
+
+  gateway Gateway  @relation(fields: [gatewayId], references: [id])
+  zone    Zone     @relation(fields: [zoneId], references: [id])
+  sensors Sensor[]
+  alerts  Alert[]
+
+  @@unique([gatewayId, externalIdentifier])
+  @@index([organizationId])
+  @@index([zoneId])
+  @@map("devices")
+}
+
+model Sensor {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  deviceId           String    @map("device_id") @db.Uuid
+  externalIdentifier String    @map("external_identifier")
+  label              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  device   Device    @relation(fields: [deviceId], references: [id])
+  channels Channel[]
+
+  @@unique([deviceId, externalIdentifier])
+  @@map("sensors")
+}
+
+enum ChannelDataType {
+  continuous
+  boolean
+  counter
+}
+
+enum ChannelAggregation {
+  average
+  sum
+  count_true
+}
+
+model ChannelType {
+  code                String             @id
+  unit                String
+  dataType            ChannelDataType    @map("data_type")
+  defaultAggregation  ChannelAggregation @map("default_aggregation")
+  minValid            Float?             @map("min_valid")
+  maxValid            Float?             @map("max_valid")
+
+  channels             Channel[]
+  orgChannelThresholds OrgChannelThreshold[]
+
+  @@map("channel_types")
+}
+
+model Channel {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  sensorId           String    @map("sensor_id") @db.Uuid
+  channelTypeCode    String    @map("channel_type_code")
+  alertThresholdMin  Float?    @map("alert_threshold_min")
+  alertThresholdMax  Float?    @map("alert_threshold_max")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  sensor      Sensor      @relation(fields: [sensorId], references: [id])
+  channelType ChannelType @relation(fields: [channelTypeCode], references: [code])
+  telemetryEntries Telemetry[]
+  latestReading    LatestReading?
+  alerts           Alert[]
+
+  @@unique([sensorId, channelTypeCode])
+  @@map("channels")
+}
+
+model OrgChannelThreshold {
+  organizationId  String   @map("organization_id") @db.Uuid
+  channelTypeCode String   @map("channel_type_code")
+  defaultMin      Float?   @map("default_min")
+  defaultMax      Float?   @map("default_max")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  channelType  ChannelType  @relation(fields: [channelTypeCode], references: [code])
+
+  @@id([organizationId, channelTypeCode])
+  @@map("org_channel_thresholds")
+}
+
+// ---------------------------------------------------------------------------
+// Feature flags por organización (Etapa 4/13, PERMISSIONS.md §14)
+// ---------------------------------------------------------------------------
+
+model Feature {
+  code  String @id
+  label String
+
+  organizationFeatures OrganizationFeature[]
+
+  @@map("features")
+}
+
+model OrganizationFeature {
+  organizationId String   @map("organization_id") @db.Uuid
+  featureCode    String   @map("feature_code")
+  enabled        Boolean  @default(false)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedById    String   @map("updated_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  feature      Feature      @relation(fields: [featureCode], references: [code])
+
+  @@id([organizationId, featureCode])
+  @@map("organization_features")
+}
+
+// ---------------------------------------------------------------------------
+// Auditoría (DATA_MODEL.md §6) — inmutable, bigint identity (§6, justificado ahí)
+// ---------------------------------------------------------------------------
+
+model AuditLogEntry {
+  id             BigInt   @id @default(autoincrement())
+  organizationId String?  @map("organization_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String
+  targetType     String?  @map("target_type")
+  targetId       String?  @map("target_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@map("audit_log")
+}
+
+// ---------------------------------------------------------------------------
+// Telemetría y alertas (DATA_MODEL.md §5). La tabla física `telemetry` está
+// particionada por rango de `ts_origin` — Prisma no expresa `PARTITION BY`
+// de forma nativa, así que (igual que RLS en migration 0002) la migración
+// 0003 la crea a mano en vez de dejar que Prisma genere un CREATE TABLE
+// plano; el modelo de aquí abajo describe exactamente las mismas columnas
+// para que el cliente Prisma tenga los tipos correctos.
+// ---------------------------------------------------------------------------
+
+model Telemetry {
+  channelId      String   @map("channel_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  tsOrigin       DateTime @map("ts_origin")
+  tsReceived     DateTime @default(now()) @map("ts_received")
+  value          Float
+  messageId      String?  @map("message_id")
+
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@id([channelId, tsOrigin]) // Clave de deduplicación (MQTT_PROTOCOL.md §5), no un `id` superficial (DATA_MODEL.md §5)
+  @@map("telemetry")
+}
+
+model LatestReading {
+  channelId      String   @id @map("channel_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  value          Float
+  tsOrigin       DateTime @map("ts_origin")
+  tsReceived     DateTime @map("ts_received")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@map("latest_readings")
+}
+
+enum AlertType {
+  threshold
+  offline
+}
+
+enum AlertStatus {
+  open
+  acknowledged
+  resolved
+}
+
+model Alert {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String      @map("organization_id") @db.Uuid
+  alertType        AlertType   @map("alert_type")
+  channelId        String?     @map("channel_id") @db.Uuid
+  deviceId         String?     @map("device_id") @db.Uuid
+  gatewayId        String?     @map("gateway_id") @db.Uuid
+  status           AlertStatus @default(open)
+  openedAt         DateTime    @map("opened_at")
+  acknowledgedAt   DateTime?   @map("acknowledged_at")
+  acknowledgedById String?     @map("acknowledged_by") @db.Uuid
+  resolvedAt       DateTime?   @map("resolved_at")
+  resolvedById     String?     @map("resolved_by") @db.Uuid
+  details          Json?
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  channel       Channel?          @relation(fields: [channelId], references: [id])
+  device        Device?           @relation(fields: [deviceId], references: [id])
+  gateway       Gateway?          @relation(fields: [gatewayId], references: [id])
+  notifications NotificationLog[]
+
+  @@index([organizationId, status])
+  @@map("alerts")
+  // Índices únicos parciales "una alerta abierta por causa" -> migración SQL manual (DATA_MODEL.md §5)
+}
+
+enum NotificationChannel {
+  email
+}
+
+enum NotificationStatus {
+  sent
+  failed
+}
+
+model NotificationLog {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String              @map("organization_id") @db.Uuid
+  alertId         String              @map("alert_id") @db.Uuid
+  recipientUserId String              @map("recipient_user_id") @db.Uuid
+  channel         NotificationChannel @default(email)
+  status          NotificationStatus
+  sentAt          DateTime            @map("sent_at")
+  error           String?
+
+  alert Alert @relation(fields: [alertId], references: [id])
+
+  @@unique([alertId, recipientUserId]) // Evita reenviar la misma notificación dos veces (DATA_MODEL.md §5)
+  @@map("notification_log")
+}
