@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../readings/application/channel_type_labels.dart';
 import '../application/installations_controller.dart';
 
 /// Vista resumen de una instalación (FUNCTIONAL_REQUIREMENTS.md §12): última
-/// lectura de cada canal. La gráfica al pulsar sobre una lectura (MVP,
-/// FUNCTIONAL_REQUIREMENTS.md §12) queda para el siguiente paso de la Etapa 14.
+/// lectura de cada canal; pulsar una lleva a su gráfica histórica
+/// (`ChannelHistoryScreen`).
 class InstallationDetailScreen extends ConsumerWidget {
   final String installationId;
 
@@ -58,6 +59,10 @@ class InstallationDetailScreen extends ConsumerWidget {
                   trailing: Text(
                     '${reading.value.toStringAsFixed(1)} $unit',
                     style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  onTap: () => context.push(
+                    '/channels/${reading.channelId}/history',
+                    extra: reading.channelTypeCode,
                   ),
                 );
               },

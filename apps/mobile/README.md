@@ -5,13 +5,13 @@ Arquitectura de procesos y auth: [`ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 
 ## Estado
 Login (con selección de organización si aplica) → lista de instalaciones →
-última lectura de cada canal de una instalación → lista de alertas (filtro
-por estado, reconocer/resolver). Directorio IoT completo (zonas, gateways,
-dispositivos, sensores, canales) y gráficas históricas quedan para el
-siguiente paso.
+última lectura de cada canal de una instalación → gráfica histórica de un
+canal (24h/7d/30d) → lista de alertas (filtro por estado, reconocer/
+resolver). Directorio IoT completo (zonas, gateways, dispositivos,
+sensores, canales) queda para el siguiente paso.
 
 **Validado** (2026-07-27, Flutter 3.44.8 estable): el SDK está instalado en
-este entorno; `flutter analyze` sin incidencias, `flutter test` (6/6 en
+este entorno; `flutter analyze` sin incidencias, `flutter test` (8/8 en
 verde) y `flutter build web` compilan. iOS solo se puede **compilar** de
 verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`, no
 compilado ni ejecutado.
@@ -60,7 +60,7 @@ lib/
     auth/           Login, selección de organización, refresh (API_DESIGN.md §3)
     installations/   Listado y detalle de instalación (últimas lecturas)
     alerts/          Lista de alertas, filtro por estado, reconocer/resolver
-    readings/        Etiquetas de presentación del catálogo de canales
+    readings/        Gráfica histórica de un canal + etiquetas del catálogo
 ```
 
 ## Decisiones de esta etapa
@@ -72,3 +72,8 @@ lib/
 - **`GET /me` tras cada login/refresh** para obtener `organizationId`/
   `roleCode`/`isPlatformAdmin` — más simple que decodificar el JWT en el
   cliente y reutiliza un endpoint ya construido.
+- **`fl_chart`** para la gráfica histórica: única dependencia de gráficas
+  del proyecto (no estaba en el stack inicial, no es una desviación que
+  necesite ADR — es una librería de UI, no de arquitectura); puro Dart,
+  sin dependencias nativas, mantenida activamente, funciona igual en
+  web/Android/iOS.
