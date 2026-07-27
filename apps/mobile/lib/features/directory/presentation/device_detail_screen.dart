@@ -126,45 +126,71 @@ class DeviceDetailScreen extends ConsumerWidget {
 
   Future<void> _showEditDeviceDialog(BuildContext context, WidgetRef ref, Device? device) async {
     if (device == null) return;
+    // La zona actual solo trae `installationId` a través de la propia zona
+    // (`Device` no lo expone directamente) — se resuelve aquí para poder
+    // ofrecer el desplegable de zonas de esa misma instalación.
+    final api = ref.read(directoryApiProvider);
+    final currentZone = await api.getZone(device.zoneId);
+    final zones = await api.zonesForInstallation(currentZone.installationId);
+
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: device.name);
+    var zoneId = device.zoneId;
 
+    if (!context.mounted) return;
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Editar dispositivo'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: nameController,
-            decoration: const InputDecoration(labelText: 'Nombre'),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          title: const Text('Editar dispositivo'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Nombre'),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: zoneId,
+                  decoration: const InputDecoration(labelText: 'Zona'),
+                  items: zones
+                      .map((z) => DropdownMenuItem(value: z.id, child: Text(z.name)))
+                      .toList(),
+                  onChanged: (value) => setState(() => zoneId = value!),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              try {
-                await ref
-                    .read(directoryApiProvider)
-                    .updateDevice(deviceId, name: nameController.text.trim());
-                if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
-              } catch (error) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('No se pudo guardar el dispositivo.\n$error')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                try {
+                  await api.updateDevice(
+                    deviceId,
+                    name: nameController.text.trim(),
+                    zoneId: zoneId,
                   );
+                  if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+                } catch (error) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text('No se pudo guardar el dispositivo.\n$error')),
+                    );
+                  }
                 }
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
       ),
     );
 

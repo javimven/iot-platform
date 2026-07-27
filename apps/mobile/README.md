@@ -85,13 +85,13 @@ lib/
   necesite ADR — es una librería de UI, no de arquitectura); puro Dart,
   sin dependencias nativas, mantenida activamente, funciona igual en
   web/Android/iOS.
-- **Directorio IoT completo salvo reasignar zona de un dispositivo desde
-  la app**: el backend sí lo permite (`DeviceUpdateDto.zoneId`), pero
-  requeriría que esta pantalla conociera la instalación del dispositivo
-  (hoy solo se llega por `deviceId`) para poder ofrecer el desplegable de
-  zonas — se deja para cuando haga falta, no bloquea el flujo principal de
-  alta de una instalación nueva. Sensor no tiene edición en el backend
-  (solo alta/baja), por eso tampoco la tiene aquí.
+- **Directorio IoT completo**, incluida la reasignación de zona de un
+  dispositivo: `DeviceDetailScreen` resuelve la instalación del
+  dispositivo vía `GET /zones/:id` (la zona actual ya trae
+  `installationId`) antes de pedir la lista de zonas de esa instalación
+  para el desplegable — dos llamadas extra al abrir el diálogo, aceptable
+  para una acción de edición poco frecuente. Sensor no tiene edición en el
+  backend (solo alta/baja), por eso tampoco la tiene aquí.
 - **`GET /gateways` no filtra por instalación** (backend, `BACKLOG.md` #13,
   resuelto documentando la realidad en vez de paginar): `DirectoryApi.
   gatewaysForInstallation` pide todos los gateways de la organización y

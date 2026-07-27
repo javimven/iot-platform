@@ -3,13 +3,20 @@
 /// (FUNCTIONAL_REQUIREMENTS.md §4-9).
 class Zone {
   final String id;
+  final String installationId;
   final String name;
   final String? zoneType;
 
-  const Zone({required this.id, required this.name, required this.zoneType});
+  const Zone({
+    required this.id,
+    required this.installationId,
+    required this.name,
+    required this.zoneType,
+  });
 
   factory Zone.fromJson(Map<String, dynamic> json) => Zone(
         id: json['id'] as String,
+        installationId: json['installationId'] as String,
         name: json['name'] as String,
         zoneType: json['zoneType'] as String?,
       );
@@ -69,12 +76,14 @@ class GatewayCredential {
 
 class Device {
   final String id;
+  final String zoneId;
   final String name;
   final String status;
   final DateTime? lastSeenAt;
 
   const Device({
     required this.id,
+    required this.zoneId,
     required this.name,
     required this.status,
     required this.lastSeenAt,
@@ -84,6 +93,7 @@ class Device {
     final lastSeenRaw = json['lastSeenAt'] as String?;
     return Device(
       id: json['id'] as String,
+      zoneId: json['zoneId'] as String,
       name: json['name'] as String,
       status: json['status'] as String,
       lastSeenAt: lastSeenRaw == null ? null : DateTime.parse(lastSeenRaw),

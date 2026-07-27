@@ -30,6 +30,11 @@ class DirectoryApi {
   /// Baja lógica (FUNCTIONAL_REQUIREMENTS.md §4) — no física.
   Future<void> deleteZone(String id) => _client.delete('/zones/$id');
 
+  Future<Zone> getZone(String id) async {
+    final json = await _client.getJson('/zones/$id');
+    return Zone.fromJson(json);
+  }
+
   /// `GET /gateways` no acepta filtro por instalación (backend, gap conocido
   /// — ver BACKLOG.md #13 sobre paginación/filtrado de listados); se filtra
   /// aquí porque a esta escala (≤500 dispositivos, NON_FUNCTIONAL_REQUIREMENTS.md
@@ -101,11 +106,8 @@ class DirectoryApi {
     return Device.fromJson(json);
   }
 
-  /// Reasignar de zona no está expuesto todavía en la UI (requeriría
-  /// conocer la instalación del dispositivo desde esta pantalla) — el
-  /// backend sí lo permite (`DeviceUpdateDto.zoneId`), solo se envía `name`.
-  Future<Device> updateDevice(String id, {required String name}) async {
-    final json = await _client.patchJson('/devices/$id', body: {'name': name});
+  Future<Device> updateDevice(String id, {required String name, required String zoneId}) async {
+    final json = await _client.patchJson('/devices/$id', body: {'name': name, 'zoneId': zoneId});
     return Device.fromJson(json);
   }
 
