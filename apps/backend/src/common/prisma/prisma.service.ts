@@ -43,8 +43,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     return this.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${context.userId ?? ''}, true)`;
-      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${context.organizationId ?? ''}, true)`;
+      // `null`, no `''`: las políticas de RLS castean estas dos variables a
+      // `::uuid` (DATA_MODEL.md §7) — `''::uuid` lanza un error real de
+      // Postgres ("invalid input syntax for type uuid"), mientras que
+      // `NULL::uuid` es simplemente NULL (la comparación de la política
+      // correspondiente da `false`, no un error). Descubierto en vivo
+      // (2026-07-28): invisible mientras la conexión de la aplicación
+      // pudiera saltarse RLS (ver infra/docker/postgres-init) — con RLS
+      // realmente activo, cualquier login (organizationId aún desconocido)
+      // rompía con un 500.
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${context.userId ?? null}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${context.organizationId ?? null}, true)`;
       await tx.$executeRaw`SELECT set_config('app.is_platform_admin', ${
         context.isPlatformAdmin ? 'true' : 'false'
       }, true)`;

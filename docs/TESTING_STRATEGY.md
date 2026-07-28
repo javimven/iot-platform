@@ -48,9 +48,10 @@ flowchart TD
 - Cobertura: 80% líneas en código de dominio (`apps/backend/src/modules/**`, `apps/mobile/lib/features/**`) — no se persigue el 100%: código de arranque/configuración no aporta valor probado exhaustivamente.
 
 ## 4. Pruebas de integración
-- Contra Postgres/Redis reales (no mocks) — ya configurado en `ci-cd.yml` (`integration-tests`, Etapa 9).
+- Contra Postgres/Redis reales (no mocks) — configurado en `ci-cd.yml` (`integration-tests`, Etapa 9). **Primera prueba real: `apps/backend/test/integration/rls-isolation.spec.ts`** (añadida 2026-07-28, la primera vez que este proyecto corrió contra un Postgres real de cualquier tipo). Encontró dos bugs críticos de aislamiento multi-tenant que los 46 tests unitarios (Prisma mockeado) nunca pudieron detectar — ver `DATA_MODEL.md` §7/§9 para el detalle. El `ci-cd.yml` actualizado en el mismo cambio, pero **sin confirmar con un run real de GitHub Actions todavía** (el pipeline completo nunca se ha disparado — ver cabecera de `ci-cd.yml`).
 - Repositorios y consultas reales (incluye las de agregación de `readings`, Etapa 7).
 - Migraciones: se aplican desde cero en cada ejecución (ya implícito al levantar el Postgres efímero) — ver sección 8 para la prueba adicional contra datos realistas.
+- **El rol de conexión de la prueba debe ser el rol de aplicación restringido (`iot_platform_app`), nunca el propietario de las tablas** — un superusuario/dueño se salta RLS por completo, dando una falsa sensación de cobertura. `rls-isolation.spec.ts` incluye una prueba que falla explícitamente si esto se rompe (`rolsuper`/`rolbypassrls` deben ser `false`).
 
 ## 5. Pruebas de contrato MQTT
 Suite dedicada (`MQTT_PROTOCOL.md` sección 15 ya listó los casos) ejecutada contra un EMQX real de pruebas, no un mock del broker — un mock no verificaría que la ACL generada realmente se aplica. Publica mensajes válidos e inválidos y verifica el resultado en la cola/BD, no solo que `ingestion` "no explota".
@@ -61,6 +62,8 @@ Suite dedicada (`MQTT_PROTOCOL.md` sección 15 ya listó los casos) ejecutada co
 
 ## 7. Pruebas de aislamiento multitenant
 Además de los casos ya listados (`DATA_MODEL.md` sección 12), se añade una **meta-prueba**: consulta `pg_policies`/`pg_tables` al final de la suite de integración y falla si alguna tabla con columna `organization_id` **no** tiene RLS activado — evita que una tabla nueva se añada en el futuro sin pasar por Etapa 5/8, sin depender de que alguien se acuerde de revisarlo manualmente.
+
+**Estado real (2026-07-28)**: `rls-isolation.spec.ts` cubre el caso concreto ya encontrado (dos organizaciones, aislamiento end-to-end, rol sin `BYPASSRLS`), pero la meta-prueba genérica descrita arriba (escanear automáticamente *todas* las tablas con `organization_id` contra `pg_policies`) todavía no está escrita — sigue siendo la siguiente mejora natural de esta sección, ahora con más urgencia dado lo que se acaba de encontrar.
 
 ## 8. Pruebas de roles y permisos
 La matriz de `PERMISSIONS.md` sección 4 se usa como **dato de prueba**, no solo como documentación: una fixture (YAML/JSON) que refleja esa tabla exactamente, recorrida en un test parametrizado que llama a cada endpoint con cada rol y compara el código de respuesta esperado. Si la matriz cambia, la fixture cambia con ella — documento y prueba no pueden divergir en silencio.

@@ -2,6 +2,16 @@
 -- §7, SECURITY.md §1, PERMISSIONS.md §14). Se aplica DESPUÉS de la migración
 -- inicial generada por `prisma migrate dev` (0001, generada automáticamente
 -- contra una base de datos real, no incluida a mano en este repositorio).
+--
+-- `NULLIF(current_setting(...), '')::uuid`, no `current_setting(...)::uuid`
+-- a secas — descubierto en vivo (2026-07-28): `set_config(name, NULL, true)`
+-- no guarda SQL NULL, lo convierte en cadena vacía (los parámetros GUC de
+-- Postgres no distinguen "NULL" de "''"). Sin `NULLIF`, cualquier consulta
+-- sin `organizationId`/`userId` todavía conocido (login antes de elegir
+-- organización, refresh de sesión, accept-invitation) rompía con
+-- `invalid input syntax for type uuid: ""` en vez de simplemente no
+-- filtrar por esa condición — invisible mientras la conexión de la
+-- aplicación pudiera saltarse RLS (ver infra/docker/postgres-init).
 
 -- ---------------------------------------------------------------------------
 -- Índice único parcial: como mucho una credencial ACTIVA por gateway
@@ -46,7 +56,7 @@ CREATE TRIGGER device_zone_matches_gateway_installation
 -- ---------------------------------------------------------------------------
 ALTER TABLE org_channel_thresholds ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON org_channel_thresholds USING (
-  organization_id = current_setting('app.current_org_id', true)::uuid
+  organization_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid
 );
 
 -- `audit_log` necesita, además del aislamiento estándar, que el Admin de
@@ -59,7 +69,7 @@ CREATE POLICY tenant_isolation ON org_channel_thresholds USING (
 -- suya salvo que sea, específicamente, una acción `platform.*`.
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_or_platform_admin ON audit_log USING (
-  organization_id = current_setting('app.current_org_id', true)::uuid
+  organization_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid
   OR organization_id IS NULL
   OR (
     current_setting('app.is_platform_admin', true)::boolean IS TRUE
@@ -98,16 +108,16 @@ CREATE POLICY tenant_isolation_or_platform_admin ON audit_log USING (
 -- bootstrap, que no pasa por esos endpoints. Ver PERMISSIONS.md nota ³.
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_or_own_user ON members USING (
-  organization_id = current_setting('app.current_org_id', true)::uuid
-  OR user_id = current_setting('app.current_user_id', true)::uuid
+  organization_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid
+  OR user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
   OR current_setting('app.allow_identity_bootstrap', true)::boolean IS TRUE
   OR current_setting('app.is_platform_admin', true)::boolean IS TRUE
 );
 
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation_or_own_user ON sessions USING (
-  (organization_id = current_setting('app.current_org_id', true)::uuid OR organization_id IS NULL)
-  OR user_id = current_setting('app.current_user_id', true)::uuid
+  (organization_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid OR organization_id IS NULL)
+  OR user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid
   OR current_setting('app.allow_identity_bootstrap', true)::boolean IS TRUE
 );
 
@@ -125,7 +135,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format(
       'CREATE POLICY tenant_isolation_or_platform_admin ON %I USING (
-         organization_id = current_setting(''app.current_org_id'', true)::uuid
+         organization_id = NULLIF(current_setting(''app.current_org_id'', true), '''')::uuid
          OR current_setting(''app.is_platform_admin'', true)::boolean IS TRUE
        )', t
     );
@@ -143,7 +153,7 @@ END $$;
 ALTER TABLE organization_features ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_read ON organization_features FOR SELECT
-  USING (organization_id = current_setting('app.current_org_id', true)::uuid);
+  USING (organization_id = NULLIF(current_setting('app.current_org_id', true), '')::uuid);
 
 CREATE POLICY platform_admin_write ON organization_features FOR ALL
   USING (current_setting('app.is_platform_admin', true)::boolean IS TRUE)

@@ -1,14 +1,17 @@
-# Pipeline de referencia (Etapa 9, DEPLOYMENT.md sección 9).
-# Los pasos que referencian "apps/backend" o "apps/mobile" se activan
-# a partir de la Etapa 13/14, cuando esas carpetas existan con código real.
+# Pipeline de referencia (Etapa 9, DEPLOYMENT.md sección 9). Etapas 13/14
+# (apps/backend, apps/mobile) ya tienen código real, pero este workflow en
+# sí **nunca se ha ejecutado de verdad** (el repo no tenía remoto hasta
+# 2026-07-28, y hasta ahora escuchaba en `main` en vez de `master`, el
+# branch real de este repo — corregido, pero sigue sin haber un run real
+# que lo confirme). `mobile-ios-build.yml` sí está confirmado en vivo.
 
 name: ci-cd
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   # 1-3: Formateo, lint, análisis estático
@@ -49,6 +52,11 @@ jobs:
           POSTGRES_PASSWORD: ci_only_password
           POSTGRES_DB: iot_platform_test
         ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U iot_platform"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
       redis:
         image: redis:7-alpine
         ports: ["6379:6379"]
@@ -57,9 +65,21 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
       - run: npm ci --prefix apps/backend
-      - run: npm run test:integration --prefix apps/backend
+      - name: Migrar esquema (como propietario de las tablas)
+        run: npm run prisma:migrate --prefix apps/backend
         env:
           DATABASE_URL: postgres://iot_platform:ci_only_password@localhost:5432/iot_platform_test
+      - name: Crear el rol de aplicación restringido (mismo script que docker-compose local)
+        run: |
+          sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+          PGPASSWORD=ci_only_password psql -h localhost -U iot_platform -d iot_platform_test \
+            -f infra/docker/postgres-init/01-app-role.sql
+      - run: npm run test:integration --prefix apps/backend
+        env:
+          # `iot_platform_app`, NUNCA `iot_platform` (dueño de las tablas) — un
+          # superusuario/dueño se salta RLS por completo, con o sin `ENABLE ROW
+          # LEVEL SECURITY` (DATA_MODEL.md §7/§9, descubierto en vivo 2026-07-28).
+          DATABASE_URL: postgres://iot_platform_app:dev_only_app_password@localhost:5432/iot_platform_test
           REDIS_URL: redis://localhost:6379
 
   # 6: Construcción
@@ -117,7 +137,7 @@ jobs:
 
   # 9: Despliegue en staging (automático al fusionar a main)
   deploy-staging:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     needs: docker-image
     runs-on: ubuntu-latest
     environment: staging

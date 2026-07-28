@@ -2,6 +2,11 @@
 # api/ingestion/worker ya usan el código real de apps/backend (Etapa 13).
 # Requiere apps/backend/.env.development (copiar de .env.example, nunca
 # commitear — SECURITY.md §7) con al menos el par de claves JWT de desarrollo.
+#
+# Migraciones (`prisma migrate deploy`) y el seed corren como `iot_platform`
+# (dueño de las tablas, necesario para DDL) — usa esa URL explícitamente,
+# no la de `api`/`ingestion`/`worker`, que se conectan como `iot_platform_app`
+# (infra/docker/postgres-init/01-app-role.sql) para que RLS tenga efecto.
 
 services:
   postgres:
@@ -14,6 +19,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Crea `iot_platform_app` (rol de aplicación, sin BYPASSRLS/superusuario)
+      # la primera vez que se inicializa el volumen — ver el propio script
+      # para el porqué: sin él, RLS queda sin efecto (DATA_MODEL.md §7).
+      - ./infra/docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U iot_platform"]
       interval: 5s
@@ -80,7 +89,7 @@ services:
     environment:
       PROCESS_ROLE: api
       NODE_ENV: development
-      DATABASE_URL: postgres://iot_platform:dev_only_password@postgres:5432/iot_platform
+      DATABASE_URL: postgres://iot_platform_app:dev_only_app_password@postgres:5432/iot_platform
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
@@ -110,7 +119,7 @@ services:
     environment:
       PROCESS_ROLE: worker
       NODE_ENV: development
-      DATABASE_URL: postgres://iot_platform:dev_only_password@postgres:5432/iot_platform
+      DATABASE_URL: postgres://iot_platform_app:dev_only_app_password@postgres:5432/iot_platform
       REDIS_URL: redis://redis:6379
       SMTP_HOST: mailpit
       SMTP_PORT: 1025

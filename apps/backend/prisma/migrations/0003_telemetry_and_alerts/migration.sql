@@ -84,7 +84,7 @@ BEGIN
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format(
       'CREATE POLICY tenant_isolation ON %I USING (
-         organization_id = current_setting(''app.current_org_id'', true)::uuid
+         organization_id = NULLIF(current_setting(''app.current_org_id'', true), '''')::uuid
        )', t
     );
   END LOOP;
