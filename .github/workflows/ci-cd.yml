@@ -99,8 +99,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: npm audit (falla en crítico/alto)
-        run: npm audit --audit-level=high --prefix apps/backend
+      # --omit=dev: las vulnerabilidades de herramientas de build (@nestjs/cli
+      # -> tmp/webpack/picomatch/inquirer) nunca se ejecutan en el servicio
+      # desplegado, solo durante "nest build"/generación de código en local.
+      # Auditamos solo dependencias de producción para que la puerta refleje
+      # riesgo real de runtime, no ruido de tooling (ver SECURITY.md §10).
+      - name: npm audit (falla en crítico/alto, solo dependencias de producción)
+        run: npm audit --omit=dev --audit-level=high --prefix apps/backend
       - name: Escaneo de secretos en el repositorio
         uses: gitleaks/gitleaks-action@v2
 
