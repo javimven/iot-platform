@@ -1,0 +1,48 @@
+# Validación del target iOS (Etapa 14) en un runner macOS de GitHub Actions
+# — no hay Mac disponible en el entorno de desarrollo local, así que esta es
+# la única forma de comprobar que `apps/mobile` compila para iOS. Sin firma
+# de código (no hay cuenta de Apple Developer configurada): valida que el
+# build compila, no genera un .ipa instalable en un dispositivo real.
+#
+# Gratuito e ilimitado en este repositorio por ser público (GitHub Actions
+# no factura minutos, ni siquiera en runners macOS, en repos públicos).
+
+name: mobile-ios-build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ios-build.yml"
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: "stable"
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      - name: Build iOS (sin firma)
+        run: flutter build ios --release --no-codesign
+
+      - name: Subir el .app resultante
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-unsigned
+          path: apps/mobile/build/ios/iphoneos/Runner.app
+          if-no-files-found: error

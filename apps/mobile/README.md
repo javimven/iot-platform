@@ -18,9 +18,14 @@ lo sigue haciendo el backend (`RequirePermission`), nunca el cliente.
 
 **Validado** (2026-07-28, Flutter 3.44.8 estable): `flutter analyze` sin
 incidencias, `flutter test` (12/12 en verde), `flutter build web` y
-**`flutter build apk --debug`** compilan. iOS solo se puede **compilar**
-de verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`,
-no compilado ni ejecutado.
+`flutter build apk --debug` compilan localmente. **iOS validado vía
+GitHub Actions** (`.github/workflows/mobile-ios-build.yml`, runner
+`macos-14` — no hay Mac en este entorno de desarrollo): compila sin firma
+de código (`flutter build ios --release --no-codesign`, no hay cuenta de
+Apple Developer configurada, así que no genera un `.ipa` instalable en un
+dispositivo real, solo confirma que el código compila para iOS). Se
+dispara automáticamente al tocar `apps/mobile/**` en `master`, o a mano
+desde la pestaña Actions de GitHub (`workflow_dispatch`).
 
 **Bug real encontrado al validar Android** (no hipotético — sin esto
 `flutter build apk` fallaba siempre): `jni` 1.0.1 (dependencia transitiva
