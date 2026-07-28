@@ -27,6 +27,12 @@ dispositivo real, solo confirma que el código compila para iOS). Se
 dispara automáticamente al tocar `apps/mobile/**` en `master`, o a mano
 desde la pestaña Actions de GitHub (`workflow_dispatch`).
 
+**Primera ejecución confirmada** (2026-07-28): éxito en ~3 minutos,
+artefacto `ios-build-unsigned` de 7,2 MB
+([run](https://github.com/javimven/iot-platform/actions/runs/30352818973)).
+Con esto, los tres targets (web, Android, iOS) están validados — compilan
+de verdad, no solo "debería funcionar".
+
 **Bug real encontrado al validar Android** (no hipotético — sin esto
 `flutter build apk` fallaba siempre): `jni` 1.0.1 (dependencia transitiva
 de `flutter_secure_storage` → `path_provider_android`) fue **retirado por
