@@ -24,5 +24,14 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
 
+# `jni` 1.0.1 (dependencia transitiva de flutter_secure_storage ->
+# path_provider_android) fue retirado por sus autores en pub.dev: su
+# build.gradle solo aplica el plugin de Kotlin si AGP < 9, y este proyecto
+# (generado por `flutter create` en 2026) usa AGP 9.0.1 — sin el override,
+# `flutter build apk` falla con "Could not find method kotlin()". 1.0.2 lo
+# corrige.
+dependency_overrides:
+  jni: ^1.0.2
+
 flutter:
   uses-material-design: true

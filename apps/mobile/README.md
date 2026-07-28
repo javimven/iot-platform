@@ -16,11 +16,22 @@ Botones de alta/edición solo se muestran si el rol lo permitiría
 (`org_admin`/`technician`) — es una pista de UI, el control de acceso real
 lo sigue haciendo el backend (`RequirePermission`), nunca el cliente.
 
-**Validado** (2026-07-27, Flutter 3.44.8 estable): el SDK está instalado en
-este entorno; `flutter analyze` sin incidencias, `flutter test` (12/12 en
-verde) y `flutter build web` compilan. iOS solo se puede **compilar** de
-verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`, no
-compilado ni ejecutado.
+**Validado** (2026-07-28, Flutter 3.44.8 estable): `flutter analyze` sin
+incidencias, `flutter test` (12/12 en verde), `flutter build web` y
+**`flutter build apk --debug`** compilan. iOS solo se puede **compilar**
+de verdad en macOS (Xcode) — aquí solo se ha generado el proyecto `ios/`,
+no compilado ni ejecutado.
+
+**Bug real encontrado al validar Android** (no hipotético — sin esto
+`flutter build apk` fallaba siempre): `jni` 1.0.1 (dependencia transitiva
+de `flutter_secure_storage` → `path_provider_android`) fue **retirado por
+sus propios autores en pub.dev** — su `build.gradle` solo aplicaba el
+plugin de Kotlin si `AGP < 9`, y este proyecto usa AGP 9.0.1 (generado por
+`flutter create` en 2026), así que fallaba con "Could not find method
+kotlin()". Corregido con `dependency_overrides: jni: ^1.0.2` en
+`pubspec.yaml` — esa versión elimina el bloque de Kotlin que ya no
+necesitaba. Quitar el override en cuanto `path_provider_android` publique
+una versión que ya no dependa de la 1.0.1.
 
 Al conectar el módulo de Alertas contra el backend real se encontraron y
 corrigieron dos divergencias de contrato reales (no hipotéticas — habrían
@@ -52,6 +63,9 @@ flutter test
 
 # 3. Arrancar contra el backend local (docker-compose.yml en la raíz del repo)
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000/v1
+
+# 4. Compilación Android (opcional, para verificar el target además de web)
+flutter build apk --debug
 ```
 
 ## Estructura
