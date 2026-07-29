@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../application/auth_controller.dart';
 
@@ -88,6 +89,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Entrar'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: authState.isLoading ? null : () => context.go('/forgot-password'),
+                    child: const Text('¿Olvidaste tu contraseña?'),
                   ),
                 ],
               ),

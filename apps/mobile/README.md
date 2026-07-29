@@ -12,6 +12,19 @@ deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
 baja) → canales (edición de umbral). Gateway muestra su credencial una
 única vez al crearlo o rotarlo (no se puede recuperar después).
 
+**Activar cuenta invitada / recuperar contraseña** (2026-07-29): el backend
+siempre tuvo `/auth/accept-invitation`, `/auth/forgot-password` y
+`/auth/reset-password` (Etapa 13i), pero hasta ahora no había ninguna
+pantalla para ellos — el único mecanismo real de alta de usuarios
+(invitación por email) no era usable desde la app. `AcceptInvitationScreen`/
+`ForgotPasswordScreen`/`ResetPasswordScreen` (rutas `/accept-invitation`,
+`/forgot-password`, `/reset-password`, con el `token` leído de la query de
+la URL del email) cierran ese hueco; enlace "¿Olvidaste tu contraseña?" en
+el login. Verificado el contrato HTTP exacto contra el backend real (token
+de invitación/restablecimiento leído de Mailpit, no simulado) — sin
+herramienta de automatización de navegador en este entorno no se pudo
+interactuar visualmente con la UI resultante.
+
 Botones de alta/edición solo se muestran si el rol lo permitiría
 (`org_admin`/`technician`) — es una pista de UI, el control de acceso real
 lo sigue haciendo el backend (`RequirePermission`), nunca el cliente.

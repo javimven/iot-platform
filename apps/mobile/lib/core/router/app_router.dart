@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../features/alerts/presentation/alerts_list_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/application/auth_state.dart';
+import '../../features/auth/presentation/accept_invitation_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/reset_password_screen.dart';
 import '../../features/auth/presentation/select_organization_screen.dart';
 import '../../features/directory/presentation/device_detail_screen.dart';
 import '../../features/directory/presentation/directory_screen.dart';
@@ -43,6 +46,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authControllerProvider);
       final location = state.matchedLocation;
 
+      // Enlaces de un solo uso desde email (invitación/restablecer
+      // contraseña) — siempre accesibles, independientes del estado de
+      // sesión actual (incluso durante el `initial` del bootstrap, para no
+      // perder el token de la URL con una redirección a `/` de por medio).
+      const tokenActionRoutes = {'/forgot-password', '/accept-invitation', '/reset-password'};
+      if (tokenActionRoutes.contains(location)) {
+        return null;
+      }
+
       switch (authState.status) {
         case AuthStatus.initial:
           return location == '/' ? null : '/';
@@ -58,6 +70,22 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/', builder: (context, state) => const _SplashScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/accept-invitation',
+        builder: (context, state) => AcceptInvitationScreen(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => ResetPasswordScreen(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
       GoRoute(
         path: '/select-organization',
         builder: (context, state) => const SelectOrganizationScreen(),
