@@ -34,7 +34,18 @@ RUN npx prisma generate \
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+  # Parchea OpenSSL de la imagen base (Trivy, CRITICAL/HIGH, ci-cd.yml) — la
+  # base `node:20-alpine` trae libssl3/libcrypto3 sin el último parche.
+  && apk upgrade --no-cache libssl3 libcrypto3 \
+  # El `npm` (y `npx`/`corepack`) que trae la imagen base nunca se ejecuta en
+  # tiempo de ejecución (ENTRYPOINT es "node dist/main.js" directo) — solo
+  # aporta CVEs de sus propias dependencias internas (`tar`, `minimatch`,
+  # `glob`...) sin exposición real, encontrado en vivo por Trivy en el primer
+  # build real de esta imagen (2026-07-29). Se quita en vez de dejarlo como
+  # peso muerto con vulnerabilidades.
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
