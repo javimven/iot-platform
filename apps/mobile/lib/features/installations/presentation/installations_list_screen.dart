@@ -11,11 +11,21 @@ class InstallationsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final installations = ref.watch(installationsListProvider);
+    final roleCode = ref.watch(authControllerProvider).roleCode;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Instalaciones'),
         actions: [
+          // Pista de UI (igual que el resto de la app): solo `org_admin`
+          // tiene `members.*` (PERMISSIONS.md §1), el control real lo
+          // aplica el backend.
+          if (roleCode == 'org_admin')
+            IconButton(
+              icon: const Icon(Icons.people_outline),
+              tooltip: 'Miembros',
+              onPressed: () => context.push('/members'),
+            ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             tooltip: 'Alertas',

@@ -12,6 +12,15 @@ deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
 baja) → canales (edición de umbral). Gateway muestra su credencial una
 única vez al crearlo o rotarlo (no se puede recuperar después).
 
+**Gestión de miembros** (2026-07-29, `org_admin` únicamente): `MembersListScreen`
+(ruta `/members`, entrada en la barra de Instalaciones) — listar, invitar,
+cambiar rol, suspender/reactivar, asignar alcance por instalación y eliminar
+miembros. Verificado el contrato HTTP exacto contra el backend real; en el
+proceso se encontraron y corrigieron dos bugs reales en el backend (no en
+Flutter): `GET /members` filtraba el hash Argon2 de cada miembro
+(`SECURITY.md` §7), y ni invitar ni cambiar rol/estado devolvían
+`email`/`fullName` pese a estar documentado.
+
 **Activar cuenta invitada / recuperar contraseña** (2026-07-29): el backend
 siempre tuvo `/auth/accept-invitation`, `/auth/forgot-password` y
 `/auth/reset-password` (Etapa 13i), pero hasta ahora no había ninguna

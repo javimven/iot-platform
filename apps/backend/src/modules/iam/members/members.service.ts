@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Member } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { PasswordService } from '../../../common/security/password.service';
@@ -123,9 +122,9 @@ export class MembersService {
    * atrapa y se loguea, pero no bloquea la creación del miembro (Etapa 13,
    * simplificación deliberada frente a montar una cola solo para esto).
    */
-  async invite(user: AccessTokenClaims, dto: MemberInviteDto): Promise<Member> {
+  async invite(user: AccessTokenClaims, dto: MemberInviteDto): Promise<MemberListItem> {
     const organizationId = user.organizationId!;
-    const { member, token } = await this.prisma.runInTenantContext(
+    const { member, targetUser, token } = await this.prisma.runInTenantContext(
       { userId: user.sub, organizationId },
       async (tx) => {
         let targetUser = await tx.user.findUnique({ where: { email: dto.email } });
@@ -174,12 +173,24 @@ export class MembersService {
           { expiresIn: INVITATION_TOKEN_TTL },
         );
 
-        return { member: createdMember, token: invitationToken };
+        return { member: createdMember, targetUser, token: invitationToken };
       },
     );
 
     await this.sendInvitationEmail(dto.email, token);
-    return member;
+    // Aplanado al esquema `Member` documentado (OPENAPI.yaml) — igual que
+    // `listForOrganization`; `targetUser` ya estaba en memoria, no hace
+    // falta una consulta extra para email/fullName.
+    return {
+      id: member.id,
+      userId: member.userId,
+      email: targetUser.email,
+      fullName: targetUser.fullName,
+      roleCode: member.roleCode,
+      status: member.status,
+      invitedAt: member.invitedAt,
+      activatedAt: member.activatedAt,
+    };
   }
 
   private async sendInvitationEmail(email: string, token: string): Promise<void> {
@@ -199,7 +210,7 @@ export class MembersService {
     user: AccessTokenClaims,
     memberId: string,
     dto: MemberUpdateDto,
-  ): Promise<Member> {
+  ): Promise<MemberListItem> {
     const tenantContext = { userId: user.sub, organizationId: user.organizationId };
     const existing = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.member.findFirst({ where: { id: memberId, deletedAt: null } }),
@@ -208,8 +219,15 @@ export class MembersService {
       throw new NotFoundException('Member not found');
     }
 
-    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
-      const updated = await tx.member.update({ where: { id: memberId }, data: dto });
+    const updated = await this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const result = await tx.member.update({
+        where: { id: memberId },
+        data: dto,
+        // Igual que `listForOrganization`/`invite` — `select` (no
+        // `include: { user: true }`) para no pedirle `passwordHash` a la
+        // base de datos.
+        include: { user: { select: { email: true, fullName: true } } },
+      });
       await this.auditLog.record(tx, {
         organizationId: user.organizationId,
         actorUserId: user.sub,
@@ -218,8 +236,19 @@ export class MembersService {
         targetId: memberId,
         metadata: { ...dto },
       });
-      return updated;
+      return result;
     });
+
+    return {
+      id: updated.id,
+      userId: updated.userId,
+      email: updated.user.email,
+      fullName: updated.user.fullName,
+      roleCode: updated.roleCode,
+      status: updated.status,
+      invitedAt: updated.invitedAt,
+      activatedAt: updated.activatedAt,
+    };
   }
 
   async remove(user: AccessTokenClaims, memberId: string): Promise<void> {

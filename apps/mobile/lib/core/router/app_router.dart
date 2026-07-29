@@ -16,6 +16,7 @@ import '../../features/directory/presentation/gateway_detail_screen.dart';
 import '../../features/directory/presentation/sensor_detail_screen.dart';
 import '../../features/installations/presentation/installation_detail_screen.dart';
 import '../../features/installations/presentation/installations_list_screen.dart';
+import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
 
 /// Traduce los cambios de `AuthState` (Riverpod) en notificaciones que
@@ -101,6 +102,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen()),
+      GoRoute(path: '/members', builder: (context, state) => const MembersListScreen()),
       GoRoute(
         path: '/channels/:channelId/history',
         builder: (context, state) => ChannelHistoryScreen(
