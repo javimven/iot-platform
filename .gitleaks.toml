@@ -1,0 +1,19 @@
+# Configuración de gitleaks (docs/SECURITY.md §10 — escaneo de secretos en CI).
+#
+# Solo añade una excepción sobre las reglas por defecto (no las sustituye):
+# apps/backend/.env.example es una plantilla documentada con valores de
+# ejemplo (DEPLOYMENT.md), nunca la clave real (esa vive en .env/.env.development,
+# ambos en .gitignore). El placeholder de la clave RSA usa literalmente "..."
+# en vez de contenido base64 real, pero coincide con la regla "private-key"
+# de gitleaks solo por tener las cabeceras "-----BEGIN/END ... KEY-----".
+#
+# La excepción es un regex, no toda la ruta: solo cubre el placeholder con
+# "..." literal, así que una clave real pegada por error en ese mismo fichero
+# seguiría detectándose.
+[extend]
+useDefault = true
+
+[allowlist]
+regexes = [
+  '''-----BEGIN (PRIVATE|PUBLIC) KEY-----\\n\.\.\.\\n-----END (PRIVATE|PUBLIC) KEY-----''',
+]
