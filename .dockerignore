@@ -1,0 +1,27 @@
+# infra/docker/Dockerfile usa `context: .` (raíz del repo, ci-cd.yml) — sin
+# este fichero, todo lo de abajo se copia también en el contexto de build y
+# puede acabar dentro de la imagen. Bug real encontrado en vivo (2026-07-29):
+# no existía ningún `.dockerignore`, así que `COPY apps/backend/ .` en la
+# etapa `build` copiaba también el `node_modules` del host por encima del
+# recién instalado dentro del contenedor (Linux) — en un host Windows esto
+# mete binarios nativos de Windows (motor de Prisma, `argon2`) en una imagen
+# `node:20-alpine` (Linux/musl). No es solo desperdicio de espacio: enmascaró
+# durante el desarrollo local un segundo bug real (ver Dockerfile) que solo
+# se vio en un checkout limpio de verdad (GitHub Actions).
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+.git/
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+.idea/
+.vscode/

@@ -7,14 +7,27 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY apps/backend/package.json apps/backend/package-lock.json ./
-RUN npm ci --omit=dev=false
+# `prisma/schema.prisma` tiene que estar presente ANTES de `npm ci`: el
+# postinstall de `@prisma/client` (`generate`) lo necesita para generar los
+# tipos; si no está, genera un cliente incompleto y `nest build` falla más
+# adelante con decenas de errores de TypeScript (encontrado en vivo,
+# 2026-07-29 — primera vez que este Dockerfile se construyó de verdad desde
+# un checkout limpio en CI; en local no se detectó porque el `node_modules`
+# del host, ya con el cliente bien generado, se colaba por encima en la
+# etapa `build` al no existir `.dockerignore` — dos bugs distintos que se
+# enmascaraban entre sí).
+COPY apps/backend/prisma ./prisma
+RUN npm ci
 
 # ---- build: compila TypeScript ----
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/backend/ .
-RUN npm run build \
+# Regenera de todos modos, explícito e idempotente — no depender de que el
+# postinstall de la etapa `deps` haya tenido todo lo que necesitaba.
+RUN npx prisma generate \
+  && npm run build \
   && npm prune --omit=dev
 
 # ---- runtime: imagen final, mínima ----
