@@ -23,6 +23,18 @@ interface InvitationTokenClaims {
   type: 'invitation';
 }
 
+/** OPENAPI.yaml `Member` — nunca incluye `passwordHash` (ver `listForOrganization`). */
+export interface MemberListItem {
+  id: string;
+  userId: string;
+  email: string;
+  fullName: string;
+  roleCode: string;
+  status: string;
+  invitedAt: Date | null;
+  activatedAt: Date | null;
+}
+
 const INVITATION_TOKEN_TTL = '7d'; // FUNCTIONAL_REQUIREMENTS.md §3 (enlace de invitación)
 
 @Injectable()
@@ -71,16 +83,31 @@ export class MembersService {
     return member ? { memberId: member.id, roleCode: member.roleCode as RoleCode } : null;
   }
 
-  async listForOrganization(user: AccessTokenClaims) {
-    return this.prisma.runInTenantContext(
+  async listForOrganization(user: AccessTokenClaims): Promise<MemberListItem[]> {
+    const members = await this.prisma.runInTenantContext(
       { userId: user.sub, organizationId: user.organizationId },
       (tx) =>
         tx.member.findMany({
           where: { organizationId: user.organizationId!, deletedAt: null },
-          include: { user: true },
+          // `select` (no `include: { user: true }`) — nunca se pide
+          // `passwordHash` a la base de datos, así que no puede filtrarse en
+          // la respuesta por descuido de serialización (bug real encontrado
+          // en vivo: `include: { user: true }` devolvía el hash de Argon2 de
+          // cada miembro a cualquier org_admin que listara `GET /members`).
+          include: { user: { select: { email: true, fullName: true } } },
           orderBy: { createdAt: 'asc' },
         }),
     );
+    return members.map((member) => ({
+      id: member.id,
+      userId: member.userId,
+      email: member.user.email,
+      fullName: member.user.fullName,
+      roleCode: member.roleCode,
+      status: member.status,
+      invitedAt: member.invitedAt,
+      activatedAt: member.activatedAt,
+    }));
   }
 
   /**
