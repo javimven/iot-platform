@@ -71,11 +71,11 @@ export class GatewaysService {
   }
 
   async findAll(user: AccessTokenClaims, explicitOrganizationId?: string): Promise<Gateway[]> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const scope = await this.resolveScope(user, explicitOrganizationId);
     return this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.gateway.findMany({
-        where: { deletedAt: null, ...scopeWhereClause(scope, 'installationId') },
+        where: { organizationId, deletedAt: null, ...scopeWhereClause(scope, 'installationId') },
         orderBy: { name: 'asc' },
       }),
     );
@@ -86,9 +86,9 @@ export class GatewaysService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<Gateway> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const gateway = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.gateway.findFirst({ where: { id, deletedAt: null } }),
+      tx.gateway.findFirst({ where: { id, organizationId, deletedAt: null } }),
     );
     if (!gateway) {
       throw new NotFoundException('Gateway not found');

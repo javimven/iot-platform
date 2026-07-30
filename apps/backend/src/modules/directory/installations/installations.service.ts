@@ -57,11 +57,11 @@ export class InstallationsService {
   }
 
   async findAll(user: AccessTokenClaims, explicitOrganizationId?: string): Promise<Installation[]> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const scope = await this.resolveScope(user);
     return this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.installation.findMany({
-        where: { deletedAt: null, ...scopeWhereClause(scope, 'id') },
+        where: { organizationId, deletedAt: null, ...scopeWhereClause(scope, 'id') },
         orderBy: { name: 'asc' },
       }),
     );
@@ -72,9 +72,9 @@ export class InstallationsService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<Installation> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const installation = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.installation.findFirst({ where: { id, deletedAt: null } }),
+      tx.installation.findFirst({ where: { id, organizationId, deletedAt: null } }),
     );
     if (!installation) {
       throw new NotFoundException('Installation not found');

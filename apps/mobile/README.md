@@ -23,11 +23,21 @@ ningún endpoint con el catálogo completo de funciones contratables
 (`GET /platform/features`, nuevo), y `PUT /platform/organizations/{id}/features`
 rompía siempre con 500 por un bug real de RLS en `audit_log` (la política no
 distinguía leer de escribir) — corregido con una migración nueva y
-reescribiendo cómo se registra la auditoría. Sigue pendiente de decidir
-(`BACKLOG.md` #18) si se completa la gestión de Directorio IoT de cualquier
-organización más allá de gateways (ADR-0005), ya que hoy un Admin de
-plataforma no puede crear la instalación inicial de un cliente nuevo por
-ninguna vía. Verificado en vivo contra el backend real.
+reescribiendo cómo se registra la auditoría.
+
+**Directorio IoT del panel de plataforma** (2026-07-30, ADR-0005/`BACKLOG.md`
+#18 cerrado): desde "Directorio IoT" en el menú de cada organización,
+`PlatformInstallationsScreen` → `PlatformInstallationDetailScreen` (zonas +
+gateways) → `PlatformGatewayDetailScreen` (dispositivos) →
+`PlatformDeviceDetailScreen` (sensores) — solo crear y listar, sin editar/
+deshabilitar/rotar credencial (`BACKLOG.md` #20: el backend rechazaría esas
+operaciones por ID para un Admin de plataforma puro). Al verificar la cadena
+completa en vivo se encontró un **bug real de aislamiento multi-tenant**:
+`GET /platform/organizations/{id}/installations` y `.../gateways` devolvían
+filas de todas las organizaciones, no solo la de la URL — ninguno de los dos
+`findAll` filtraba por `organizationId` en el `where` de Prisma, y para el
+Admin de plataforma ni RLS ni el alcance por instalación lo hacían por él
+(`BACKLOG.md` #21, corregido). Verificado en vivo contra el backend real.
 
 **Ajustes de organización y auditoría** (2026-07-30): `OrganizationSettingsScreen`
 (perfil editable solo por `org_admin`; funciones contratadas, solo visibles

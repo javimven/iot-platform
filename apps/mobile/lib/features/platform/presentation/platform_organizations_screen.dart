@@ -55,6 +55,7 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
                   trailing: PopupMenuButton<String>(
                     onSelected: (action) => _handleAction(context, ref, org, action),
                     itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'directory', child: Text('Directorio IoT')),
                       const PopupMenuItem(value: 'features', child: Text('Funciones contratadas')),
                       if (org.status == 'active')
                         const PopupMenuItem(value: 'suspend', child: Text('Suspender'))
@@ -76,6 +77,8 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
   void _handleAction(BuildContext context, WidgetRef ref, OrganizationProfile org, String action) {
     if (action == 'features') {
       context.push('/platform/organizations/${org.id}/features', extra: org.name);
+    } else if (action == 'directory') {
+      context.push('/platform/organizations/${org.id}/installations', extra: org.name);
     } else if (action == 'suspend') {
       _confirmStatusChange(context, ref, org, suspend: true);
     } else if (action == 'reactivate') {

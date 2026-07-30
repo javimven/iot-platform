@@ -20,6 +20,10 @@ import '../../features/installations/presentation/installations_list_screen.dart
 import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/organization/presentation/organization_settings_screen.dart';
 import '../../features/platform/presentation/platform_audit_log_screen.dart';
+import '../../features/platform/presentation/platform_device_detail_screen.dart';
+import '../../features/platform/presentation/platform_gateway_detail_screen.dart';
+import '../../features/platform/presentation/platform_installation_detail_screen.dart';
+import '../../features/platform/presentation/platform_installations_screen.dart';
 import '../../features/platform/presentation/platform_organization_features_screen.dart';
 import '../../features/platform/presentation/platform_organizations_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
@@ -136,6 +140,44 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => PlatformOrganizationFeaturesScreen(
           organizationId: state.pathParameters['id']!,
           organizationName: state.extra as String? ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/platform/organizations/:organizationId/installations',
+        builder: (context, state) => PlatformInstallationsScreen(
+          organizationId: state.pathParameters['organizationId']!,
+          organizationName: state.extra as String? ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/platform/organizations/:organizationId/installations/:installationId',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return PlatformInstallationDetailScreen(
+            organizationId: state.pathParameters['organizationId']!,
+            installationId: state.pathParameters['installationId']!,
+            installationName: extra['installationName'] as String? ?? '',
+          );
+        },
+      ),
+      GoRoute(
+        path: '/platform/organizations/:organizationId/gateways/:id',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return PlatformGatewayDetailScreen(
+            organizationId: state.pathParameters['organizationId']!,
+            gatewayId: state.pathParameters['id']!,
+            gatewayName: extra['gatewayName'] as String? ?? '',
+            installationId: extra['installationId'] as String? ?? '',
+          );
+        },
+      ),
+      GoRoute(
+        path: '/platform/organizations/:organizationId/devices/:id',
+        builder: (context, state) => PlatformDeviceDetailScreen(
+          organizationId: state.pathParameters['organizationId']!,
+          deviceId: state.pathParameters['id']!,
+          deviceName: state.extra as String? ?? '',
         ),
       ),
       GoRoute(
