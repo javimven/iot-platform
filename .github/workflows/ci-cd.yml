@@ -134,6 +134,7 @@ jobs:
         with:
           context: .
           file: infra/docker/Dockerfile
+          target: runtime
           push: true
           tags: ${{ steps.tag.outputs.image_tag }}
       - name: Escaneo de la imagen (Trivy)

@@ -46,16 +46,17 @@ RUN npx prisma generate && npm run build
 
 # ---- prod-deps: instalación limpia, solo dependencias de producción ----
 # Antes se reutilizaba el `node_modules` de `build` después de
-# `npm prune --omit=dev` — bug real encontrado en vivo (2026-07-30): en el
-# runner de GitHub Actions, `npm prune --omit=dev` dejó `eslint`/`jest`/
-# `typescript`/`@nestjs/cli` completos dentro de la imagen final (362 MB en
-# vez de 180 MB), con sus propias vulnerabilidades CRITICAL/HIGH (Trivy) —
-# en local, con el mismo Dockerfile/lockfile, `prune` sí los quitaba. No se
-# encontró la causa exacta de la discrepancia (probablemente una diferencia
-# de comportamiento de `npm prune` entre entornos, ya documentada como poco
-# fiable en general) — en vez de perseguirla, se eliminó la dependencia en
-# `prune` por completo: una instalación `npm ci --omit=dev` dedicada es el
-# camino principal y mejor probado de npm, no un caso secundario.
+# `npm prune --omit=dev`. Se cambió a esta etapa dedicada tras un fallo de
+# Trivy en CI (`node_modules` con `eslint`/`jest`/`typescript`/`@nestjs/cli`
+# completos, 362 MB en vez de 180 MB) que en su momento se atribuyó
+# (erróneamente) a `npm prune` siendo poco fiable entre entornos —
+# diagnóstico corregido en `BACKLOG.md` #23: la causa real era que el paso
+# de CI que publica la imagen de producción no tenía `target: runtime`
+# explícito y estaba construyendo la etapa `migrator` (con su
+# `node_modules` completo) en su lugar. `npm prune` nunca fue el problema.
+# Esta etapa se conserva de todos modos porque una instalación
+# `npm ci --omit=dev` dedicada es más explícita y mejor probada que
+# "instalar todo y podar después", no porque corrigiera el bug real.
 FROM node:20-alpine AS prod-deps
 WORKDIR /app
 RUN apk add --no-cache openssl
