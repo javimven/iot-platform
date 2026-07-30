@@ -12,6 +12,16 @@ deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
 baja) → canales (edición de umbral). Gateway muestra su credencial una
 única vez al crearlo o rotarlo (no se puede recuperar después).
 
+**Sesiones activas propias** (2026-07-30, cualquier rol): `SessionsListScreen`
+(ruta `/sessions`, icono en la barra de Instalaciones) — listar y cerrar
+sesión en otro dispositivo (`GET`/`DELETE /auth/sessions`). Cerrar la sesión
+de *este* dispositivo se deshabilita aquí a propósito (ya existe el botón
+"Cerrar sesión"). Verificado en vivo contra el backend real. Al construirla
+se encontró que `sessions.read_others`/`revoke_others` (permiso de
+`org_admin` para gestionar sesiones de otros miembros) está definido en la
+matriz de permisos pero nunca implementado en ningún endpoint —
+`BACKLOG.md` #14, decisión pendiente.
+
 **Gestión de miembros** (2026-07-29, `org_admin` únicamente): `MembersListScreen`
 (ruta `/members`, entrada en la barra de Instalaciones) — listar, invitar,
 cambiar rol, suspender/reactivar, asignar alcance por instalación y eliminar

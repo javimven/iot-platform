@@ -18,6 +18,7 @@ import '../../features/installations/presentation/installation_detail_screen.dar
 import '../../features/installations/presentation/installations_list_screen.dart';
 import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
+import '../../features/sessions/presentation/sessions_list_screen.dart';
 
 /// Traduce los cambios de `AuthState` (Riverpod) en notificaciones que
 /// GoRouter entiende (`Listenable`), para que reevalúe `redirect` cada vez
@@ -103,6 +104,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen()),
       GoRoute(path: '/members', builder: (context, state) => const MembersListScreen()),
+      GoRoute(path: '/sessions', builder: (context, state) => const SessionsListScreen()),
       GoRoute(
         path: '/channels/:channelId/history',
         builder: (context, state) => ChannelHistoryScreen(

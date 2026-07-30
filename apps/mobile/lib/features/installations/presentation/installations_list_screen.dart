@@ -32,6 +32,11 @@ class InstallationsListScreen extends ConsumerWidget {
             onPressed: () => context.push('/alerts'),
           ),
           IconButton(
+            icon: const Icon(Icons.devices_outlined),
+            tooltip: 'Sesiones activas',
+            onPressed: () => context.push('/sessions'),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
             onPressed: () => ref.read(authControllerProvider.notifier).logout(),
