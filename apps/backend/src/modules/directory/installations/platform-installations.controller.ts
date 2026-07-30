@@ -31,10 +31,7 @@ export class PlatformInstallationsController {
 
   @RequirePermission('installations.read')
   @Get()
-  findAll(
-    @CurrentUser() user: AccessTokenClaims,
-    @Param('organizationId') organizationId: string,
-  ) {
+  findAll(@CurrentUser() user: AccessTokenClaims, @Param('organizationId') organizationId: string) {
     return this.installations.findAll(user, organizationId);
   }
 }
