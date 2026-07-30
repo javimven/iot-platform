@@ -900,6 +900,22 @@ paths:
       responses:
         "200": { description: Éxito }
 
+  /platform/features:
+    get:
+      tags: [platform]
+      summary: >
+        Catálogo completo de funciones (org_features.read) — sin esto no hay
+        forma de saber qué activar la primera vez para una organización que
+        nunca ha tenido ninguna función activada (BACKLOG.md #17).
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Feature" }
+
   /platform/organizations/{organizationId}/gateways:
     get:
       tags: [platform]
@@ -1078,6 +1094,12 @@ components:
         featureCode: { type: string }
         enabled: { type: boolean }
         updatedAt: { type: string, format: date-time }
+
+    Feature:
+      type: object
+      properties:
+        code: { type: string }
+        label: { type: string }
 
     ChannelType:
       type: object

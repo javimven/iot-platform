@@ -12,6 +12,23 @@ deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
 baja) → canales (edición de umbral). Gateway muestra su credencial una
 única vez al crearlo o rotarlo (no se puede recuperar después).
 
+**Panel de plataforma** (2026-07-30, Admin de plataforma "puro", sin
+organización propia): `PlatformOrganizationsScreen` (listar/crear/suspender/
+reactivar organizaciones), `PlatformOrganizationFeaturesScreen` (editor de
+funciones contratadas) y `PlatformAuditLogScreen`. El router ahora distingue
+este rol al decidir a dónde redirigir tras el login (antes siempre mandaba a
+`/installations`, que le habría devuelto 403 sin organización activa). Al
+construirlo se encontraron y corrigieron dos huecos reales más: no existía
+ningún endpoint con el catálogo completo de funciones contratables
+(`GET /platform/features`, nuevo), y `PUT /platform/organizations/{id}/features`
+rompía siempre con 500 por un bug real de RLS en `audit_log` (la política no
+distinguía leer de escribir) — corregido con una migración nueva y
+reescribiendo cómo se registra la auditoría. Sigue pendiente de decidir
+(`BACKLOG.md` #18) si se completa la gestión de Directorio IoT de cualquier
+organización más allá de gateways (ADR-0005), ya que hoy un Admin de
+plataforma no puede crear la instalación inicial de un cliente nuevo por
+ninguna vía. Verificado en vivo contra el backend real.
+
 **Ajustes de organización y auditoría** (2026-07-30): `OrganizationSettingsScreen`
 (perfil editable solo por `org_admin`; funciones contratadas, solo visibles
 para `org_admin`) y `AuditLogScreen` (`org_admin`/`technician`) — agrupadas

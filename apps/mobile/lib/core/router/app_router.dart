@@ -19,6 +19,9 @@ import '../../features/installations/presentation/installation_detail_screen.dar
 import '../../features/installations/presentation/installations_list_screen.dart';
 import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/organization/presentation/organization_settings_screen.dart';
+import '../../features/platform/presentation/platform_audit_log_screen.dart';
+import '../../features/platform/presentation/platform_organization_features_screen.dart';
+import '../../features/platform/presentation/platform_organizations_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
 import '../../features/sessions/presentation/sessions_list_screen.dart';
 
@@ -68,7 +71,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           return location == '/select-organization' ? null : '/select-organization';
         case AuthStatus.authenticated:
           final isOnAuthRoute = location == '/' || location == '/login' || location == '/select-organization';
-          return isOnAuthRoute ? '/installations' : null;
+          if (!isOnAuthRoute) return null;
+          // Un Admin de plataforma "puro" (sin membresía en ninguna
+          // organización) no tiene nada que hacer en `/installations` —
+          // `GET /installations` requiere `organizationId`, que aquí es
+          // nulo, y devolvería 403. Su punto de entrada es el panel de
+          // plataforma (`API_DESIGN.md` §2: "Admin de plataforma puro").
+          final isPurePlatformAdmin =
+              authState.isPlatformAdmin && authState.organizationId == null;
+          return isPurePlatformAdmin ? '/platform' : '/installations';
       }
     },
     routes: [
@@ -111,6 +122,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/organization',
         builder: (context, state) => const OrganizationSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/platform',
+        builder: (context, state) => const PlatformOrganizationsScreen(),
+      ),
+      GoRoute(
+        path: '/platform/audit-log',
+        builder: (context, state) => const PlatformAuditLogScreen(),
+      ),
+      GoRoute(
+        path: '/platform/organizations/:id/features',
+        builder: (context, state) => PlatformOrganizationFeaturesScreen(
+          organizationId: state.pathParameters['id']!,
+          organizationName: state.extra as String? ?? '',
+        ),
       ),
       GoRoute(
         path: '/channels/:channelId/history',

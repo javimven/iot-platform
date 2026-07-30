@@ -11,7 +11,8 @@ class InstallationsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final installations = ref.watch(installationsListProvider);
-    final roleCode = ref.watch(authControllerProvider).roleCode;
+    final authState = ref.watch(authControllerProvider);
+    final roleCode = authState.roleCode;
 
     // Pista de UI (igual que el resto de la app): el control real de acceso
     // lo aplica el backend (`RequirePermission`), esto solo evita ofrecer un
@@ -19,6 +20,12 @@ class InstallationsListScreen extends ConsumerWidget {
     final canManageMembers = roleCode == 'org_admin';
     final canSeeOrganization = roleCode == 'org_admin';
     final canSeeAudit = roleCode == 'org_admin' || roleCode == 'technician';
+    // Un usuario que además de miembro de esta organización es Admin de
+    // plataforma (caso raro pero posible) no tiene otro sitio desde el que
+    // llegar al panel de plataforma — su redirect de sesión lo manda aquí,
+    // no a `/platform` (`app_router.dart`, solo el Admin "puro" sin
+    // organización aterriza allí).
+    final isPlatformAdmin = authState.isPlatformAdmin;
 
     return Scaffold(
       appBar: AppBar(
@@ -34,7 +41,7 @@ class InstallationsListScreen extends ConsumerWidget {
             tooltip: 'Sesiones activas',
             onPressed: () => context.push('/sessions'),
           ),
-          if (canManageMembers || canSeeOrganization || canSeeAudit)
+          if (canManageMembers || canSeeOrganization || canSeeAudit || isPlatformAdmin)
             PopupMenuButton<String>(
               tooltip: 'Más',
               onSelected: (route) => context.push(route),
@@ -45,6 +52,8 @@ class InstallationsListScreen extends ConsumerWidget {
                   const PopupMenuItem(value: '/organization', child: Text('Organización')),
                 if (canSeeAudit)
                   const PopupMenuItem(value: '/audit-log', child: Text('Auditoría')),
+                if (isPlatformAdmin)
+                  const PopupMenuItem(value: '/platform', child: Text('Panel de plataforma')),
               ],
             ),
           IconButton(

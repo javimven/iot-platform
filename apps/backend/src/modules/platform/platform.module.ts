@@ -7,6 +7,7 @@ import { PlatformOrganizationsController } from './organizations/platform-organi
 import { PlatformOrganizationsService } from './organizations/platform-organizations.service';
 import { PlatformFeaturesController } from './organizations/platform-features.controller';
 import { PlatformFeaturesService } from './organizations/platform-features.service';
+import { PlatformFeaturesCatalogController } from './organizations/platform-features-catalog.controller';
 import { PlatformAuditController } from './audit/platform-audit.controller';
 import { PlatformAuditService } from './audit/platform-audit.service';
 
@@ -20,6 +21,7 @@ import { PlatformAuditService } from './audit/platform-audit.service';
   controllers: [
     PlatformOrganizationsController,
     PlatformFeaturesController,
+    PlatformFeaturesCatalogController,
     PlatformAuditController,
   ],
   providers: [
