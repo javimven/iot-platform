@@ -1,0 +1,115 @@
+# Docker Compose de despliegue real (staging/producción, DEPLOYMENT.md
+# secciones 2/5/8/9) — DISTINTO del docker-compose.yml de la raíz (ese es
+# solo para desarrollo local: incluye Postgres/MinIO en contenedor, que en
+# real son DigitalOcean Managed Postgres / Hetzner Object Storage,
+# aprovisionados por infra/terraform/, nunca contenedores aquí).
+#
+# Vive en la VPS (Hetzner Cloud, infra/terraform/modules/compute), no en
+# este repositorio en ejecución — el pipeline de CI/CD copia este archivo
+# (y el Caddyfile) por SSH y ejecuta infra/docker/deploy.sh, que a su vez
+# invoca `docker compose -f docker-compose.deploy.yml ...` (DEPLOYMENT.md
+# sección 9, pasos 9/12 — hoy siguen siendo un `echo` de marcador de
+# posición en .github/workflows/ci-cd.yml hasta que exista una VPS real
+# donde probar el script de verdad).
+#
+# `api` corre 2 réplicas nombradas por separado (no `deploy.replicas`, que
+# Compose V2 en modo no-Swarm ignora) para poder desplegar una, comprobar
+# su /health, y solo entonces tocar la otra (DEPLOYMENT.md sección 8) —
+# ver infra/docker/deploy.sh.
+
+services:
+  api_1: &api
+    image: ghcr.io/javimven/iot-platform:${IMAGE_TAG:?Falta IMAGE_TAG (SHA del commit a desplegar, nunca "latest")}
+    env_file: [.env]
+    environment:
+      PROCESS_ROLE: api
+      NODE_ENV: ${NODE_ENV:?}
+    expose: ["3000"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on: [redis, otel-collector]
+
+  api_2:
+    <<: *api
+
+  worker:
+    image: ghcr.io/javimven/iot-platform:${IMAGE_TAG:?}
+    env_file: [.env]
+    environment:
+      PROCESS_ROLE: worker
+      NODE_ENV: ${NODE_ENV:?}
+    restart: unless-stopped
+    depends_on: [redis, otel-collector]
+
+  ingestion:
+    image: ghcr.io/javimven/iot-platform:${IMAGE_TAG:?}
+    env_file: [.env]
+    environment:
+      PROCESS_ROLE: ingestion
+      NODE_ENV: ${NODE_ENV:?}
+    restart: unless-stopped
+    depends_on: [emqx, redis, otel-collector]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redis_data:/data"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # TLS de EMQX (mqtt.<dominio>:8883): certificado Let's Encrypt gestionado
+  # aparte de Caddy (DEPLOYMENT.md sección 6) — vía el gestor de
+  # certificados integrado de EMQX (Dashboard → Certificates) o `acme.sh`
+  # en el host con el resultado montado en `emqx_certs`. Ninguna de las dos
+  # opciones se automatiza todavía aquí — deliberado, ver infra/terraform/README.md
+  # y DEPLOYMENT.md sección 17: no hay dominio real contra el que emitir un
+  # certificado real todavía.
+  emqx:
+    image: emqx/emqx:5.4
+    environment:
+      EMQX_NAME: iot-platform-${ENVIRONMENT_NAME:?staging o production}
+    ports:
+      - "8883:8883" # MQTTS — público (DEPLOYMENT.md sección 6, Cloudflare no lo protege)
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_certs:/opt/emqx/etc/certs/custom:ro
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    env_file: [.env] # GRAFANA_CLOUD_OTLP_ENDPOINT / GRAFANA_CLOUD_OTLP_AUTH
+    volumes:
+      - ../otel/otel-collector-prod.yaml:/etc/otelcol/config.yaml:ro
+    command: ["--config=/etc/otelcol/config.yaml"]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "443:443"
+      - "80:80" # Solo para el reto ACME de Let's Encrypt — Caddy redirige a 443 automáticamente
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro # `flutter build web`, copiado aquí por el pipeline de despliegue
+      - caddy_data:/data # Certificados TLS — persistente entre despliegues, no lo borres
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:?}
+      ENVIRONMENT_SUBDOMAIN: ${ENVIRONMENT_SUBDOMAIN:-} # "" en producción, "staging." en staging
+    restart: unless-stopped
+    depends_on: [api_1, api_2]
+
+volumes:
+  redis_data:
+  emqx_data:
+  emqx_certs:
+  caddy_data:
+  caddy_config:

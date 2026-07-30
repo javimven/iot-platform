@@ -118,10 +118,13 @@ jobs:
       packages: write
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
+      migrator_image_tag: ${{ steps.tag.outputs.migrator_image_tag }}
     steps:
       - uses: actions/checkout@v4
       - id: tag
-        run: echo "image_tag=ghcr.io/${{ github.repository }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "image_tag=ghcr.io/${{ github.repository }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "migrator_image_tag=ghcr.io/${{ github.repository }}:${{ github.sha }}-migrator" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -139,6 +142,18 @@ jobs:
           image-ref: ${{ steps.tag.outputs.image_tag }}
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+      # `migrator` (DEPLOYMENT.md §9, infra/docker/deploy.sh) conserva el CLI
+      # de `prisma` a propósito para `prisma migrate deploy` en el momento
+      # del despliegue — nunca se usa para servir tráfico, así que no pasa
+      # por el escaneo de Trivy de arriba (ese gatea la imagen que sí queda
+      # expuesta).
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/Dockerfile
+          target: migrator
+          push: true
+          tags: ${{ steps.tag.outputs.migrator_image_tag }}
 
   # 9: Despliegue en staging (automático al fusionar a main)
   deploy-staging:

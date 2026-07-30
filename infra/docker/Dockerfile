@@ -6,6 +6,21 @@
 # ---- deps: instala dependencias con caché de capas ----
 FROM node:20-alpine AS deps
 WORKDIR /app
+# El CLI `openssl` (no solo las librerías) tiene que estar disponible ANTES
+# de `npm ci`: el postinstall de `@prisma/client` (`generate`) lo usa para
+# detectar la versión real de OpenSSL de la imagen y elegir el binario de
+# motor correcto (`linux-musl-openssl-3.0.x`, que es lo que trae de verdad
+# `node:20-alpine`). Sin el CLI, la detección falla, cae por defecto a
+# "openssl-1.1.x" (silencioso, solo un warning) y genera/empaqueta el
+# binario equivocado — la imagen `runtime` final arranca pero **no puede
+# conectar con Postgres en absoluto** ("Error loading shared library
+# libssl.so.1.1: No such file or directory", `node:20-alpine` no trae esa
+# librería, trae libssl.so.3). Bug real encontrado en vivo (2026-07-30) al
+# construir el flujo de despliegue real: nunca se había probado el cliente
+# de Prisma generado por este Dockerfile contra una base de datos real —
+# `ci-cd.yml` ejecuta las pruebas de integración directamente en el runner
+# de GitHub Actions (Ubuntu/glibc), nunca dentro de la imagen construida.
+RUN apk add --no-cache openssl
 COPY apps/backend/package.json apps/backend/package-lock.json ./
 # `prisma/schema.prisma` tiene que estar presente ANTES de `npm ci`: el
 # postinstall de `@prisma/client` (`generate`) lo necesita para generar los
@@ -22,6 +37,7 @@ RUN npm ci
 # ---- build: compila TypeScript ----
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/backend/ .
 # Regenera de todos modos, explícito e idempotente — no depender de que el
@@ -38,6 +54,14 @@ RUN addgroup -S app && adduser -S app -G app \
   # Parchea OpenSSL de la imagen base (Trivy, CRITICAL/HIGH, ci-cd.yml) — la
   # base `node:20-alpine` trae libssl3/libcrypto3 sin el último parche.
   && apk upgrade --no-cache libssl3 libcrypto3 \
+  # El CLI `openssl` hace falta AQUÍ TAMBIÉN, no solo en `deps`/`build`:
+  # Prisma Client vuelve a detectar la versión de OpenSSL en cada arranque
+  # del proceso (no solo al generar el cliente) para decidir qué motor
+  # cargar — sin el CLI en esta etapa, esa segunda detección también falla
+  # y por defecto busca la variante equivocada del motor aunque el
+  # correcto ya esté empaquetado (bug real encontrado en vivo, 2026-07-30,
+  # ver el comentario en la etapa `deps`).
+  && apk add --no-cache openssl \
   # El `npm` (y `npx`/`corepack`) que trae la imagen base nunca se ejecuta en
   # tiempo de ejecución (ENTRYPOINT es "node dist/main.js" directo) — solo
   # aporta CVEs de sus propias dependencias internas (`tar`, `minimatch`,
@@ -55,3 +79,17 @@ USER app
 # El script main.js interno lee la variable y bootstrapea solo los módulos
 # necesarios (ARCHITECTURE.md sección 4) — no son tres imágenes distintas.
 ENTRYPOINT ["node", "dist/main.js"]
+
+# ---- migrator: solo para `prisma migrate deploy` en el momento del
+# despliegue (DEPLOYMENT.md §9, infra/docker/deploy.sh) — se basa en `deps`
+# (antes de que la etapa `build` haga `npm prune --omit=dev`) porque el CLI
+# de `prisma` es una devDependency: `runtime` lo quita a propósito (nunca se
+# ejecuta en el proceso servido — mismo criterio que quitar npm/npx de esa
+# etapa) pero migrar el esquema si necesita el CLI real, no solo
+# `@prisma/client`. Nunca se referencia desde `runtime`, así que no le
+# añade peso ni superficie de ataque a la imagen que de verdad queda
+# expuesta al tráfico.
+FROM deps AS migrator
+WORKDIR /app
+COPY apps/backend/prisma ./prisma
+ENTRYPOINT ["npx", "prisma", "migrate", "deploy"]

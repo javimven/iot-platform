@@ -109,18 +109,21 @@ ya no sabe qué recursos reales existen y podría intentar recrearlos.
 
 ## Qué NO cubre este directorio
 
-- **Qué corre dentro de cada servidor** (Docker Compose de despliegue,
-  Caddyfile con el dominio real, configuración de EMQX/TLS) — Terraform
-  aprovisiona la VPS, el propio pipeline de CI/CD (`DEPLOYMENT.md` §9,
-  pasos 9/12, hoy con marcadores de posición) es quien instala/actualiza lo
-  que corre encima vía SSH. Ver `DEPLOYMENT.md` §5 para el `docker-compose.yml`
-  de desarrollo local (referencia de qué servicios hacen falta) — el de
-  despliegue real todavía no existe como entregable propio.
+- **Qué corre dentro de cada servidor** — Terraform aprovisiona la VPS; lo
+  que corre encima (Docker Compose de despliegue, Caddyfile, script de
+  despliegue) vive en [`infra/docker/`](../docker/) (`docker-compose.deploy.yml`,
+  `Caddyfile`, `deploy.sh`, `.env.example`) y se copia/ejecuta ahí por SSH.
+  Ya escrito y validado en local (sin necesitar ninguna cuenta) — pendiente
+  de probarlo contra una VPS real, y de que `.github/workflows/ci-cd.yml`
+  invoque `deploy.sh` de verdad en los pasos 9/12 (hoy siguen siendo `echo`
+  de marcador de posición, DEPLOYMENT.md §9).
 - El bootstrap del rol de aplicación restringido en Postgres
-  (`iot_platform_app` sin `BYPASSRLS`, equivalente a
-  `infra/docker/postgres-init/01-app-role.sql` en local) — ese paso vive en
-  las migraciones/pipeline de despliegue, no en Terraform (ver comentario
-  en `modules/database/main.tf`).
+  (`iot_platform_app` sin `BYPASSRLS`) — Terraform crea el usuario
+  (`digitalocean_database_user.app`) pero no puede conceder privilegios
+  sobre tablas que todavía no existen; eso lo hace
+  `infra/docker/postgres-init/02-grant-app-role-managed.sql`, ejecutado por
+  `deploy.sh` (equivalente en espíritu a `01-app-role.sql` en local, pero
+  sin `CREATE ROLE` — el usuario ya lo crea Terraform).
 - Registro del dominio en sí — hazlo en el registrador que prefieras antes
   de aplicar `dns-zone`.
 

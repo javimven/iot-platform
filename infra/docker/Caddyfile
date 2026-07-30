@@ -1,0 +1,21 @@
+# Reverse proxy + TLS automático (Let's Encrypt) para api/app (DEPLOYMENT.md
+# sección 6) — el mismo Caddyfile sirve staging y producción: solo cambia
+# {$ENVIRONMENT_SUBDOMAIN} ("" en producción, "staging." en staging,
+# inyectado por docker-compose.deploy.yml). mqtt.<dominio> NO pasa por aquí
+# (TLS propio de EMQX, ver docker-compose.deploy.yml).
+
+api.{$ENVIRONMENT_SUBDOMAIN}{$DOMAIN} {
+	reverse_proxy api_1:3000 api_2:3000 {
+		health_uri /health
+		health_interval 10s
+		health_timeout 5s
+		lb_policy round_robin
+	}
+}
+
+app.{$ENVIRONMENT_SUBDOMAIN}{$DOMAIN} {
+	root * /srv/web
+	encode gzip
+	try_files {path} /index.html
+	file_server
+}
