@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { SensorsService } from './sensors.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../../common/guards/jwt-auth.guard';
 
 /** FUNCTIONAL_REQUIREMENTS.md §7: un dispositivo tiene hasta 4 sensores (límite de negocio). */
@@ -26,7 +27,8 @@ describe('SensorsService', () => {
       }),
     );
     const prisma = { runInTenantContext } as unknown as PrismaService;
-    return new SensorsService(prisma);
+    const auditLog = { record: jest.fn() } as unknown as AuditLogService;
+    return new SensorsService(prisma, auditLog);
   }
 
   it('permite crear el cuarto sensor de un dispositivo', async () => {

@@ -6,8 +6,10 @@ import {
 } from '@nestjs/common';
 import { Device } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../../common/guards/jwt-auth.guard';
 import { resolveInstallationScope } from '../../../common/permissions/installation-scope';
+import { resolveOrgContext } from '../../../common/permissions/org-context';
 import { DeviceCreateDto, DeviceUpdateDto } from './dto/device.dto';
 
 /**
@@ -17,13 +19,23 @@ import { DeviceCreateDto, DeviceUpdateDto } from './dto/device.dto';
  * error claro, 400) *antes* de intentar el INSERT — el trigger de Postgres
  * (migration 0002) es el respaldo de última línea, no la experiencia de
  * usuario principal.
+ *
+ * `explicitOrganizationId` (ADR-0005, `BACKLOG.md` #18) — ver `InstallationsService`.
  */
 @Injectable()
 export class DevicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
-  async create(user: AccessTokenClaims, gatewayId: string, dto: DeviceCreateDto): Promise<Device> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async create(
+    user: AccessTokenClaims,
+    gatewayId: string,
+    dto: DeviceCreateDto,
+    explicitOrganizationId?: string,
+  ): Promise<Device> {
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
 
     const [gateway, zone] = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       Promise.all([
@@ -44,21 +56,34 @@ export class DevicesService {
       );
     }
 
-    return this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.device.create({
+    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const device = await tx.device.create({
         data: {
-          organizationId: user.organizationId!,
+          organizationId,
           gatewayId,
           zoneId: dto.zoneId,
           externalIdentifier: dto.externalIdentifier,
           name: dto.name,
         },
-      }),
-    );
+      });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'devices.create',
+        targetType: 'device',
+        targetId: device.id,
+        metadata: { name: device.name, gatewayId, zoneId: dto.zoneId },
+      });
+      return device;
+    });
   }
 
-  async findAllForGateway(user: AccessTokenClaims, gatewayId: string): Promise<Device[]> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async findAllForGateway(
+    user: AccessTokenClaims,
+    gatewayId: string,
+    explicitOrganizationId?: string,
+  ): Promise<Device[]> {
+    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const gateway = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.gateway.findFirst({ where: { id: gatewayId, deletedAt: null } }),
     );
@@ -71,8 +96,12 @@ export class DevicesService {
     );
   }
 
-  async findOne(user: AccessTokenClaims, id: string): Promise<Device> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async findOne(
+    user: AccessTokenClaims,
+    id: string,
+    explicitOrganizationId?: string,
+  ): Promise<Device> {
+    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const device = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.device.findFirst({ where: { id, deletedAt: null }, include: { zone: true } }),
     );
@@ -83,9 +112,14 @@ export class DevicesService {
     return device;
   }
 
-  async update(user: AccessTokenClaims, id: string, dto: DeviceUpdateDto): Promise<Device> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
-    const device = await this.findOne(user, id);
+  async update(
+    user: AccessTokenClaims,
+    id: string,
+    dto: DeviceUpdateDto,
+    explicitOrganizationId?: string,
+  ): Promise<Device> {
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const device = await this.findOne(user, id, explicitOrganizationId);
 
     if (dto.zoneId) {
       const [gateway, zone] = await this.prisma.runInTenantContext(tenantContext, (tx) =>
@@ -104,17 +138,37 @@ export class DevicesService {
       }
     }
 
-    return this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.device.update({ where: { id }, data: dto }),
-    );
+    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const updated = await tx.device.update({ where: { id }, data: dto });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'devices.update',
+        targetType: 'device',
+        targetId: id,
+        metadata: { ...dto },
+      });
+      return updated;
+    });
   }
 
-  async disable(user: AccessTokenClaims, id: string): Promise<void> {
-    await this.findOne(user, id);
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
-    await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.device.update({ where: { id }, data: { status: 'disabled' } }),
-    );
+  async disable(
+    user: AccessTokenClaims,
+    id: string,
+    explicitOrganizationId?: string,
+  ): Promise<void> {
+    await this.findOne(user, id, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    await this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      await tx.device.update({ where: { id }, data: { status: 'disabled' } });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'devices.disable',
+        targetType: 'device',
+        targetId: id,
+      });
+    });
   }
 
   private async assertInScope(user: AccessTokenClaims, installationId: string): Promise<void> {

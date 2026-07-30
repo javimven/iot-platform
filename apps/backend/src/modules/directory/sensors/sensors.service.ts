@@ -6,19 +6,30 @@ import {
 } from '@nestjs/common';
 import { Sensor } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../../common/guards/jwt-auth.guard';
 import { resolveInstallationScope } from '../../../common/permissions/installation-scope';
+import { resolveOrgContext } from '../../../common/permissions/org-context';
 import { SensorCreateDto } from './dto/sensor.dto';
 
 /** FUNCTIONAL_REQUIREMENTS.md §7: un dispositivo tiene hasta 4 sensores (límite de negocio, no de BD). */
 const MAX_SENSORS_PER_DEVICE = 4;
 
+/** `explicitOrganizationId` (ADR-0005, `BACKLOG.md` #18) — ver `InstallationsService`. */
 @Injectable()
 export class SensorsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
-  async create(user: AccessTokenClaims, deviceId: string, dto: SensorCreateDto): Promise<Sensor> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async create(
+    user: AccessTokenClaims,
+    deviceId: string,
+    dto: SensorCreateDto,
+    explicitOrganizationId?: string,
+  ): Promise<Sensor> {
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const device = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.device.findFirst({
         where: { id: deviceId, deletedAt: null },
@@ -36,20 +47,33 @@ export class SensorsService {
       );
     }
 
-    return this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.sensor.create({
+    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const sensor = await tx.sensor.create({
         data: {
-          organizationId: user.organizationId!,
+          organizationId,
           deviceId,
           externalIdentifier: dto.externalIdentifier,
           label: dto.label,
         },
-      }),
-    );
+      });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'sensors.create',
+        targetType: 'sensor',
+        targetId: sensor.id,
+        metadata: { deviceId, label: dto.label },
+      });
+      return sensor;
+    });
   }
 
-  async findAllForDevice(user: AccessTokenClaims, deviceId: string): Promise<Sensor[]> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async findAllForDevice(
+    user: AccessTokenClaims,
+    deviceId: string,
+    explicitOrganizationId?: string,
+  ): Promise<Sensor[]> {
+    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const device = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.device.findFirst({ where: { id: deviceId, deletedAt: null }, include: { zone: true } }),
     );
@@ -62,8 +86,12 @@ export class SensorsService {
     );
   }
 
-  async findOne(user: AccessTokenClaims, id: string): Promise<Sensor> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async findOne(
+    user: AccessTokenClaims,
+    id: string,
+    explicitOrganizationId?: string,
+  ): Promise<Sensor> {
+    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const sensor = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.sensor.findFirst({
         where: { id, deletedAt: null },
@@ -77,12 +105,23 @@ export class SensorsService {
     return sensor;
   }
 
-  async softDelete(user: AccessTokenClaims, id: string): Promise<void> {
-    await this.findOne(user, id);
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
-    await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.sensor.update({ where: { id }, data: { deletedAt: new Date() } }),
-    );
+  async softDelete(
+    user: AccessTokenClaims,
+    id: string,
+    explicitOrganizationId?: string,
+  ): Promise<void> {
+    await this.findOne(user, id, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    await this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      await tx.sensor.update({ where: { id }, data: { deletedAt: new Date() } });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'sensors.delete',
+        targetType: 'sensor',
+        targetId: id,
+      });
+    });
   }
 
   private async assertInScope(user: AccessTokenClaims, installationId: string): Promise<void> {

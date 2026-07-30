@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Gateway } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../../common/guards/jwt-auth.guard';
 import {
   resolveInstallationScope,
@@ -23,11 +24,15 @@ export interface GatewayWithCredential extends Gateway {
  * Gateways = unidad de conexión MQTT (ADR-0004: concentrador LoRa o estación
  * directa). El secreto de la credencial solo se devuelve en la creación y en
  * la rotación (API_DESIGN.md §7) — nunca se puede recuperar después, solo
- * rotar.
+ * rotar. Las acciones que mutan quedan auditadas (nunca el secreto en sí,
+ * solo el nombre de usuario de la credencial) — ver `InstallationsService`.
  */
 @Injectable()
 export class GatewaysService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   async create(
     user: AccessTokenClaims,
@@ -40,8 +45,8 @@ export class GatewaysService {
     const externalIdentifier = `gw-${randomBytes(8).toString('hex')}`;
     const secret = generateOpaqueSecret();
 
-    const gateway = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.gateway.create({
+    const gateway = await this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const created = await tx.gateway.create({
         data: {
           organizationId,
           installationId: dto.installationId,
@@ -50,8 +55,17 @@ export class GatewaysService {
           externalIdentifier,
           credentials: { create: { secretHash: hashOpaqueSecret(secret) } },
         },
-      }),
-    );
+      });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'gateways.create',
+        targetType: 'gateway',
+        targetId: created.id,
+        metadata: { name: created.name, installationId: dto.installationId },
+      });
+      return created;
+    });
 
     return { ...gateway, credentialUsername: externalIdentifier, credentialSecret: secret };
   }
@@ -89,11 +103,20 @@ export class GatewaysService {
     dto: GatewayUpdateDto,
     explicitOrganizationId?: string,
   ): Promise<Gateway> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     await this.findOne(user, id, explicitOrganizationId);
-    return this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.gateway.update({ where: { id }, data: dto }),
-    );
+    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const gateway = await tx.gateway.update({ where: { id }, data: dto });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'gateways.update',
+        targetType: 'gateway',
+        targetId: id,
+        metadata: { ...dto },
+      });
+      return gateway;
+    });
   }
 
   async disable(
@@ -101,11 +124,18 @@ export class GatewaysService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<void> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     await this.findOne(user, id, explicitOrganizationId);
-    await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.gateway.update({ where: { id }, data: { status: 'disabled' } }),
-    );
+    await this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      await tx.gateway.update({ where: { id }, data: { status: 'disabled' } });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'gateways.disable',
+        targetType: 'gateway',
+        targetId: id,
+      });
+    });
   }
 
   /** Revoca la credencial activa y emite una nueva (rotación, API_DESIGN.md §7). */
@@ -114,7 +144,7 @@ export class GatewaysService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<GatewayWithCredential> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const gateway = await this.findOne(user, id, explicitOrganizationId);
     const secret = generateOpaqueSecret();
 
@@ -125,6 +155,14 @@ export class GatewaysService {
       });
       await tx.gatewayCredential.create({
         data: { gatewayId: id, secretHash: hashOpaqueSecret(secret) },
+      });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId: user.sub,
+        action: 'gateways.rotate_credential',
+        targetType: 'gateway',
+        targetId: id,
+        metadata: { credentialUsername: gateway.externalIdentifier },
       });
     });
 

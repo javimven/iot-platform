@@ -1,18 +1,24 @@
 import { Module } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AuditLogService } from '../../common/audit/audit-log.service';
 
 import { InstallationsController } from './installations/installations.controller';
+import { PlatformInstallationsController } from './installations/platform-installations.controller';
 import { InstallationsService } from './installations/installations.service';
 import { ZonesController } from './zones/zones.controller';
+import { PlatformZonesController } from './zones/platform-zones.controller';
 import { ZonesService } from './zones/zones.service';
 import { GatewaysController } from './gateways/gateways.controller';
 import { PlatformGatewaysController } from './gateways/platform-gateways.controller';
 import { GatewaysService } from './gateways/gateways.service';
 import { DevicesController } from './devices/devices.controller';
+import { PlatformDevicesController } from './devices/platform-devices.controller';
 import { DevicesService } from './devices/devices.service';
 import { SensorsController } from './sensors/sensors.controller';
+import { PlatformSensorsController } from './sensors/platform-sensors.controller';
 import { SensorsService } from './sensors/sensors.service';
 import { ChannelsController } from './channels/channels.controller';
+import { PlatformChannelsController } from './channels/platform-channels.controller';
 import { ChannelsService } from './channels/channels.service';
 import { ChannelTypesController } from './channels/channel-types.controller';
 import { OrgChannelThresholdsController } from './channels/org-channel-thresholds.controller';
@@ -26,17 +32,23 @@ import { OrgChannelThresholdsController } from './channels/org-channel-threshold
 @Module({
   controllers: [
     InstallationsController,
+    PlatformInstallationsController,
     ZonesController,
+    PlatformZonesController,
     GatewaysController,
     PlatformGatewaysController,
     DevicesController,
+    PlatformDevicesController,
     SensorsController,
+    PlatformSensorsController,
     ChannelsController,
+    PlatformChannelsController,
     ChannelTypesController,
     OrgChannelThresholdsController,
   ],
   providers: [
     PrismaService,
+    AuditLogService,
     InstallationsService,
     ZonesService,
     GatewaysService,

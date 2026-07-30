@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../../common/guards/jwt-auth.guard';
 
 /**
@@ -32,7 +33,8 @@ describe('DevicesService', () => {
       }),
     );
     const prisma = { runInTenantContext } as unknown as PrismaService;
-    return new DevicesService(prisma);
+    const auditLog = { record: jest.fn() } as unknown as AuditLogService;
+    return new DevicesService(prisma, auditLog);
   }
 
   it('rechaza con 400 si la zona pertenece a una instalación distinta a la del gateway', async () => {

@@ -964,6 +964,158 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GatewayCreated" }
 
+  /platform/organizations/{organizationId}/installations:
+    get:
+      tags: [platform]
+      summary: >
+        Directorio IoT global (ADR-0005) — hasta el 2026-07-30 (`BACKLOG.md`
+        #18) solo existía para gateways; sin esto un Admin de plataforma no
+        podía crear la instalación inicial de un cliente nuevo por ninguna
+        vía.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Installation" }
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstallationCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Installation" }
+
+  /platform/organizations/{organizationId}/installations/{installationId}/zones:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Zone" }
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ZoneCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Zone" }
+
+  /platform/organizations/{organizationId}/gateways/{gatewayId}/devices:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Device" }
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+
+  /platform/organizations/{organizationId}/devices/{deviceId}/sensors:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Sensor" }
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SensorCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sensor" }
+
+  /platform/organizations/{organizationId}/sensors/{sensorId}/channels:
+    get:
+      tags: [platform]
+      summary: >
+        Directorio IoT global (ADR-0005) — solo lectura, los canales se crean
+        automáticamente al ingerir el primer mensaje MQTT, nunca por POST
+        manual (ni siquiera en la ruta de miembro).
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+
   /platform/audit-log:
     get:
       tags: [platform]
