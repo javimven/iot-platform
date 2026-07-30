@@ -127,6 +127,8 @@ De paso se añadió una etapa `migrator` al mismo Dockerfile (conserva el CLI de
 
 Verificado en vivo de nuevo: `docker build` sin `--target` reproduce el `Entrypoint` equivocado de forma determinista (no es un misterio); con el `target: runtime` añadido a `ci-cd.yml`, el flujo completo (typecheck/lint/tests/build/Trivy) queda pendiente de una última confirmación en CI tras este commit.
 
+**Confirmación final en CI real (commit `be4e9a6`, run [30567025184](https://github.com/javimven/iot-platform/actions/runs/30567025184)):** los 14 jobs del pipeline pasaron, incluido `docker-image` con el escaneo de Trivy en verde. No bastó con el check verde de CI — se descargó la imagen real recién publicada (`ghcr.io/javimven/iot-platform:be4e9a6...`, tag `image_tag`) y se inspeccionó en local: `Entrypoint` es `[node dist/main.js]` (no `migrator`), `/app/dist/main.js` existe, `node_modules` pesa 180.3 MB y no contiene `eslint`/`jest`/`typescript`. Confirmado: `image_tag` es de verdad la imagen `runtime`, el bug está cerrado en los tres commits (`ec67d43` #22, `1a242b6` reestructuración `prod-deps`, `be4e9a6` fix real de #23).
+
 ---
 
 ## Pregunta pendiente: alcance de "control de qué ve cada usuario"
