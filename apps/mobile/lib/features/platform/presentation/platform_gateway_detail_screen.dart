@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../directory/data/directory_models.dart';
+import '../../directory/presentation/directory_screen.dart'
+    show showConfirmDialog, showGatewayCredentialDialog;
 import '../application/platform_directory_controller.dart';
 
 class PlatformGatewayDetailScreen extends ConsumerWidget {
@@ -32,6 +34,21 @@ class PlatformGatewayDetailScreen extends ConsumerWidget {
         title: Text(gatewayName),
         actions: [
           IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Editar nombre',
+            onPressed: () => _showEditGatewayDialog(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.key),
+            tooltip: 'Rotar credencial',
+            onPressed: () => _rotateCredential(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.block),
+            tooltip: 'Deshabilitar',
+            onPressed: () => _confirmDisable(context, ref),
+          ),
+          IconButton(
             icon: const Icon(Icons.add),
             tooltip: 'Nuevo dispositivo',
             onPressed: () => _showCreateDeviceDialog(context, ref, zones.value ?? []),
@@ -56,7 +73,11 @@ class PlatformGatewayDetailScreen extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(
                     '/platform/organizations/$organizationId/devices/${device.id}',
-                    extra: device.name,
+                    extra: {
+                      'deviceName': device.name,
+                      'gatewayId': gatewayId,
+                      'installationId': installationId,
+                    },
                   ),
                 );
               },
@@ -67,6 +88,101 @@ class PlatformGatewayDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showEditGatewayDialog(BuildContext context, WidgetRef ref) async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: gatewayName);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar gateway'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Nombre'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await ref
+                    .read(platformDirectoryApiProvider)
+                    .updateGateway(organizationId, gatewayId, name: nameController.text.trim());
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('No se pudo guardar el gateway.\n$error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true && context.mounted) {
+      ref.invalidate(
+        platformGatewaysForInstallationProvider(
+          (organizationId: organizationId, installationId: installationId),
+        ),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gateway actualizado.')),
+      );
+    }
+  }
+
+  Future<void> _confirmDisable(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Deshabilitar gateway',
+      message: 'Dejará de aceptar tráfico MQTT. Puedes rotar su credencial más adelante '
+          'si necesitas volver a habilitarlo.',
+    );
+    if (!confirmed) return;
+    try {
+      await ref.read(platformDirectoryApiProvider).disableGateway(organizationId, gatewayId);
+      if (context.mounted) {
+        ref.invalidate(
+          platformGatewaysForInstallationProvider(
+            (organizationId: organizationId, installationId: installationId),
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo deshabilitar el gateway.\n$error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rotateCredential(BuildContext context, WidgetRef ref) async {
+    try {
+      final credential =
+          await ref.read(platformDirectoryApiProvider).rotateGatewayCredential(organizationId, gatewayId);
+      if (context.mounted) await showGatewayCredentialDialog(context, credential);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo rotar la credencial.\n$error')),
+        );
+      }
+    }
   }
 
   Future<void> _showCreateDeviceDialog(

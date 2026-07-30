@@ -174,11 +174,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/platform/organizations/:organizationId/devices/:id',
-        builder: (context, state) => PlatformDeviceDetailScreen(
-          organizationId: state.pathParameters['organizationId']!,
-          deviceId: state.pathParameters['id']!,
-          deviceName: state.extra as String? ?? '',
-        ),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return PlatformDeviceDetailScreen(
+            organizationId: state.pathParameters['organizationId']!,
+            deviceId: state.pathParameters['id']!,
+            deviceName: extra['deviceName'] as String? ?? '',
+            gatewayId: extra['gatewayId'] as String? ?? '',
+            installationId: extra['installationId'] as String? ?? '',
+          );
+        },
       ),
       GoRoute(
         path: '/channels/:channelId/history',

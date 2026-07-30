@@ -52,7 +52,7 @@ export class ChannelsService {
     const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const channel = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.channel.findFirst({
-        where: { id, deletedAt: null },
+        where: { id, organizationId, deletedAt: null },
         include: { sensor: { include: { device: { include: { zone: true } } } } },
       }),
     );

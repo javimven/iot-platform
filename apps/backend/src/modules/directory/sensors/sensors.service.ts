@@ -91,10 +91,10 @@ export class SensorsService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<Sensor> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const sensor = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.sensor.findFirst({
-        where: { id, deletedAt: null },
+        where: { id, organizationId, deletedAt: null },
         include: { device: { include: { zone: true } } },
       }),
     );

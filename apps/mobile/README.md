@@ -26,18 +26,23 @@ distinguía leer de escribir) — corregido con una migración nueva y
 reescribiendo cómo se registra la auditoría.
 
 **Directorio IoT del panel de plataforma** (2026-07-30, ADR-0005/`BACKLOG.md`
-#18 cerrado): desde "Directorio IoT" en el menú de cada organización,
+#18 y #20 cerrados): desde "Directorio IoT" en el menú de cada organización,
 `PlatformInstallationsScreen` → `PlatformInstallationDetailScreen` (zonas +
 gateways) → `PlatformGatewayDetailScreen` (dispositivos) →
-`PlatformDeviceDetailScreen` (sensores) — solo crear y listar, sin editar/
-deshabilitar/rotar credencial (`BACKLOG.md` #20: el backend rechazaría esas
-operaciones por ID para un Admin de plataforma puro). Al verificar la cadena
-completa en vivo se encontró un **bug real de aislamiento multi-tenant**:
-`GET /platform/organizations/{id}/installations` y `.../gateways` devolvían
-filas de todas las organizaciones, no solo la de la URL — ninguno de los dos
-`findAll` filtraba por `organizationId` en el `where` de Prisma, y para el
-Admin de plataforma ni RLS ni el alcance por instalación lo hacían por él
-(`BACKLOG.md` #21, corregido). Verificado en vivo contra el backend real.
+`PlatformDeviceDetailScreen` (sensores) — con los mismos botones editar/
+deshabilitar/rotar credencial/eliminar que ya tenía la vista de miembro
+(al principio deliberadamente ausentes porque el backend los habría
+rechazado; #20 completó las rutas por ID que faltaban, ver ADR-0005). Al
+verificar la cadena completa en vivo se encontró un **bug real de
+aislamiento multi-tenant**: `GET /platform/organizations/{id}/installations`
+y `.../gateways` devolvían filas de todas las organizaciones, no solo la de
+la URL — ninguno de los dos `findAll` filtraba por `organizationId` en el
+`where` de Prisma, y para el Admin de plataforma ni RLS ni el alcance por
+instalación lo hacían por él (`BACKLOG.md` #21, corregido — y extendido a
+`findOne` de zonas/dispositivos/sensores/canales al completar #20).
+Verificado en vivo contra el backend real: ciclo completo de
+crear→editar→rotar→deshabilitar→eliminar para los 6 recursos, como Admin de
+plataforma puro.
 
 **Ajustes de organización y auditoría** (2026-07-30): `OrganizationSettingsScreen`
 (perfil editable solo por `org_admin`; funciones contratadas, solo visibles

@@ -964,6 +964,63 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GatewayCreated" }
 
+  /platform/organizations/{organizationId}/gateways/{id}:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gateway" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [platform]
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                heartbeatIntervalSeconds: { type: integer, nullable: true }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Gateway" }
+    delete:
+      tags: [platform]
+      summary: Deshabilitar gateway
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "204": { description: Sin contenido }
+
+  /platform/organizations/{organizationId}/gateways/{id}/rotate-credential:
+    post:
+      tags: [platform]
+      summary: Revocar la credencial activa y emitir una nueva
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: "Éxito. Igual que en la creación, el secreto solo se muestra aquí."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GatewayCreated" }
+
   /platform/organizations/{organizationId}/installations:
     get:
       tags: [platform]
@@ -998,6 +1055,45 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Installation" }
 
+  /platform/organizations/{organizationId}/installations/{id}:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Installation" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [platform]
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstallationCreate" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Installation" }
+    delete:
+      tags: [platform]
+      summary: Baja lógica
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "204": { description: Sin contenido }
+
   /platform/organizations/{organizationId}/installations/{installationId}/zones:
     get:
       tags: [platform]
@@ -1030,6 +1126,47 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Zone" }
+
+  /platform/organizations/{organizationId}/installations/{installationId}/zones/{id}:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Zone" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [platform]
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ZoneCreate" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Zone" }
+    delete:
+      tags: [platform]
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "204": { description: Sin contenido }
 
   /platform/organizations/{organizationId}/gateways/{gatewayId}/devices:
     get:
@@ -1064,6 +1201,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Device" }
 
+  /platform/organizations/{organizationId}/gateways/{gatewayId}/devices/{id}:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [platform]
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                zoneId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Device" }
+    delete:
+      tags: [platform]
+      summary: Deshabilitar dispositivo
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "204": { description: Sin contenido }
+
   /platform/organizations/{organizationId}/devices/{deviceId}/sensors:
     get:
       tags: [platform]
@@ -1097,13 +1280,38 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Sensor" }
 
+  /platform/organizations/{organizationId}/devices/{deviceId}/sensors/{id}:
+    get:
+      tags: [platform]
+      summary: Directorio IoT global (ADR-0005) — ver /platform/organizations/{organizationId}/installations.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sensor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [platform]
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "204": { description: Sin contenido }
+
   /platform/organizations/{organizationId}/sensors/{sensorId}/channels:
     get:
       tags: [platform]
       summary: >
-        Directorio IoT global (ADR-0005) — solo lectura, los canales se crean
-        automáticamente al ingerir el primer mensaje MQTT, nunca por POST
-        manual (ni siquiera en la ruta de miembro).
+        Directorio IoT global (ADR-0005) — sin POST, los canales se crean
+        automáticamente al ingerir el primer mensaje MQTT, nunca manualmente
+        (ni siquiera en la ruta de miembro); el único ajuste posible es el
+        umbral de alerta (ver /platform/.../channels/{id}).
       parameters:
         - { $ref: "#/components/parameters/PathId" }
         - { $ref: "#/components/parameters/PathId" }
@@ -1115,6 +1323,30 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Channel" }
+
+  /platform/organizations/{organizationId}/sensors/{sensorId}/channels/{id}:
+    patch:
+      tags: [platform]
+      summary: Sobrescribir el umbral de alerta de este canal (override del valor por defecto de la organización)
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alertThresholdMin: { type: number, nullable: true }
+                alertThresholdMax: { type: number, nullable: true }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Channel" }
 
   /platform/audit-log:
     get:

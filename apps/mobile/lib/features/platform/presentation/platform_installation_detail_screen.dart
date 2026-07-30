@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../directory/data/directory_models.dart';
-import '../../directory/presentation/directory_screen.dart' show showGatewayCredentialDialog;
+import '../../directory/presentation/directory_screen.dart'
+    show showConfirmDialog, showGatewayCredentialDialog;
 import '../application/platform_directory_controller.dart';
 
 class PlatformInstallationDetailScreen extends ConsumerWidget {
@@ -25,7 +26,21 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
     final gateways = ref.watch(platformGatewaysForInstallationProvider(params));
 
     return Scaffold(
-      appBar: AppBar(title: Text(installationName)),
+      appBar: AppBar(
+        title: Text(installationName),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Editar nombre',
+            onPressed: () => _showEditInstallationDialog(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Eliminar instalación',
+            onPressed: () => _confirmDeleteInstallation(context, ref),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () => Future.wait([
           ref.refresh(platformZonesProvider(params).future),
@@ -54,8 +69,21 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
                       child: Text('Sin zonas registradas.'),
                     )
                   : Column(
-                      children:
-                          items.map((z) => ListTile(title: Text(z.name), subtitle: z.zoneType != null ? Text(z.zoneType!) : null)).toList(),
+                      children: items
+                          .map((z) => ListTile(
+                                title: Text(z.name),
+                                subtitle: z.zoneType != null ? Text(z.zoneType!) : null,
+                                trailing: PopupMenuButton<String>(
+                                  onSelected: (action) => action == 'edit'
+                                      ? _showEditZoneDialog(context, ref, z)
+                                      : _confirmDeleteZone(context, ref, z),
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(value: 'edit', child: Text('Editar')),
+                                    PopupMenuItem(value: 'delete', child: Text('Eliminar')),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
                     ),
               error: (error, _) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -116,6 +144,160 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showEditInstallationDialog(BuildContext context, WidgetRef ref) async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: installationName);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar instalación'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Nombre'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await ref
+                    .read(platformDirectoryApiProvider)
+                    .updateInstallation(organizationId, installationId, name: nameController.text.trim());
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('No se pudo guardar la instalación.\n$error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true && context.mounted) {
+      ref.invalidate(platformInstallationsProvider(organizationId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Instalación actualizada.')),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteInstallation(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Eliminar instalación',
+      message: '¿Seguro que quieres eliminar "$installationName"? Esta acción es una baja lógica.',
+    );
+    if (!confirmed) return;
+    try {
+      await ref.read(platformDirectoryApiProvider).deleteInstallation(organizationId, installationId);
+      ref.invalidate(platformInstallationsProvider(organizationId));
+      if (context.mounted) context.pop();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo eliminar la instalación.\n$error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditZoneDialog(BuildContext context, WidgetRef ref, Zone zone) async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: zone.name);
+    final zoneTypeController = TextEditingController(text: zone.zoneType ?? '');
+    final params = (organizationId: organizationId, installationId: installationId);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar zona'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+              ),
+              TextFormField(
+                controller: zoneTypeController,
+                decoration: const InputDecoration(labelText: 'Tipo (opcional)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await ref.read(platformDirectoryApiProvider).updateZone(
+                      organizationId,
+                      installationId,
+                      zone.id,
+                      name: nameController.text.trim(),
+                      zoneType: zoneTypeController.text.trim(),
+                    );
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('No se pudo guardar la zona.\n$error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      ref.invalidate(platformZonesProvider(params));
+    }
+  }
+
+  Future<void> _confirmDeleteZone(BuildContext context, WidgetRef ref, Zone zone) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Eliminar zona',
+      message: '¿Seguro que quieres eliminar "${zone.name}"? Esta acción es una baja lógica.',
+    );
+    if (!confirmed) return;
+    final params = (organizationId: organizationId, installationId: installationId);
+    try {
+      await ref.read(platformDirectoryApiProvider).deleteZone(organizationId, installationId, zone.id);
+      ref.invalidate(platformZonesProvider(params));
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo eliminar la zona.\n$error')),
+        );
+      }
+    }
   }
 
   Future<void> _showCreateZoneDialog(BuildContext context, WidgetRef ref) async {

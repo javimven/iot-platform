@@ -101,9 +101,12 @@ export class DevicesService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<Device> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const device = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.device.findFirst({ where: { id, deletedAt: null }, include: { zone: true } }),
+      tx.device.findFirst({
+        where: { id, organizationId, deletedAt: null },
+        include: { zone: true },
+      }),
     );
     if (!device) {
       throw new NotFoundException('Device not found');

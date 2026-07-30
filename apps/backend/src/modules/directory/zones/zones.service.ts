@@ -56,9 +56,9 @@ export class ZonesService {
     id: string,
     explicitOrganizationId?: string,
   ): Promise<Zone> {
-    const { tenantContext } = resolveOrgContext(user, explicitOrganizationId);
+    const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const zone = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.zone.findFirst({ where: { id, deletedAt: null } }),
+      tx.zone.findFirst({ where: { id, organizationId, deletedAt: null } }),
     );
     if (!zone) {
       throw new NotFoundException('Zone not found');

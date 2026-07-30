@@ -3,11 +3,9 @@ import '../../directory/data/directory_models.dart';
 import '../../installations/data/installation_models.dart';
 
 /// Directorio IoT global del Admin de plataforma (ADR-0005, `BACKLOG.md`
-/// #18) — solo crear y listar, no editar/deshabilitar: las operaciones por
-/// ID solo existen en la ruta de miembro, que exige una organización propia
-/// que un Admin de plataforma "puro" no tiene (`BACKLOG.md` #20, sin
-/// decidir todavía). Una vez creado, el equipo de la propia organización
-/// cliente gestiona el día a día desde su Directorio IoT normal.
+/// #18/#20) — crear, listar, editar, deshabilitar/dar de baja y rotar
+/// credencial, igual que la ruta de miembro (ADR-0005 ya decidía este
+/// alcance completo desde el principio).
 class PlatformDirectoryApi {
   final ApiClient _client;
 
@@ -23,6 +21,22 @@ class PlatformDirectoryApi {
         .postJson('/platform/organizations/$organizationId/installations', body: {'name': name});
     return Installation.fromJson(json);
   }
+
+  Future<Installation> updateInstallation(
+    String organizationId,
+    String id, {
+    required String name,
+  }) async {
+    final json = await _client.patchJson(
+      '/platform/organizations/$organizationId/installations/$id',
+      body: {'name': name},
+    );
+    return Installation.fromJson(json);
+  }
+
+  /// Baja lógica.
+  Future<void> deleteInstallation(String organizationId, String id) =>
+      _client.delete('/platform/organizations/$organizationId/installations/$id');
 
   Future<List<Zone>> zones(String organizationId, String installationId) async {
     final list = await _client.getJsonList(
@@ -42,6 +56,24 @@ class PlatformDirectoryApi {
     );
     return Zone.fromJson(json);
   }
+
+  Future<Zone> updateZone(
+    String organizationId,
+    String installationId,
+    String id, {
+    required String name,
+    String? zoneType,
+  }) async {
+    final json = await _client.patchJson(
+      '/platform/organizations/$organizationId/installations/$installationId/zones/$id',
+      body: {'name': name, if (zoneType != null && zoneType.isNotEmpty) 'zoneType': zoneType},
+    );
+    return Zone.fromJson(json);
+  }
+
+  /// Baja lógica.
+  Future<void> deleteZone(String organizationId, String installationId, String id) => _client
+      .delete('/platform/organizations/$organizationId/installations/$installationId/zones/$id');
 
   /// `GET /platform/.../gateways` no filtra por instalación (mismo gap que
   /// la ruta de miembro, `BACKLOG.md` #13) — se filtra en cliente.
@@ -66,6 +98,26 @@ class PlatformDirectoryApi {
     return GatewayCredential.fromJson(json);
   }
 
+  Future<Gateway> updateGateway(String organizationId, String id, {required String name}) async {
+    final json = await _client.patchJson(
+      '/platform/organizations/$organizationId/gateways/$id',
+      body: {'name': name},
+    );
+    return Gateway.fromJson(json);
+  }
+
+  /// No es baja lógica ni física — pasa a `status: disabled`.
+  Future<void> disableGateway(String organizationId, String id) =>
+      _client.delete('/platform/organizations/$organizationId/gateways/$id');
+
+  /// Revoca la credencial activa y emite una nueva — la anterior deja de
+  /// servir de inmediato (API_DESIGN.md §7).
+  Future<GatewayCredential> rotateGatewayCredential(String organizationId, String id) async {
+    final json = await _client
+        .postJson('/platform/organizations/$organizationId/gateways/$id/rotate-credential');
+    return GatewayCredential.fromJson(json);
+  }
+
   Future<List<Device>> devicesForGateway(String organizationId, String gatewayId) async {
     final list = await _client
         .getJsonList('/platform/organizations/$organizationId/gateways/$gatewayId/devices');
@@ -85,6 +137,24 @@ class PlatformDirectoryApi {
     );
     return Device.fromJson(json);
   }
+
+  Future<Device> updateDevice(
+    String organizationId,
+    String gatewayId,
+    String id, {
+    required String name,
+    required String zoneId,
+  }) async {
+    final json = await _client.patchJson(
+      '/platform/organizations/$organizationId/gateways/$gatewayId/devices/$id',
+      body: {'name': name, 'zoneId': zoneId},
+    );
+    return Device.fromJson(json);
+  }
+
+  /// Deshabilitar, no borrar — mismo criterio que `disableGateway`.
+  Future<void> disableDevice(String organizationId, String gatewayId, String id) => _client
+      .delete('/platform/organizations/$organizationId/gateways/$gatewayId/devices/$id');
 
   Future<List<Sensor>> sensorsForDevice(String organizationId, String deviceId) async {
     final list = await _client
@@ -107,4 +177,8 @@ class PlatformDirectoryApi {
     );
     return Sensor.fromJson(json);
   }
+
+  /// Baja lógica — no hay edición de sensor en el backend (solo alta/baja).
+  Future<void> deleteSensor(String organizationId, String deviceId, String id) =>
+      _client.delete('/platform/organizations/$organizationId/devices/$deviceId/sensors/$id');
 }
