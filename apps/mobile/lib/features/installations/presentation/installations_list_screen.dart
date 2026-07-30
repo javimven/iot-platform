@@ -13,19 +13,17 @@ class InstallationsListScreen extends ConsumerWidget {
     final installations = ref.watch(installationsListProvider);
     final roleCode = ref.watch(authControllerProvider).roleCode;
 
+    // Pista de UI (igual que el resto de la app): el control real de acceso
+    // lo aplica el backend (`RequirePermission`), esto solo evita ofrecer un
+    // atajo a algo que devolvería 403 (`PERMISSIONS.md` §1/§4).
+    final canManageMembers = roleCode == 'org_admin';
+    final canSeeOrganization = roleCode == 'org_admin';
+    final canSeeAudit = roleCode == 'org_admin' || roleCode == 'technician';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Instalaciones'),
         actions: [
-          // Pista de UI (igual que el resto de la app): solo `org_admin`
-          // tiene `members.*` (PERMISSIONS.md §1), el control real lo
-          // aplica el backend.
-          if (roleCode == 'org_admin')
-            IconButton(
-              icon: const Icon(Icons.people_outline),
-              tooltip: 'Miembros',
-              onPressed: () => context.push('/members'),
-            ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             tooltip: 'Alertas',
@@ -36,6 +34,19 @@ class InstallationsListScreen extends ConsumerWidget {
             tooltip: 'Sesiones activas',
             onPressed: () => context.push('/sessions'),
           ),
+          if (canManageMembers || canSeeOrganization || canSeeAudit)
+            PopupMenuButton<String>(
+              tooltip: 'Más',
+              onSelected: (route) => context.push(route),
+              itemBuilder: (context) => [
+                if (canManageMembers)
+                  const PopupMenuItem(value: '/members', child: Text('Miembros')),
+                if (canSeeOrganization)
+                  const PopupMenuItem(value: '/organization', child: Text('Organización')),
+                if (canSeeAudit)
+                  const PopupMenuItem(value: '/audit-log', child: Text('Auditoría')),
+              ],
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',

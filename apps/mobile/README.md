@@ -12,6 +12,18 @@ deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
 baja) → canales (edición de umbral). Gateway muestra su credencial una
 única vez al crearlo o rotarlo (no se puede recuperar después).
 
+**Ajustes de organización y auditoría** (2026-07-30): `OrganizationSettingsScreen`
+(perfil editable solo por `org_admin`; funciones contratadas, solo visibles
+para `org_admin`) y `AuditLogScreen` (`org_admin`/`technician`) — agrupadas
+en un nuevo menú "Más" en la barra de Instalaciones. Al construirlas se
+encontró y corrigió un **bug crítico real**: `GET /audit-log` y
+`GET /platform/audit-log` llevaban rotos desde siempre (500 en cuanto había
+al menos una fila) porque `AuditLogEntry.id` es `BigInt` y `JSON.stringify`
+no lo serializa de forma nativa — nunca se había detectado porque nadie
+había llamado a ese endpoint de verdad hasta ahora. Corregido con un parche
+global en `main.ts`; `id` ahora viaja como string. Verificado en vivo contra
+el backend real.
+
 **Sesiones activas propias** (2026-07-30, cualquier rol): `SessionsListScreen`
 (ruta `/sessions`, icono en la barra de Instalaciones) — listar y cerrar
 sesión en otro dispositivo (`GET`/`DELETE /auth/sessions`). Cerrar la sesión

@@ -6,6 +6,21 @@ import { ApiModule } from './api.module';
 import { IngestionModule } from './ingestion.module';
 import { WorkerModule } from './worker.module';
 
+// `JSON.stringify` no sabe serializar `BigInt` de forma nativa (Node) — hoy
+// solo lo usa `AuditLogEntry.id` (Prisma `BigInt @id @default(autoincrement())`),
+// pero un parche global evita repetir el error si aparece otro campo BigInt
+// en el futuro. Bug real encontrado en vivo (2026-07-30): `GET /audit-log`
+// crasheaba con 500 ("Do not know how to serialize a BigInt") en cuanto
+// había al menos una fila — nunca se había probado end-to-end hasta ahora.
+declare global {
+  interface BigInt {
+    toJSON(): string;
+  }
+}
+BigInt.prototype.toJSON = function (this: bigint): string {
+  return this.toString();
+};
+
 /**
  * Único entrypoint para los tres procesos (ARCHITECTURE.md §4, DEPLOYMENT.md
  * `infra/docker/Dockerfile`): `PROCESS_ROLE` decide qué módulo raíz se

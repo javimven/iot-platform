@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/alerts/presentation/alerts_list_screen.dart';
+import '../../features/audit/presentation/audit_log_screen.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/application/auth_state.dart';
 import '../../features/auth/presentation/accept_invitation_screen.dart';
@@ -17,6 +18,7 @@ import '../../features/directory/presentation/sensor_detail_screen.dart';
 import '../../features/installations/presentation/installation_detail_screen.dart';
 import '../../features/installations/presentation/installations_list_screen.dart';
 import '../../features/members/presentation/members_list_screen.dart';
+import '../../features/organization/presentation/organization_settings_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
 import '../../features/sessions/presentation/sessions_list_screen.dart';
 
@@ -105,6 +107,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen()),
       GoRoute(path: '/members', builder: (context, state) => const MembersListScreen()),
       GoRoute(path: '/sessions', builder: (context, state) => const SessionsListScreen()),
+      GoRoute(path: '/audit-log', builder: (context, state) => const AuditLogScreen()),
+      GoRoute(
+        path: '/organization',
+        builder: (context, state) => const OrganizationSettingsScreen(),
+      ),
       GoRoute(
         path: '/channels/:channelId/history',
         builder: (context, state) => ChannelHistoryScreen(
