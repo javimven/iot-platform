@@ -131,11 +131,6 @@ Verificado en vivo de nuevo: `docker build` sin `--target` reproduce el `Entrypo
 
 ---
 
-## Pregunta pendiente: alcance de "control de qué ve cada usuario"
+## ~~Pregunta pendiente: alcance de "control de qué ve cada usuario"~~ — Resuelta (2026-07-27), texto obsoleto encontrado el 2026-07-30 y limpiado
 
-Tu frase: *"la configuración de que ve cada usuario y capacidad de modificarlo siempre la voy a tener yo como administrador y que los usuarios no puedan cambiar lo que ven"*. Esto admite dos lecturas muy distintas y quiero confirmar cuál antes de detallarlo:
-
-1. **Solo idioma**: cada usuario tiene un idioma asignado, pero lo asigna el Admin (¿de plataforma? ¿de organización?) en vez de elegirlo el propio usuario libremente.
-2. **Visibilidad de funciones/módulos** (más amplio): qué pestañas/funciones ve cada organización o usuario (p. ej. "informes" o "recomendaciones" solo para ciertos clientes/planes) se controla centralmente — esto sería un sistema de *feature flags* por organización, no solo idioma, y encajaría con vender la plataforma en distintos niveles/planes.
-
-Si es la lectura 2, es una pieza de arquitectura real (probablemente ligada a `organizations` — un plan/tier por organización) que conviene fijar antes de la Etapa 7 (API), no dejarla para V2 sin más.
+Esta pregunta (lectura 1 "solo idioma" vs. lectura 2 "feature flags por organización") llevaba sin resolverse en el texto de este archivo desde el commit inicial del proyecto, pero la decisión real **sí se tomó y se implementó**: lectura 2, feature flags por organización gestionadas en exclusiva por el Admin de plataforma (`docs/PERMISSIONS.md` §14, historial fechado 2026-07-27, citando tu propia frase como motivo para descartar el autoservicio por organización). Implementado en `organization_features`/`features` (esquema), `PlatformFeaturesService`/`platform-features.controller.ts`/`platform-features-catalog.controller.ts` (backend) — `org_features.read` (alcance propio, para que el org_admin sepa qué pestañas mostrar) / `org_features.update` (solo Admin de plataforma, global). Encontrado al auditar el estado del proyecto tras cerrar #23: el texto de la pregunta nunca se borró de `BACKLOG.md` después de decidirse, dando la falsa impresión de que seguía abierta. Sin cambios de código — solo limpieza de documentación.
