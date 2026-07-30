@@ -15,3 +15,11 @@ final organizationProfileProvider = FutureProvider.autoDispose<OrganizationProfi
 final organizationFeaturesProvider = FutureProvider.autoDispose<List<OrganizationFeature>>((ref) {
   return ref.watch(organizationApiProvider).getFeatures();
 });
+
+final channelTypeCodesProvider = FutureProvider.autoDispose<List<String>>((ref) {
+  return ref.watch(organizationApiProvider).getChannelTypeCodes();
+});
+
+final channelThresholdsProvider = FutureProvider.autoDispose<List<OrgChannelThreshold>>((ref) {
+  return ref.watch(organizationApiProvider).getChannelThresholds();
+});

@@ -248,6 +248,22 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/OrganizationFeature" }
 
+  /organization/channel-thresholds:
+    get:
+      tags: [organization]
+      summary: >
+        Umbrales por defecto ya configurados para mi organización
+        (channels.read) — antes solo existía el PUT por tipo de canal, sin
+        ninguna forma de leer el valor actual (BACKLOG.md #16).
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OrgChannelThreshold" }
+
   /organization/channel-thresholds/{channelTypeCode}:
     put:
       tags: [organization]
@@ -1100,6 +1116,14 @@ components:
       properties:
         code: { type: string }
         label: { type: string }
+
+    OrgChannelThreshold:
+      type: object
+      properties:
+        channelTypeCode: { type: string }
+        defaultMin: { type: number, nullable: true }
+        defaultMax: { type: number, nullable: true }
+        updatedAt: { type: string, format: date-time }
 
     ChannelType:
       type: object

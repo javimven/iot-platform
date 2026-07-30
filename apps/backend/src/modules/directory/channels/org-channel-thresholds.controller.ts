@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { IsNumber, IsOptional } from 'class-validator';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -25,6 +25,23 @@ class OrgChannelThresholdDto {
 @Controller('organization/channel-thresholds')
 export class OrgChannelThresholdsController {
   constructor(private readonly prisma: PrismaService) {}
+
+  // `BACKLOG.md` #16: hasta ahora este controlador solo tenía `PUT` — no
+  // había forma de leer los valores ya configurados antes de editarlos.
+  // Mismo permiso que la lectura de canales (`channels.read`, todos los
+  // roles) — es información de solo lectura, no la propia edición.
+  @RequirePermission('channels.read')
+  @Get()
+  findAll(@CurrentUser() user: AccessTokenClaims) {
+    return this.prisma.runInTenantContext(
+      { userId: user.sub, organizationId: user.organizationId },
+      (tx) =>
+        tx.orgChannelThreshold.findMany({
+          where: { organizationId: user.organizationId! },
+          orderBy: { channelTypeCode: 'asc' },
+        }),
+    );
+  }
 
   @RequirePermission('channels.update_threshold')
   @Put(':channelTypeCode')

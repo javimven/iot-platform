@@ -46,3 +46,28 @@ class OrganizationFeature {
         updatedAt: DateTime.parse(json['updatedAt'] as String),
       );
 }
+
+/// Espejo de `OrgChannelThreshold` (`GET/PUT /organization/channel-thresholds`)
+/// — umbral por defecto de un tipo de canal para toda la organización; un
+/// canal con umbral propio (Directorio IoT) lo sustituye. Hasta el
+/// 2026-07-30 solo existía el `PUT` (`BACKLOG.md` #16).
+class OrgChannelThreshold {
+  final String channelTypeCode;
+  final double? defaultMin;
+  final double? defaultMax;
+  final DateTime updatedAt;
+
+  const OrgChannelThreshold({
+    required this.channelTypeCode,
+    required this.defaultMin,
+    required this.defaultMax,
+    required this.updatedAt,
+  });
+
+  factory OrgChannelThreshold.fromJson(Map<String, dynamic> json) => OrgChannelThreshold(
+        channelTypeCode: json['channelTypeCode'] as String,
+        defaultMin: (json['defaultMin'] as num?)?.toDouble(),
+        defaultMax: (json['defaultMax'] as num?)?.toDouble(),
+        updatedAt: DateTime.parse(json['updatedAt'] as String),
+      );
+}

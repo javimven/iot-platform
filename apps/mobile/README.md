@@ -31,7 +31,9 @@ ninguna vía. Verificado en vivo contra el backend real.
 
 **Ajustes de organización y auditoría** (2026-07-30): `OrganizationSettingsScreen`
 (perfil editable solo por `org_admin`; funciones contratadas, solo visibles
-para `org_admin`) y `AuditLogScreen` (`org_admin`/`technician`) — agrupadas
+para `org_admin`; umbrales por defecto de canal, visibles para cualquier rol
+y editables por `org_admin`/`technician` — `BACKLOG.md` #16, cerrado
+añadiendo el `GET` que faltaba) y `AuditLogScreen` (`org_admin`/`technician`) — agrupadas
 en un nuevo menú "Más" en la barra de Instalaciones. Al construirlas se
 encontró y corrigió un **bug crítico real**: `GET /audit-log` y
 `GET /platform/audit-log` llevaban rotos desde siempre (500 en cuanto había

@@ -30,4 +30,30 @@ void main() {
       expect(feature.enabled, isTrue);
     });
   });
+
+  group('OrgChannelThreshold.fromJson', () {
+    test('parsea un umbral con mínimo y máximo definidos', () {
+      final threshold = OrgChannelThreshold.fromJson({
+        'channelTypeCode': 'temperature_air',
+        'defaultMin': 5,
+        'defaultMax': 35.5,
+        'updatedAt': '2026-01-01T00:00:00.000Z',
+      });
+
+      expect(threshold.defaultMin, 5.0);
+      expect(threshold.defaultMax, 35.5);
+    });
+
+    test('tolera mínimo/máximo nulos (sin definir)', () {
+      final threshold = OrgChannelThreshold.fromJson({
+        'channelTypeCode': 'humidity_soil',
+        'defaultMin': null,
+        'defaultMax': null,
+        'updatedAt': '2026-01-01T00:00:00.000Z',
+      });
+
+      expect(threshold.defaultMin, isNull);
+      expect(threshold.defaultMax, isNull);
+    });
+  });
 }
