@@ -1,0 +1,3 @@
+# Copia este archivo a terraform.tfvars y rellena valores reales.
+domain                = "example.com" # sustituir por el dominio real una vez registrado
+cloudflare_account_id = "changeme"    # Dashboard de Cloudflare -> Overview -> Account ID

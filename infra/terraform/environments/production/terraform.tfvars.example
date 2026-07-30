@@ -1,0 +1,15 @@
+# Copia este archivo a terraform.tfvars y rellena valores reales.
+# terraform.tfvars NUNCA se versiona (ver .gitignore) — puede contener
+# secretos o datos específicos del entorno.
+
+domain          = "example.com" # sustituir por el dominio real una vez registrado (DEPLOYMENT.md §17)
+ssh_public_key  = "ssh-ed25519 AAAA... tu-clave-publica"
+admin_ssh_cidrs = ["203.0.113.10/32"] # tu IP pública de administración — nunca 0.0.0.0/0
+
+# Credenciales S3 de Hetzner Object Storage (Consola Hetzner Cloud → Object
+# Storage → Generar credencial) — no son el mismo token que HCLOUD_TOKEN.
+object_storage_access_key = "changeme"
+object_storage_secret_key = "changeme"
+
+# Tokens de proveedor (HCLOUD_TOKEN, DIGITALOCEAN_TOKEN, CLOUDFLARE_API_TOKEN)
+# se pasan como variables de entorno, nunca aquí — ver README.md.

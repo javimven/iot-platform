@@ -1,0 +1,18 @@
+# Estado de Terraform — contiene valores en texto plano (incluidos los
+# marcados `sensitive`, que solo se ocultan en la salida de la CLI, no en el
+# fichero de estado) — nunca se versiona.
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl.bak
+
+# Valores reales por entorno/secretos.
+terraform.tfvars
+*.auto.tfvars
+
+# Caché de providers descargados.
+.terraform/
+
+# Planes guardados (pueden contener secretos en claro).
+*.tfplan
+crash.log
+crash.*.log

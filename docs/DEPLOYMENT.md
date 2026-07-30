@@ -2,8 +2,8 @@
 
 ## 0. Estado de este documento
 - Etapa del proceso: 9 — Infraestructura y DevOps
-- Estado: En análisis (propuesta completa, pendiente de tu validación)
-- Última actualización: 2026-07-27
+- Estado: IaC escrito y validado (`infra/terraform/`), pendiente de aplicar — necesita cuentas reales en los tres proveedores y un dominio registrado (sección 17)
+- Última actualización: 2026-07-30
 - Depende de: Etapas 0-8 (especialmente Etapa 2 — escala/presupuesto, y Etapa 8 — controles de seguridad a aplicar aquí)
 - Bloquea: Etapa 10 (observabilidad se conecta a esta infraestructura), Etapa 12 (backups), Etapa 13 (el pipeline despliega lo que ahí se construya)
 
@@ -123,6 +123,7 @@ Ver [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) para la refe
 - [`docker-compose.yml`](../docker-compose.yml) (raíz del repositorio).
 - [`infra/docker/Dockerfile`](../infra/docker/Dockerfile) (referencia multi-stage para el monorepo NestJS).
 - [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) (pipeline de referencia).
+- [`infra/terraform/`](../infra/terraform/README.md) (2026-07-30): IaC completo para las decisiones de la sección 1 — módulos `compute` (Hetzner Cloud: servidor + firewall + SSH), `database` (DigitalOcean Managed Postgres + firewall + usuario de aplicación), `object_storage` (Hetzner Object Storage vía provider `minio`, sin recurso `hcloud_*` nativo todavía), `dns` (registros Cloudflare api/app/mqtt); `dns-zone/` (zona del dominio, se aplica una sola vez); `environments/staging` y `environments/production` (aislados, DEPLOYMENT.md §2/§13). Validado con `terraform fmt`/`validate`/`plan` contra los proveedores reales (tokens con formato válido pero falsos, para forzar cada API a aceptar/rechazar la forma de la petición sin crear nada) — **sin aplicar ningún recurso real todavía**: pendiente de que existan cuentas en los tres proveedores y un dominio registrado (sección 17, sin cambios).
 
 ## 13. Criterios de aceptación de esta etapa
 - Los tres entornos están completamente aislados (sin credenciales ni datos compartidos entre staging y producción).
@@ -141,7 +142,11 @@ Ver [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) para la refe
 - [x] Especificar variables de entorno y gestión de secretos.
 - [x] Diseñar el pipeline de 14 pasos con mecanismo real de aprobación y rollback.
 - [x] Crear `docker-compose.yml`, `Dockerfile` de referencia y workflow de GitHub Actions.
-- [ ] Revisión y validación por tu parte (incluida la elección de dominio real, sección 6).
+- [x] Escribir y validar el Terraform/IaC de las decisiones de la sección 1 (`infra/terraform/`, 2026-07-30) — sin aplicar ningún recurso real todavía.
+- [ ] Crear cuentas reales en Hetzner Cloud, DigitalOcean y Cloudflare, y registrar el dominio real (sección 6/17) — pendiente de ti.
+- [ ] Aplicar `infra/terraform/dns-zone` y `infra/terraform/environments/staging` contra recursos reales, una vez exista lo anterior.
+- [ ] Escribir el Docker Compose/Caddyfile de despliegue real (distinto del de desarrollo local) que el pipeline instala vía SSH — todavía no existe como entregable propio (ver `infra/terraform/README.md`, "Qué NO cubre").
+- [ ] Revisión y validación por tu parte.
 - [ ] Cerrar etapa y pasar a Etapa 10 (Observabilidad).
 
 ## 16. Dependencias
@@ -167,3 +172,6 @@ Ver [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) para la refe
 | 2026-07-27 | Terraform para IaC, sin Ansible/config management dedicado | Ansible (descartado: innecesario para 1-2 servidores) |
 | 2026-07-27 | Caddy como reverse proxy/TLS | Nginx + Certbot manual (más configuración para el mismo resultado); Traefik (válido, Caddy más simple para el equipo) |
 | 2026-07-27 | 2 réplicas de `api` desde el MVP para despliegue sin interrupciones | 1 réplica con ventana de indisponibilidad aceptada (descartado: contradice el requisito explícito de "despliegue sin interrupciones") |
+| 2026-07-30 | Hetzner Object Storage se gestiona vía el provider `minio` (`aminueza/minio`), no `hcloud_*` ni `aws` | No existe recurso `hcloud_*` nativo para Object Storage a fecha de escritura; el provider `aws` apuntado al endpoint S3-compatible es un patrón de la comunidad, no el documentado oficialmente por Hetzner — se prefirió `minio`, que sí lo es |
+| 2026-07-30 | Producción: 1 VPS por defecto (2 réplicas de `api` como contenedores Docker en la misma VPS), no 2 VPS separadas | 2 VPS desde el principio (descartado por ahora: añade una dependencia de red privada entre VPS y de balanceo entre servidores sin que el volumen real lo haya pedido todavía, DEPLOYMENT.md §17) — el módulo `compute` soporta subir `server_count` cuando hagan falta métricas reales que lo justifiquen |
+| 2026-07-30 | Estado de Terraform local (no remoto) mientras una sola persona aplique cambios | Terraform Cloud / backend S3 en el propio Object Storage desde el principio (descartado por ahora: complejidad operativa sin necesidad medida todavía, mismo criterio que el resto de esta etapa) — documentado como migración futura en `infra/terraform/README.md` |
