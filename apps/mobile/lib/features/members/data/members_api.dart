@@ -1,4 +1,5 @@
 import '../../../core/api/api_client.dart';
+import '../../sessions/data/sessions_models.dart';
 import 'members_models.dart';
 
 /// Llamadas HTTP crudas a `/members*` (OPENAPI.yaml, `PERMISSIONS.md` §1 —
@@ -45,4 +46,15 @@ class MembersApi {
   Future<void> setScope(String memberId, List<String> installationIds) {
     return _client.put('/members/$memberId/scope', body: {'installationIds': installationIds});
   }
+
+  /// Sesiones activas de otro miembro (`sessions.read_others`, `BACKLOG.md` #14) —
+  /// solo `org_admin`.
+  Future<List<UserSession>> sessions(String memberId) async {
+    final list = await _client.getJsonList('/members/$memberId/sessions');
+    return list.map((e) => UserSession.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// 204 idempotente incluso si ya no existe (mismo criterio que la propia sesión).
+  Future<void> revokeSession(String memberId, String sessionId) =>
+      _client.delete('/members/$memberId/sessions/$sessionId');
 }

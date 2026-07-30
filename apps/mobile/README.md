@@ -12,6 +12,16 @@ deshabilitar) → dispositivos (alta/edición/deshabilitar) → sensores (alta/
 baja) → canales (edición de umbral). Gateway muestra su credencial una
 única vez al crearlo o rotarlo (no se puede recuperar después).
 
+**Sesiones de otros miembros** (2026-07-30, `BACKLOG.md` #14, solo `org_admin`):
+nueva acción "Sesiones activas" por miembro en `MembersListScreen` →
+`MemberSessionsScreen` (listar/revocar) — `sessions.read_others`/
+`revoke_others` estaban documentados y probados en el backend desde el
+principio pero ningún endpoint los usaba de verdad. Corregido añadiendo
+`GET`/`DELETE /members/{id}/sessions[/{sessionId}]`, auditado
+(`sessions.revoke_others`). Verificado en vivo: invitar un segundo miembro,
+iniciar sesión como él, revocar su sesión como `org_admin` y confirmar que
+su siguiente `refresh` falla con 401.
+
 **Panel de plataforma** (2026-07-30, Admin de plataforma "puro", sin
 organización propia): `PlatformOrganizationsScreen` (listar/crear/suspender/
 reactivar organizaciones), `PlatformOrganizationFeaturesScreen` (editor de

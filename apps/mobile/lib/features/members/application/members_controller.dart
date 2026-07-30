@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/auth_controller.dart';
+import '../../sessions/data/sessions_models.dart';
 import '../data/members_api.dart';
 import '../data/members_models.dart';
 
@@ -14,4 +15,9 @@ final membersListProvider = FutureProvider.autoDispose<List<Member>>((ref) {
 
 final memberScopeProvider = FutureProvider.autoDispose.family<List<String>, String>((ref, memberId) {
   return ref.watch(membersApiProvider).getScope(memberId);
+});
+
+final memberSessionsProvider =
+    FutureProvider.autoDispose.family<List<UserSession>, String>((ref, memberId) {
+  return ref.watch(membersApiProvider).sessions(memberId);
 });

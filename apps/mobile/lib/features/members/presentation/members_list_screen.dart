@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../directory/presentation/directory_screen.dart' show showConfirmDialog;
 import '../../installations/application/installations_controller.dart';
@@ -54,6 +55,7 @@ class MembersListScreen extends ConsumerWidget {
                     itemBuilder: (context) => [
                       const PopupMenuItem(value: 'role', child: Text('Cambiar rol')),
                       const PopupMenuItem(value: 'scope', child: Text('Asignar alcance')),
+                      const PopupMenuItem(value: 'sessions', child: Text('Sesiones activas')),
                       if (member.status == 'active')
                         const PopupMenuItem(value: 'suspend', child: Text('Suspender'))
                       else if (member.status == 'suspended')
@@ -82,6 +84,8 @@ class MembersListScreen extends ConsumerWidget {
       await _showChangeRoleDialog(context, ref, member);
     } else if (action == 'scope') {
       await _showScopeDialog(context, ref, member);
+    } else if (action == 'sessions') {
+      context.push('/members/${member.id}/sessions', extra: member.fullName);
     } else if (action == 'suspend') {
       await _updateStatus(context, ref, member, 'suspended');
     } else if (action == 'reactivate') {

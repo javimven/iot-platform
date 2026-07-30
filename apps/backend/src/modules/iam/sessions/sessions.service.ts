@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { AuditLogService } from '../../../common/audit/audit-log.service';
 import {
   generateOpaqueSecret,
   hashOpaqueSecret,
@@ -15,7 +16,10 @@ const REFRESH_TOKEN_TTL_DAYS = 30; // DEPLOYMENT.md §3 — valor por defecto, c
 
 @Injectable()
 export class SessionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
   /**
    * Crea una sesión para un usuario. `organizationId` es null hasta que se
@@ -126,5 +130,62 @@ export class SessionsService {
         orderBy: { lastUsedAt: 'desc' },
       }),
     );
+  }
+
+  /**
+   * Sesiones de *otro* miembro de la misma organización (`sessions.read_others`,
+   * `PERMISSIONS.md` §1, `BACKLOG.md` #14) — a diferencia de `listOwn`, el
+   * contexto de tenant es el del Admin de organización que llama
+   * (`organizationId`, no `userId` del objetivo), y el filtro por
+   * `organizationId` en el `where` es explícito: sin él devolvería las
+   * sesiones de cualquier miembro de la organización, no solo las del
+   * miembro objetivo (RLS por sí sola no distingue entre miembros de la
+   * misma organización, solo entre organizaciones — DATA_MODEL.md §7).
+   */
+  async listForUser(
+    organizationId: string,
+    targetUserId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      userAgent: string | null;
+      ipAddress: string | null;
+      createdAt: Date;
+      lastUsedAt: Date;
+    }>
+  > {
+    return this.prisma.runInTenantContext({ organizationId }, (tx) =>
+      tx.session.findMany({
+        where: { userId: targetUserId, organizationId, revokedAt: null },
+        select: { id: true, userAgent: true, ipAddress: true, createdAt: true, lastUsedAt: true },
+        orderBy: { lastUsedAt: 'desc' },
+      }),
+    );
+  }
+
+  /** Revocar la sesión de otro miembro (`sessions.revoke_others`) — auditado, a diferencia de `revoke` (propia sesión). */
+  async revokeForUser(
+    organizationId: string,
+    targetUserId: string,
+    sessionId: string,
+    actorUserId: string,
+  ): Promise<void> {
+    await this.prisma.runInTenantContext({ organizationId, userId: actorUserId }, async (tx) => {
+      const session = await tx.session.findFirst({
+        where: { id: sessionId, userId: targetUserId, organizationId },
+      });
+      if (!session) {
+        return; // 204 idempotente — mismo criterio que `revoke` (PERMISSIONS.md §9/§13)
+      }
+      await tx.session.update({ where: { id: sessionId }, data: { revokedAt: new Date() } });
+      await this.auditLog.record(tx, {
+        organizationId,
+        actorUserId,
+        action: 'sessions.revoke_others',
+        targetType: 'session',
+        targetId: sessionId,
+        metadata: { targetUserId },
+      });
+    });
   }
 }

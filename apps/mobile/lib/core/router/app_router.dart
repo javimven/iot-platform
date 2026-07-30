@@ -17,6 +17,7 @@ import '../../features/directory/presentation/gateway_detail_screen.dart';
 import '../../features/directory/presentation/sensor_detail_screen.dart';
 import '../../features/installations/presentation/installation_detail_screen.dart';
 import '../../features/installations/presentation/installations_list_screen.dart';
+import '../../features/members/presentation/member_sessions_screen.dart';
 import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/organization/presentation/organization_settings_screen.dart';
 import '../../features/platform/presentation/platform_audit_log_screen.dart';
@@ -121,6 +122,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen()),
       GoRoute(path: '/members', builder: (context, state) => const MembersListScreen()),
+      GoRoute(
+        path: '/members/:id/sessions',
+        builder: (context, state) => MemberSessionsScreen(
+          memberId: state.pathParameters['id']!,
+          memberName: state.extra as String? ?? '',
+        ),
+      ),
       GoRoute(path: '/sessions', builder: (context, state) => const SessionsListScreen()),
       GoRoute(path: '/audit-log', builder: (context, state) => const AuditLogScreen()),
       GoRoute(

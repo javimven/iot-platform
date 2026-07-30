@@ -173,13 +173,15 @@ paths:
   /auth/sessions/{sessionId}:
     delete:
       tags: [auth]
-      summary: Revocar una sesión propia (o de un miembro de mi organización, si tengo sessions.revoke_others)
+      summary: >
+        Revocar una sesión propia — nunca de otro miembro, idempotente
+        (204 aunque no exista o sea de otro usuario, PERMISSIONS.md sección
+        9/13). Para revocar la sesión de otro miembro con sessions.revoke_others,
+        ver /members/{id}/sessions/{sessionId}.
       parameters:
         - $ref: "#/components/parameters/PathId"
       responses:
         "204": { description: Sin contenido }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
 
   /me:
     get:
@@ -389,6 +391,40 @@ paths:
       responses:
         "200": { description: Éxito }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /members/{memberId}/sessions:
+    get:
+      tags: [members]
+      summary: >
+        Sesiones activas de otro miembro (sessions.read_others, PERMISSIONS.md
+        sección 1) — solo Admin de organización, `BACKLOG.md` #14.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Session" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /members/{memberId}/sessions/{sessionId}:
+    delete:
+      tags: [members]
+      summary: >
+        Revocar la sesión de otro miembro (sessions.revoke_others) — p. ej.
+        un empleado que deja la empresa o cuya cuenta se ve comprometida.
+        Idempotente (204 aunque la sesión ya no exista).
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/PathId"
+      responses:
+        "204": { description: Sin contenido }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /installations:
     get:

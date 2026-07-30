@@ -271,6 +271,21 @@ export class MembersService {
     });
   }
 
+  /** Resuelve un `memberId` a su `userId`, acotado a la organización del que llama (404 si no existe o es de otra organización). */
+  async findMemberInOrg(
+    user: AccessTokenClaims,
+    memberId: string,
+  ): Promise<{ id: string; userId: string }> {
+    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+    const member = await this.prisma.runInTenantContext(tenantContext, (tx) =>
+      tx.member.findFirst({ where: { id: memberId, deletedAt: null } }),
+    );
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+    return { id: member.id, userId: member.userId };
+  }
+
   async getScope(user: AccessTokenClaims, memberId: string): Promise<string[]> {
     const tenantContext = { userId: user.sub, organizationId: user.organizationId };
     const rows = await this.prisma.runInTenantContext(tenantContext, (tx) =>
