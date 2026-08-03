@@ -9,6 +9,13 @@
 terraform.tfvars
 *.auto.tfvars
 
+# Tokens de proveedor para cargar con `source` (Bash) o `. .\secrets.ps1`
+# (PowerShell) antes de terraform init/plan/apply (HCLOUD_TOKEN,
+# DIGITALOCEAN_TOKEN, CLOUDFLARE_EMAIL/API_KEY/API_TOKEN) — nunca se
+# versiona, nunca se pega en el chat.
+secrets.env
+secrets.ps1
+
 # Caché de providers descargados.
 .terraform/
 
