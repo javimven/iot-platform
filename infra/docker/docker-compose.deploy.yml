@@ -103,7 +103,7 @@ services:
       - caddy_config:/config
     environment:
       DOMAIN: ${DOMAIN:?}
-      ENVIRONMENT_SUBDOMAIN: ${ENVIRONMENT_SUBDOMAIN:-} # "" en producción, "staging." en staging
+      ENVIRONMENT_SUBDOMAIN: ${ENVIRONMENT_SUBDOMAIN:-} # "" en producción, "staging-" en staging (mismo nivel, no anidado — ver Caddyfile)
     restart: unless-stopped
     depends_on: [api_1, api_2]
 
