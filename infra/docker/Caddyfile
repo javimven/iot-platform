@@ -22,4 +22,17 @@
 	encode gzip
 	try_files {path} /index.html
 	file_server
+
+	# Ningún archivo del build de Flutter web tiene nombre con hash de
+	# contenido (a diferencia de webpack/vite) — `main.dart.js`/`index.html`
+	# se llaman igual en cada despliegue, con contenido distinto. La app ya
+	# gestiona su propia caché/actualización vía `flutter_service_worker.js`
+	# — Cloudflare cacheando por encima de eso (su comportamiento por
+	# defecto según extensión) sirve una versión vieja durante horas tras
+	# cada despliegue (bug real en vivo, 2026-08-04: main.dart.js con un bug
+	# ya corregido en el origen seguía viéndose en el navegador 22 minutos
+	# después, cf-cache-status: HIT). Se desactiva la caché de borde para
+	# esta zona entera — es un panel de monitorización, no una tienda con
+	# tráfico masivo que necesite ese ahorro.
+	header Cache-Control "no-cache"
 }
