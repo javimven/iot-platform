@@ -131,6 +131,16 @@ Verificado en vivo de nuevo: `docker build` sin `--target` reproduce el `Entrypo
 
 ---
 
+### 24. EMQX no tiene ninguna autenticación/ACL configurada — ni en desarrollo ni en `docker-compose.deploy.yml`
+**Sin decidir, encontrado en vivo (2026-08-04) al montar el `.env` real del primer despliegue de staging.** `MQTT_PROTOCOL.md` §18 ya dejaba esto anotado como aplazado a propósito ("Configuración literal de EMQX (auth hook HTTP vs. Postgres, formato exacto de reglas ACL) — Etapa 9"), pero al llegar de verdad a la Etapa 9 (este despliegue) conviene registrarlo como hallazgo explícito, no dejarlo solo implícito en un aplazamiento de una etapa anterior.
+
+- `apps/backend/src/modules/ingestion/mqtt-ingestion.service.ts` sí envía `MQTT_INGESTION_USERNAME`/`PASSWORD` al conectar, pero ni el `docker-compose.yml` de desarrollo ni `infra/docker/docker-compose.deploy.yml` configuran ningún backend de autenticación en la imagen `emqx/emqx:5.4` — por defecto, EMQX acepta conexiones anónimas sin credenciales. El puerto 8883 (MQTTS) queda público a internet (`DEPLOYMENT.md` §6, Cloudflare no lo protege) sin que nada, hoy, verifique quién se conecta.
+- Impacto real hoy: **ninguno** — no existe todavía ningún gateway/dispositivo de campo real conectándose (cero clientes piloto onboardeados). No es una emergencia, pero tampoco algo para dejar pasar antes de aceptar el primer dispositivo real.
+- Falta decidir el mecanismo exacto (`MQTT_PROTOCOL.md` §18 ya lo dejaba abierto): autenticación integrada de EMQX (usuario/contraseña vía su "built-in database", más simple, cubre bien la credencial única de `ingestion`) vs. un webhook HTTP hacia el propio backend (más trabajo, pero necesario de todos modos para la ACL por gateway con `organizationId`/`gatewayExternalId` concretos que ya describe `ARCHITECTURE.md` §6 — la credencial de cada gateway no puede validarse contra una tabla estática).
+- Bloqueante antes de: emitir la primera credencial real de gateway a un cliente piloto. No bloqueante para seguir probando el despliegue de `api`/`worker` contra datos sintéticos/de prueba mientras tanto.
+
+---
+
 ## ~~Pregunta pendiente: alcance de "control de qué ve cada usuario"~~ — Resuelta (2026-07-27), texto obsoleto encontrado el 2026-07-30 y limpiado
 
 Esta pregunta (lectura 1 "solo idioma" vs. lectura 2 "feature flags por organización") llevaba sin resolverse en el texto de este archivo desde el commit inicial del proyecto, pero la decisión real **sí se tomó y se implementó**: lectura 2, feature flags por organización gestionadas en exclusiva por el Admin de plataforma (`docs/PERMISSIONS.md` §14, historial fechado 2026-07-27, citando tu propia frase como motivo para descartar el autoservicio por organización). Implementado en `organization_features`/`features` (esquema), `PlatformFeaturesService`/`platform-features.controller.ts`/`platform-features-catalog.controller.ts` (backend) — `org_features.read` (alcance propio, para que el org_admin sepa qué pestañas mostrar) / `org_features.update` (solo Admin de plataforma, global). Encontrado al auditar el estado del proyecto tras cerrar #23: el texto de la pregunta nunca se borró de `BACKLOG.md` después de decidirse, dando la falsa impresión de que seguía abierta. Sin cambios de código — solo limpieza de documentación.
