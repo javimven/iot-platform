@@ -1,6 +1,6 @@
 # Cómputo Hetzner Cloud (DEPLOYMENT.md §1/§6/§8): servidor(es) `api`, con
-# firewall restrictivo (solo 443/8883/22, 22 acotado a IPs de administración
-# conocidas) y clave SSH propia del entorno.
+# firewall restrictivo (solo 80/443/8883/22, 22 acotado a IPs de
+# administración conocidas) y clave SSH propia del entorno.
 
 resource "hcloud_ssh_key" "this" {
   name       = "${var.environment}-admin-key"
@@ -9,6 +9,20 @@ resource "hcloud_ssh_key" "this" {
 
 resource "hcloud_firewall" "this" {
   name = "${var.environment}-firewall"
+
+  # HTTP — público, exclusivamente para el reto ACME HTTP-01 de Let's
+  # Encrypt (Caddy) y la redirección automática a HTTPS. Encontrado en vivo
+  # (2026-08-04, primer despliegue real): con `api`/`app` proxiados por
+  # Cloudflare, el reto TLS-ALPN-01 falla siempre (Cloudflare termina el TLS
+  # en su borde, nunca llega al origen) — Caddy reintenta automáticamente
+  # con HTTP-01, pero sin este puerto abierto, Cloudflare no puede alcanzar
+  # el origen y devuelve 522 en el propio reto.
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "80"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
 
   # HTTPS/WSS (API + app Flutter web) — público, DEPLOYMENT.md §6.
   rule {
