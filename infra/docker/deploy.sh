@@ -48,6 +48,33 @@ docker run --rm --network host \
   -e DATABASE_URL="$DATABASE_URL_MIGRATE" \
   "$MIGRATOR_IMAGE"
 
+# Catálogos de plataforma (roles, tipos de canal, features) + bootstrap del
+# primer Admin de plataforma (prisma/seed.ts, PLATFORM_ADMIN_BOOTSTRAP_EMAIL/
+# PASSWORD en .env) — idempotente (upsert), seguro de repetir en cada
+# despliegue. `prisma migrate deploy` NUNCA ejecuta esto por sí solo; sin
+# este paso, el primer login del bootstrap admin falla con 401 porque el
+# usuario nunca llegó a crearse (bug real encontrado en vivo, 2026-08-04).
+#
+# `ts-node prisma/seed.ts` directo (CJS register hook, `-r ts-node/register`,
+# y `--loader ts-node/esm`) falló de tres formas distintas contra Node 20 en
+# este contenedor (ERR_UNKNOWN_FILE_EXTENSION, después ERR_REQUIRE_CYCLE_MODULE
+# forzando el loader ESM) — problema real de compatibilidad ts-node 10.x/
+# Node 20, no un error de sintaxis. Se evita del todo compilando el archivo
+# a JS plano con `tsc` (dentro de /app para que Node resuelva node_modules al
+# buscar hacia arriba desde el archivo) y ejecutando ese JS con `node` — cero
+# dependencia del runtime de ts-node en producción, más robusto.
+echo "==> Sembrando catálogos de plataforma y admin de plataforma (idempotente)"
+docker run --rm --network host \
+  --entrypoint sh \
+  -e DATABASE_URL="$DATABASE_URL_MIGRATE" \
+  -e PLATFORM_ADMIN_BOOTSTRAP_EMAIL="${PLATFORM_ADMIN_BOOTSTRAP_EMAIL:-}" \
+  -e PLATFORM_ADMIN_BOOTSTRAP_PASSWORD="${PLATFORM_ADMIN_BOOTSTRAP_PASSWORD:-}" \
+  "$MIGRATOR_IMAGE" -c '
+    npx tsc prisma/seed.ts --outDir /app/prisma/dist --module commonjs \
+      --target ES2022 --esModuleInterop --skipLibCheck --resolveJsonModule &&
+    node /app/prisma/dist/seed.js
+  '
+
 # Despliegue sin interrupciones: una réplica de `api` cada vez, comprobando
 # /health antes de tocar la siguiente (DEPLOYMENT.md §8) — nunca las dos
 # caen a la vez.

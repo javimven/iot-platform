@@ -161,7 +161,7 @@ flutter analyze
 flutter test
 
 # 3. Arrancar contra el backend local (docker-compose.yml en la raíz del repo)
-flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000/v1
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000
 
 # 4. Compilación Android (opcional, para verificar el target además de web)
 flutter build apk --debug
