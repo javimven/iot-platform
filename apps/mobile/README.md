@@ -198,6 +198,14 @@ lib/
   necesite ADR — es una librería de UI, no de arquitectura); puro Dart,
   sin dependencias nativas, mantenida activamente, funciona igual en
   web/Android/iOS.
+- **Primer diseño real de la app** (2026-08-04): paleta + tipografía propias
+  (`lib/core/theme/`) y componentes base (`lib/core/widgets/`:
+  `AppButton`/`AppCard`/`StatusChip`) — antes solo había
+  `ThemeData(colorSchemeSeed: Colors.green)` sin identidad visual. Reglas de
+  uso obligatorias en `CLAUDE.md` de este mismo directorio. Nueva dependencia
+  `google_fonts` (oficial de Google, sin dependencias nativas) para Sora
+  (títulos) + Manrope (cuerpo) — misma justificación que `fl_chart`: librería
+  de UI, no de arquitectura, no necesita ADR.
 - **Directorio IoT completo**, incluida la reasignación de zona de un
   dispositivo: `DeviceDetailScreen` resuelve la instalación del
   dispositivo vía `GET /zones/:id` (la zona actual ya trae
