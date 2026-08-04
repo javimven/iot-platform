@@ -169,26 +169,31 @@ jobs:
       - uses: actions/checkout@v4
       - name: Configurar clave SSH (dedicada a CI/CD, distinta de la de administración)
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          mkdir -p "$HOME/.ssh"
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
           # `ssh-keyscan` puede devolver un código de salida distinto de cero
           # aunque sí obtenga la clave (comportamiento conocido) — con
           # StrictHostKeyChecking=accept-new en cada comando real de abajo no
           # depende de que esto haya poblado known_hosts de antemano.
-          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H "$STAGING_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
       - name: Sincronizar artefactos de despliegue (por si cambiaron desde el último despliegue)
         run: |
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
-          scp $SSH_OPTS infra/docker/docker-compose.deploy.yml infra/docker/Caddyfile infra/docker/deploy.sh \
+          # `~` no se expande dentro de una variable ("SSH_OPTS=\"-i ~/...\"")
+          # — solo en palabras literales de la línea de comandos. `$HOME` sí,
+          # porque es una sustitución de variable normal, no expansión de
+          # tilde (bug real encontrado en vivo, 2026-08-04: scp recibía el
+          # carácter "~" tal cual y fallaba con "No such file").
+          SSH_OPTS=(-i "$HOME/.ssh/deploy_key" -o StrictHostKeyChecking=accept-new)
+          scp "${SSH_OPTS[@]}" infra/docker/docker-compose.deploy.yml infra/docker/Caddyfile infra/docker/deploy.sh \
             "root@$STAGING_HOST:$DEPLOY_PATH/"
-          scp $SSH_OPTS infra/docker/postgres-init/02-grant-app-role-managed.sql \
+          scp "${SSH_OPTS[@]}" infra/docker/postgres-init/02-grant-app-role-managed.sql \
             "root@$STAGING_HOST:$DEPLOY_PATH/postgres-init/"
-          scp $SSH_OPTS infra/otel/otel-collector-prod.yaml \
+          scp "${SSH_OPTS[@]}" infra/otel/otel-collector-prod.yaml \
             "root@$STAGING_HOST:/opt/otel/otel-collector-prod.yaml"
       - name: Desplegar en la VPS de staging (deploy.sh real, DEPLOYMENT.md sección 8)
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "root@$STAGING_HOST" \
+          ssh -i "$HOME/.ssh/deploy_key" -o StrictHostKeyChecking=accept-new "root@$STAGING_HOST" \
             "cd $DEPLOY_PATH && chmod +x deploy.sh && IMAGE_TAG=${{ github.sha }} ./deploy.sh"
 
   # 10: Pruebas end-to-end contra staging
