@@ -21,11 +21,22 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# IMAGE_TAG explícito (p. ej. `IMAGE_TAG=<sha> ./deploy.sh` desde CI/CD) tiene
+# que ganar sobre el valor fijo dentro de .env — si no, cada despliegue
+# automático desplegaría siempre el mismo commit que quedó guardado en .env
+# la última vez que se editó a mano (bug real, encontrado al conectar
+# ci-cd.yml, 2026-08-04).
+_cli_image_tag="${IMAGE_TAG:-}"
+
 if [ -f .env ]; then
   set -a
   # shellcheck disable=SC1091
   source .env
   set +a
+fi
+
+if [ -n "$_cli_image_tag" ]; then
+  IMAGE_TAG="$_cli_image_tag"
 fi
 
 : "${IMAGE_TAG:?Falta IMAGE_TAG}"

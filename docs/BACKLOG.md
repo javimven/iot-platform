@@ -166,6 +166,11 @@ Verificado en vivo de nuevo: `docker build` sin `--target` reproduce el `Entrypo
 
 ---
 
+### 27. `deploy.sh` sobrescribía un `IMAGE_TAG` explícito con el valor fijo dentro de `.env`
+**Crítico, resuelto (2026-08-04, encontrado al conectar `ci-cd.yml` para despliegues automáticos).** El script carga `.env` con `source` **después** de que empezara a ejecutarse — si `.env` ya trae `IMAGE_TAG=<algo>` (como el nuestro, desde el primer despliegue manual), esa línea pisaba silenciosamente cualquier `IMAGE_TAG=<sha>` pasado al invocar el script. Sin este arreglo, cada despliegue automático desde CI habría desplegado siempre el mismo commit congelado en `.env`, sin ningún error visible que lo delatara — el peor tipo de bug, silencioso. Corregido: se guarda el valor entrante (si lo hay) antes de cargar `.env`, y se restaura después de cargarlo — un `IMAGE_TAG` explícito ahora gana siempre; sin él, se usa el de `.env` como hasta ahora (comportamiento manual sin cambios).
+
+---
+
 ## ~~Pregunta pendiente: alcance de "control de qué ve cada usuario"~~ — Resuelta (2026-07-27), texto obsoleto encontrado el 2026-07-30 y limpiado
 
 Esta pregunta (lectura 1 "solo idioma" vs. lectura 2 "feature flags por organización") llevaba sin resolverse en el texto de este archivo desde el commit inicial del proyecto, pero la decisión real **sí se tomó y se implementó**: lectura 2, feature flags por organización gestionadas en exclusiva por el Admin de plataforma (`docs/PERMISSIONS.md` §14, historial fechado 2026-07-27, citando tu propia frase como motivo para descartar el autoservicio por organización). Implementado en `organization_features`/`features` (esquema), `PlatformFeaturesService`/`platform-features.controller.ts`/`platform-features-catalog.controller.ts` (backend) — `org_features.read` (alcance propio, para que el org_admin sepa qué pestañas mostrar) / `org_features.update` (solo Admin de plataforma, global). Encontrado al auditar el estado del proyecto tras cerrar #23: el texto de la pregunta nunca se borró de `BACKLOG.md` después de decidirse, dando la falsa impresión de que seguía abierta. Sin cambios de código — solo limpieza de documentación.
