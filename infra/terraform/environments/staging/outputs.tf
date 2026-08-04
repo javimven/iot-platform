@@ -7,6 +7,12 @@ output "database_connection_string" {
   sensitive = true
 }
 
+output "database_admin_connection_string" {
+  description = "DATABASE_URL_MIGRATE (infra/docker/deploy.sh) — usuario admin del cluster, nunca el de la app."
+  value       = module.database.admin_connection_string
+  sensitive   = true
+}
+
 output "object_storage_bucket" {
   value = module.object_storage.bucket_name
 }
