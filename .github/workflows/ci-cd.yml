@@ -172,18 +172,23 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
+          # `ssh-keyscan` puede devolver un código de salida distinto de cero
+          # aunque sí obtenga la clave (comportamiento conocido) — con
+          # StrictHostKeyChecking=accept-new en cada comando real de abajo no
+          # depende de que esto haya poblado known_hosts de antemano.
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
       - name: Sincronizar artefactos de despliegue (por si cambiaron desde el último despliegue)
         run: |
-          scp -i ~/.ssh/deploy_key infra/docker/docker-compose.deploy.yml infra/docker/Caddyfile infra/docker/deploy.sh \
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+          scp $SSH_OPTS infra/docker/docker-compose.deploy.yml infra/docker/Caddyfile infra/docker/deploy.sh \
             "root@$STAGING_HOST:$DEPLOY_PATH/"
-          scp -i ~/.ssh/deploy_key infra/docker/postgres-init/02-grant-app-role-managed.sql \
+          scp $SSH_OPTS infra/docker/postgres-init/02-grant-app-role-managed.sql \
             "root@$STAGING_HOST:$DEPLOY_PATH/postgres-init/"
-          scp -i ~/.ssh/deploy_key infra/otel/otel-collector-prod.yaml \
+          scp $SSH_OPTS infra/otel/otel-collector-prod.yaml \
             "root@$STAGING_HOST:/opt/otel/otel-collector-prod.yaml"
       - name: Desplegar en la VPS de staging (deploy.sh real, DEPLOYMENT.md sección 8)
         run: |
-          ssh -i ~/.ssh/deploy_key "root@$STAGING_HOST" \
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "root@$STAGING_HOST" \
             "cd $DEPLOY_PATH && chmod +x deploy.sh && IMAGE_TAG=${{ github.sha }} ./deploy.sh"
 
   # 10: Pruebas end-to-end contra staging
