@@ -142,6 +142,8 @@ Diseño del token: el cliente recibe `{sessionId}.{secret}`. Al refrescar, el ba
 
 ## 4. Directorio IoT (instalaciones, zonas, gateways, dispositivos, sensores, canales)
 
+> **Nota (2026-08-05)**: este esquema de 5 niveles se mantiene sin cambios, pero desde [ADR-0006](ADR/0006-infraestructura-ui-oculta-zona-dispositivo-sensor.md) la UI de gestión ("Infraestructura") solo expone Finca (`installations`) → Estación (`gateways`) → Canal (`channels`) — `zones`/`devices`/`sensors` se siguen creando en cada aprovisionamiento, pero de forma transparente, sin que el usuario los vea ni gestione. Se conservan tal cual (sin aplanar el esquema) para no perder la capacidad de soportar un futuro concentrador LoRa con varios dispositivos remotos sin migración.
+
 ### `installations`
 | Columna | Tipo | Restricción |
 |---|---|---|

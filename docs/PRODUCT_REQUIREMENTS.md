@@ -58,14 +58,16 @@ Permitir a organizaciones del sector agro/ambiental (y, por diseño, de otros se
 ## 5. Glosario (preliminar)
 
 - **Organización**: cliente de la plataforma; unidad de aislamiento multitenant.
-- **Instalación**: ubicación física gestionada por una organización (p. ej. una finca o invernadero).
-- **Zona**: subdivisión de una instalación (p. ej. una parcela o nave).
-- **Gateway**: unidad que abre la conexión MQTT hacia el backend. Puede ser un **concentrador LoRa** (agrupa varios dispositivos y transmite vía GPRS/Ethernet/otros) o una **estación de conexión directa** (NB-IoT u otra tecnología con IP propia, sin concentrador intermedio) — ver [ADR-0004](ADR/0004-unidad-de-conexion-lora-y-nbiot.md).
-- **Dispositivo**: equipo de campo asociado a un gateway, que aloja uno o varios sensores.
-- **Sensor**: fuente concreta de una magnitud medida (temperatura, humedad, etc.).
+- **Instalación** (de cara al usuario, **Finca**): ubicación física gestionada por una organización (p. ej. una finca o invernadero).
+- **Zona** (de cara al usuario, **Parcela**): subdivisión de una instalación (p. ej. una parcela o nave). Desde [ADR-0006](ADR/0006-infraestructura-ui-oculta-zona-dispositivo-sensor.md), no es un concepto visible en la UI de gestión ("Infraestructura") mientras no exista ningún concentrador LoRa real con varios dispositivos remotos — se crea de forma transparente al aprovisionar una Estación. El nombre "Parcela" queda reservado para la futura sección "Satélite" (`BACKLOG.md` #7), donde sí vuelve a tener sentido como polígono real sobre el terreno.
+- **Gateway** (de cara al usuario, **Estación**): unidad que abre la conexión MQTT hacia el backend. Puede ser un **concentrador LoRa** (agrupa varios dispositivos y transmite vía GPRS/Ethernet/otros) o una **estación de conexión directa** (NB-IoT u otra tecnología con IP propia, sin concentrador intermedio) — ver [ADR-0004](ADR/0004-unidad-de-conexion-lora-y-nbiot.md). En la UI, "Estación" es el término único, independiente de `connectivity_type`.
+- **Dispositivo**: equipo de campo asociado a un gateway, que aloja uno o varios sensores. Oculto en la UI de gestión mientras no exista un caso real de concentrador LoRa ([ADR-0006](ADR/0006-infraestructura-ui-oculta-zona-dispositivo-sensor.md)).
+- **Sensor**: fuente concreta de una magnitud medida (temperatura, humedad, etc.). También oculto en la UI hoy — sus Canales aparecen como "Canales de la Estación" directamente ([ADR-0006](ADR/0006-infraestructura-ui-oculta-zona-dispositivo-sensor.md)).
+- **Canal**: magnitud concreta que reporta una Estación (temperatura, humedad, conductividad, lluvia...). Catálogo ampliable en `channel_types` — ver `DATA_MODEL.md`.
 - **Telemetría**: serie histórica de mediciones de un sensor.
 - **Última lectura**: valor más reciente conocido de un sensor, mantenido en tabla propia para lectura rápida.
-- **Alerta**: condición anómala detectada (umbral superado, dispositivo offline, etc.) con ciclo de vida propio.
+- **Alerta**: condición anómala detectada (umbral superado, dispositivo offline, riesgo de enfermedad, etc.) con ciclo de vida propio.
+- **Campaña**: periodo de cultivo asociado a una Estación (cultivo, fecha de inicio/fin, notas) — ver `BACKLOG.md` #12.
 
 ## 6. Suposiciones actuales
 

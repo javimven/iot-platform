@@ -7,7 +7,7 @@ Captura continua de ideas/funcionalidades que surgen durante el diseño, fuera d
 - **Futuro**: backlog sin fecha (sección 9.3).
 - **Sin decidir**: capturada pero pendiente de que tú y yo decidamos dónde encaja.
 
-Última actualización: 2026-07-27 (volcado inicial).
+Última actualización: 2026-08-05 (redefinición de navegación y Etapa 14 V2, ver sección final).
 
 ## Cómo se usa este documento
 - Cuando se te ocurra algo, dímelo en cualquier momento — no hace falta esperar a un punto concreto del proceso.
@@ -34,17 +34,21 @@ Captura continua de ideas/funcionalidades que surgen durante el diseño, fuera d
 
 ### 5. Pestaña de tiempo/clima (API de terceros tipo AEMET/OpenWeatherMap, hoy y semana)
 **V2.** Nueva integración externa: requiere gestión de API key del proveedor, caché (no llamar a la API externa en cada vista de usuario) y pasa a formar parte de "estado de proveedores externos" en observabilidad (ya anticipado en `OBSERVABILITY.md`, pendiente de escribir en Etapa 10). Depende del punto 4 (ya resuelto).
+- **Ampliado (2026-08-05, idea #31)**: ya no es una pestaña independiente — se decidió un widget de previsión por estación, con OpenWeatherMap como proveedor. Requiere GPS por estación, no solo por finca.
 
 ### 6. Informes en PDF (intervalo personalizable, selección de sensores, máx/mín/medias por día, identificación clara de estación)
 **V2.** Nuevo módulo "Informes", más elaborado que la simple "exportación de datos" ya prevista en V2 (Etapa 0) — de hecho la sustituye/amplía. Requiere: generación de PDF (librería HTML→PDF o similar), consultas de agregación por día (min/max/avg — ya soportadas por el esquema de `telemetry` sin cambios, es una consulta SQL, no una tabla nueva), y una UI de selección de sensores/rango. Se combina de forma natural con el punto 10 (Campañas): el intervalo de un informe podría fijarse automáticamente al rango de una campaña.
 - **Sugerencia mía**: además del PDF, ofrecer export CSV/Excel de los mismos datos con el mismo selector de sensores/rango — mismo componente de UI, dos formatos de salida, sin duplicar trabajo.
 - **Sugerencia mía**: un "resumen periódico" por email (diario/semanal, min/max/avg + alertas del periodo) es mucho más barato de construir que el motor de informes completo y da valor antes — candidato a V2 temprano, antes del informe PDF completo.
+- **Confirmado (2026-08-05, idea #33)**: se empieza por el resumen por email; el PDF puede agrupar varias estaciones de la misma finca.
 
 ### 7. Acceso a servicios de terceros vía API (ej. imágenes satelitales para humedad de parcela)
 **Futuro.** Exploratorio por tu propia descripción ("si fuera necesario"). Nota de modelado: si esto avanza, probablemente haga falta un polígono de parcela (no solo el punto GPS del punto 4) — no se modela todavía.
+- **Concretado (2026-08-05, idea #36)**: sección propia del menú, con nombre "Satélite" — mapa donde se selecciona el contorno de la parcela, capa de humedad superpuesta.
 
 ### 8. Alertas de riesgo de enfermedades (modelos agronómicos sobre los datos)
 **Futuro.** Va más allá de un umbral simple (Etapa 1): los modelos de riesgo de enfermedad reales (mildiu, botritis, etc.) combinan temperatura + humedad + duración en ventanas de tiempo, por cultivo. Depende del punto 10 (Campañas) para saber qué cultivo hay en cada parcela y en qué fase.
+- **Perfilado (2026-08-05, idea #35)**: 3 modelos concretos definidos (mildiu, botritis, oídio) con umbrales de temperatura/humedad/duración. Como #12 ya no lleva fase de cultivo, el modelo depende solo del cultivo, no de la fase.
 
 ### 9. Pestaña de recomendaciones (ej. sobre riego)
 **Futuro.** Junto con el punto 8, es candidato natural para el agente de IA (punto 11) en vez de reglas hechas a mano.
@@ -61,6 +65,7 @@ Captura continua de ideas/funcionalidades que surgen durante el diseño, fuera d
 
 ### 12. Campañas (qué se planta, cuándo, comparar evolución durante la campaña)
 **V2.** Nuevo módulo. Se combina con el punto 6 (informes: intervalo = duración de la campaña) y es prerrequisito conceptual de los puntos 8 y 9 (el cultivo/fase de la campaña determina qué modelo de enfermedad o recomendación aplica).
+- **Concretado (2026-08-05, idea #34)**: campos = cultivo + fecha inicio + fecha fin/cosecha + notas libres (sin fase de cultivo, descartada por ahora). Asociada a una Estación, no a una Parcela (que ya no existe como concepto de UI, ver idea #29/`ADR-0006`).
 - **Sugerencia mía**: diseñarlo pensando ya en comparar campañas entre sí (misma parcela, distintos años; o distintas parcelas, misma campaña) — refuerza por qué se decidió retención de telemetría de 2+ años en la Etapa 2 (comparar la misma época del año anterior).
 - **Sugerencia mía**: los umbrales de alerta podrían depender de la fase de la campaña (p. ej. humedad de suelo objetivo distinta en germinación vs. floración) — no lo has pedido, pero encaja de forma natural una vez existan campañas. Lo dejo anotado para cuando se diseñe V2 de alertas, no lo doy por incluido.
 
@@ -187,3 +192,54 @@ Verificado en vivo de nuevo: `docker build` sin `--target` reproduce el `Entrypo
 ## ~~Pregunta pendiente: alcance de "control de qué ve cada usuario"~~ — Resuelta (2026-07-27), texto obsoleto encontrado el 2026-07-30 y limpiado
 
 Esta pregunta (lectura 1 "solo idioma" vs. lectura 2 "feature flags por organización") llevaba sin resolverse en el texto de este archivo desde el commit inicial del proyecto, pero la decisión real **sí se tomó y se implementó**: lectura 2, feature flags por organización gestionadas en exclusiva por el Admin de plataforma (`docs/PERMISSIONS.md` §14, historial fechado 2026-07-27, citando tu propia frase como motivo para descartar el autoservicio por organización). Implementado en `organization_features`/`features` (esquema), `PlatformFeaturesService`/`platform-features.controller.ts`/`platform-features-catalog.controller.ts` (backend) — `org_features.read` (alcance propio, para que el org_admin sepa qué pestañas mostrar) / `org_features.update` (solo Admin de plataforma, global). Encontrado al auditar el estado del proyecto tras cerrar #23: el texto de la pregunta nunca se borró de `BACKLOG.md` después de decidirse, dando la falsa impresión de que seguía abierta. Sin cambios de código — solo limpieza de documentación.
+
+---
+
+## Redefinición de la navegación y de Etapa 14 V2 (2026-08-05)
+
+Tras terminar de aplicar el sistema de diseño a las pantallas ya existentes, el usuario vio la app real desplegada y señaló que la **navegación** (no el color/los componentes) no tenía sentido frente a cómo trabajan los competidores del sector (Aigro, IKOS Advanced) — pantallas sueltas con "atrás" en vez de un panel tipo SaaS con menú lateral persistente. Esto llevó a una sesión larga de redefinición de producto, hecha sección por sección sin saltar ninguna. Amplía/matiza (no contradice) las ideas #5, #6, #7, #8 y #12 de más arriba.
+
+### 29. Nueva jerarquía del Directorio IoT: Finca → Estación → Canal (antes 5 niveles)
+**Decidido, ver [ADR-0006](ADR/0006-infraestructura-ui-oculta-zona-dispositivo-sensor.md).** El esquema de datos no cambia (`zones`/`devices`/`sensors` siguen existiendo, soportando un futuro concentrador LoRa sin migración) — lo que cambia es que la UI de gestión ("Infraestructura", antes "Fincas y parcelas") solo expone Finca→Estación→Canal; Zona/Dispositivo/Sensor se crean de forma transparente al aprovisionar una Estación, sin que el usuario los vea ni gestione. Motivado porque hoy no existe ningún concentrador LoRa real (todas las estaciones son de conexión directa, `ADR-0004` caso 2).
+
+### 30. Estaciones como pantalla principal de datos en vivo
+**Decidido.** Sustituye/concreta la idea #1 (dashboard de estación). Al entrar, listado con buscador + selección múltiple de estaciones. Por cada estación seleccionada, una tarjeta con: último dato + estado (activo/inactivo, reutiliza la detección offline ya existente) → una píldora por cada Canal que esa estación realmente reporta (valor actual) → gráfica inline con selector de rango **acotado a un máximo de 2 meses** (intervalos: 1 día, 2 días, 1 semana, 1 mes, 2 meses), combinando en la misma gráfica líneas (canales `average`) y barras acumuladas (canales `sum`, p. ej. lluvia) cuando se activan varios a la vez → widget de tiempo propio (ver #31). Nunca mezcla datos de varias estaciones en la misma gráfica — se decidió explícitamente que no aporta beneficio.
+- Catálogo de canales real (backend, `apps/backend/prisma/seed.ts`) ya tenía 8 tipos antes de esta sesión, no 3 como sugería el archivo de etiquetas de Flutter (desactualizado): `temperature_air`, `humidity_air`, `humidity_soil`, `conductivity`, `tank_level`, `battery`, `signal_strength`, `precipitation` (este último ya con `dataType: counter`/`defaultAggregation: sum`, exactamente el comportamiento acumulado que se pedía para lluvia — resuelto desde la idea #3, Etapa 5). Falta añadir **radiación solar** (nuevo) y actualizar `channel_type_labels.dart` con los 5 tipos que le faltan.
+- Pendiente real de frontend (no de datos): la gráfica de histórico (`channel_history_screen.dart`) siempre dibuja `LineChart`, nunca mira `defaultAggregation` para dibujar barras en los canales `counter`.
+
+### 31. Widget de tiempo por estación (sustituye a la pestaña "Tiempo" independiente, idea #5)
+**Decidido.** En vez de una pestaña "Tiempo" aparte, cada estación lleva su propio widget con previsión de varios días (incluye el dato de hoy). Proveedor elegido: **OpenWeatherMap** (cobertura internacional, no solo España — se descartó AEMET por eso). Sigue siendo trabajo V2 real: API key, caché, y requiere GPS **por estación**, no solo por finca (pendiente de añadir al esquema cuando se construya — hoy `latitude`/`longitude` solo existe en `installations`).
+
+### 32. Gráficos personalizados: rango libre + exportación
+**Decidido.** Misma regla que Estaciones (una sola estación, nunca comparar entre estaciones — "no veo ningún beneficio"), pero sin el límite de 2 meses: selector de fechas libre, tan atrás como haya datos (la retención de 2+ años ya decidida en Etapa 2 lo cubre sin cambios). Exporta la gráfica como **imagen PNG** y los datos en **CSV/Excel**, ambos.
+
+### 33. Informes (V2): alcance confirmado
+**Amplía la idea #6.** Un informe **sí puede agrupar varias estaciones de la misma finca** (a diferencia de las gráficas, que son de consulta técnica una a una) — tiene sentido para un resumen "cómo fue la finca este mes" de cara a un cliente. Se confirma también la sugerencia ya anotada: la primera versión es un **resumen periódico por email** (diario/semanal, mín/máx/media + alertas del periodo), y el motor completo de PDF bajo demanda llega después.
+
+### 34. Campañas (V2): campos definidos
+**Concreta la idea #12.** Una campaña = cultivo (texto) + fecha de inicio + fecha de fin/cosecha + notas libres del técnico. **Sin fase/etapa de cultivo** (se valoró y se descartó por ahora — más trabajo hoy por un beneficio que depende de que Afecciones y patógenos, #35, avance). Una campaña se asocia a **una Estación** (no a una Finca ni, ya no existiendo, a una Parcela) — permite comparar la misma estación año contra año, que es justo lo que buscaba la idea original.
+
+### 35. Afecciones y patógenos (Futuro): 3 modelos concretos definidos
+**Concreta la idea #8.** Perfilado a nivel de umbrales operativos (no modelos de laboratorio calibrados), pensado para ser configurable y ampliable sin cerrar la puerta a ajustes futuros:
+- **Mildiu** (vid, tomate, patata): humedad relativa ≥90% sostenida ≥6h seguidas + temperatura 12-27°C durante esas horas.
+- **Botritis/moho gris** (muchos cultivos): humedad relativa ≥90% sostenida ≥12h seguidas + temperatura 15-25°C.
+- **Oídio** (añadido en esta sesión, complementa a los otros dos por cubrir el patrón casi opuesto): temperatura sostenida 20-30°C varias horas + sin lluvia significativa reciente (el oídio no necesita hoja mojada, al contrario que los otros dos).
+- Cada modelo se implementaría como una fila configurable (temp mín/máx, humedad mín, horas de duración, cultivos a los que aplica), no como código fijo. Depende de #34 (Campañas, para saber qué cultivo hay en cada estación) y reutilizaría el sistema de Alertas ya existente (nuevo tipo "riesgo de enfermedad", junto a `threshold` y `offline`).
+
+### 36. Satélite (Futuro): renombrado desde la idea #7
+**Decidido el nombre, sigue Futuro.** La idea original ("acceso a servicios de terceros vía API, ej. imágenes satelitales para humedad de parcela") se concreta como sección propia del menú llamada **"Satélite"**: un mapa donde el usuario dibuja/selecciona el contorno real de su parcela y ve una capa de humedad de suelo por satélite superpuesta. Confirma la nota de modelado que ya existía en la idea #7: hace falta un **polígono de parcela real**, no solo el punto GPS de la finca — cambio de esquema pequeño pero real cuando se construya. El término "Parcela" queda reservado para esta sección (ya no se usa en el Directorio IoT, #29).
+
+### 37. Alertas: filtro por estación añadido
+**Decidido.** Además del filtro por estado que ya existe (abiertas/reconocidas/resueltas), se añade un filtro por estación — encaja con el resto de la navegación centrada en estaciones.
+
+### 38. Unificación del panel de Admin de plataforma con "Infraestructura"
+**Decidido.** Hoy el Admin de plataforma gestiona el Directorio IoT de organizaciones cliente con pantallas Flutter propias, casi duplicadas de las de un técnico de organización (`platform_installations_screen.dart` y equivalentes). Pasan a ser **la misma pantalla "Infraestructura"**, con un aviso de contexto ("Gestionando: Finca de \<Organización\>") en vez de una implementación paralela — menos código que mantener, mismo diseño.
+
+### 39. Pantalla de cuenta propia (nueva) bajo "Perfil"
+**Decidido.** Hoy no existe ninguna pantalla de "mi cuenta" (ver/editar tu propio nombre y email, cambiar tu contraseña) — hueco real, se añade dentro de la agrupación "Perfil" junto a Miembros/Organización/Sesiones/Auditoría (ya existentes, solo se relocalizan) e Idioma.
+
+### 40. Idioma: visible pero bloqueado en el menú
+**Decidido.** Multi-idioma real (idea #11, ya V2) implica traducir ~30 pantallas — trabajo grande y aparte de esta reestructuración. Se muestra en el menú como "próximamente" (mismo patrón ya usado para funciones V2 no contratadas: visible, bloqueado, nunca oculto), sin traducir nada todavía.
+
+### 41. Web de marketing pública + acceso "Acceso Clientes"
+**Decidido el arranque, se amplía según haga falta.** Hoy `app.<dominio>` sirve la app Flutter directamente, sin ninguna capa de marketing delante — nuevo, no existía. Mirando Aigro (botón "Iniciar sesión" directo, autoservicio) e IKOS (botón "Acceso Clientes", con "Contacta con nosotros" como CTA principal para no-clientes) se eligió el patrón IKOS: encaja con que las organizaciones las da de alta el Admin de plataforma (`ADR-0005`, tu empresa hace la instalación física), no existe ni existirá alta autoservicio. Secciones iniciales: Hero, Qué hacemos, Cómo funciona (captura de Estaciones), Contacto, botón "Acceso Clientes" en cabecera → login de la app. Se añaden más secciones (casos de éxito, FAQ, sobre nosotros...) progresivamente, sin construirlo todo de golpe.
