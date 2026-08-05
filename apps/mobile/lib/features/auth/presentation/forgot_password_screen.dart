@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/widgets/app_button.dart';
 import '../application/auth_controller.dart';
 
 /// API_DESIGN.md §3: siempre responde igual (email enviado "si la cuenta
@@ -95,15 +96,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _isLoading ? null : _submit,
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Enviar enlace'),
+          AppButton(
+            label: 'Enviar enlace',
+            loading: _isLoading,
+            onPressed: _submit,
           ),
         ],
       ),
@@ -122,9 +118,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
-        OutlinedButton(
+        AppButton(
+          label: 'Volver a iniciar sesión',
+          variant: AppButtonVariant.secondary,
           onPressed: () => context.go('/login'),
-          child: const Text('Volver a iniciar sesión'),
         ),
       ],
     );

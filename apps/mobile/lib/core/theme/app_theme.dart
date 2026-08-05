@@ -25,6 +25,7 @@ abstract final class AppTheme {
       onError: isDark ? AppColors.paperDark : AppColors.paperRaised,
       surface: isDark ? AppColors.paperRaisedDark : AppColors.paperRaised,
       onSurface: isDark ? AppColors.inkDark : AppColors.ink,
+      onSurfaceVariant: isDark ? AppColors.inkSoftDark : AppColors.inkSoft,
       surfaceContainerHighest: isDark ? AppColors.lineDark : AppColors.line,
       outline: isDark ? AppColors.lineDark : AppColors.line,
     );

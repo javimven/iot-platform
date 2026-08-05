@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../organization/data/organization_models.dart';
 import '../application/platform_controller.dart';
@@ -106,9 +107,10 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: suspend ? 'Suspender' : 'Reactivar',
+            variant: suspend ? AppButtonVariant.danger : AppButtonVariant.primary,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(suspend ? 'Suspender' : 'Reactivar'),
           ),
         ],
       ),
@@ -173,7 +175,8 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Crear',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -191,7 +194,6 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Crear'),
           ),
         ],
       ),

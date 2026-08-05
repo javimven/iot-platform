@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/directory_controller.dart';
 import '../data/directory_models.dart';
@@ -169,7 +170,8 @@ class DeviceDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Guardar',
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 try {
@@ -187,7 +189,6 @@ class DeviceDetailScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Guardar'),
             ),
           ],
         ),
@@ -262,11 +263,13 @@ class DeviceDetailScreen extends ConsumerWidget {
                 controller: labelController,
                 decoration: const InputDecoration(labelText: 'Etiqueta (opcional)'),
               ),
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   'Máximo 4 sensores por dispositivo.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ),
             ],
@@ -277,7 +280,8 @@ class DeviceDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Crear',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -295,7 +299,6 @@ class DeviceDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Crear'),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/directory_controller.dart';
 import '../data/directory_models.dart';
@@ -146,7 +147,8 @@ class GatewayDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Guardar',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -162,7 +164,6 @@ class GatewayDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Guardar'),
           ),
         ],
       ),
@@ -266,7 +267,8 @@ class GatewayDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Crear',
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 try {
@@ -285,7 +287,6 @@ class GatewayDetailScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Crear'),
             ),
           ],
         ),

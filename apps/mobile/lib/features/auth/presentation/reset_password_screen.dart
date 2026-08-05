@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/widgets/app_button.dart';
 import '../application/auth_controller.dart';
 
 /// Enlace de email (`APP_BASE_URL/reset-password?token=...`,
@@ -83,9 +84,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       children: [
         const Text('Este enlace no es válido o le falta el token de restablecimiento.'),
         const SizedBox(height: 16),
-        OutlinedButton(
+        AppButton(
+          label: 'Solicitar un nuevo enlace',
+          variant: AppButtonVariant.secondary,
           onPressed: () => context.go('/forgot-password'),
-          child: const Text('Solicitar un nuevo enlace'),
         ),
       ],
     );
@@ -126,15 +128,10 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _isLoading ? null : _submit,
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Restablecer contraseña'),
+          AppButton(
+            label: 'Restablecer contraseña',
+            loading: _isLoading,
+            onPressed: _submit,
           ),
         ],
       ),
@@ -153,9 +150,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
-        FilledButton(
+        AppButton(
+          label: 'Iniciar sesión',
           onPressed: () => context.go('/login'),
-          child: const Text('Iniciar sesión'),
         ),
       ],
     );

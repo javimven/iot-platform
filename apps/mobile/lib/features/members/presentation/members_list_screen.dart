@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../directory/presentation/directory_screen.dart' show showConfirmDialog;
 import '../../installations/application/installations_controller.dart';
 import '../application/members_controller.dart';
@@ -133,7 +134,8 @@ class MembersListScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Invitar',
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 try {
@@ -150,7 +152,6 @@ class MembersListScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Invitar'),
             ),
           ],
         ),
@@ -183,7 +184,8 @@ class MembersListScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Guardar',
               onPressed: () async {
                 try {
                   await ref.read(membersApiProvider).updateRole(member.id, roleCode: roleCode);
@@ -196,7 +198,6 @@ class MembersListScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Guardar'),
             ),
           ],
         ),
@@ -287,7 +288,8 @@ class MembersListScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Guardar',
               onPressed: () async {
                 try {
                   await ref.read(membersApiProvider).setScope(member.id, selected.toList());
@@ -300,7 +302,6 @@ class MembersListScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Guardar'),
             ),
           ],
         ),

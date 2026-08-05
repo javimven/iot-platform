@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../application/platform_directory_controller.dart';
 
 /// Directorio IoT global del Admin de plataforma (ADR-0005) para una
@@ -84,7 +85,8 @@ class PlatformInstallationsScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Crear',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -100,7 +102,6 @@ class PlatformInstallationsScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Crear'),
           ),
         ],
       ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/status_chip.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../readings/application/channel_type_labels.dart';
 import '../application/organization_controller.dart';
@@ -63,12 +65,11 @@ class OrganizationSettingsScreen extends ConsumerWidget {
                         : Column(
                             children: items
                                 .map((f) => ListTile(
-                                      leading: Icon(
-                                        f.enabled ? Icons.check_circle_outline : Icons.lock_outline,
-                                        color: f.enabled ? Colors.green : null,
-                                      ),
                                       title: Text(f.featureCode),
-                                      subtitle: Text(f.enabled ? 'Activa' : 'No disponible en tu plan'),
+                                      trailing: StatusChip(
+                                        label: f.enabled ? 'Activa' : 'No disponible en tu plan',
+                                        tone: f.enabled ? AppStatusTone.ok : AppStatusTone.neutral,
+                                      ),
                                     ))
                                 .toList(),
                           ),
@@ -190,7 +191,8 @@ class _ChannelThresholdsSection extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Guardar',
             onPressed: () async {
               try {
                 await ref.read(organizationApiProvider).setChannelThreshold(
@@ -207,7 +209,6 @@ class _ChannelThresholdsSection extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Guardar'),
           ),
         ],
       ),
@@ -248,8 +249,11 @@ class _ProfileSection extends ConsumerWidget {
           Text('Email de contacto: ${org.contactEmail}'),
           const SizedBox(height: 4),
           Text('Identificador: ${org.slug}'),
-          const SizedBox(height: 4),
-          Text('Estado: ${org.status == 'active' ? 'Activa' : 'Suspendida'}'),
+          const SizedBox(height: 8),
+          StatusChip(
+            label: org.status == 'active' ? 'Activa' : 'Suspendida',
+            tone: org.status == 'active' ? AppStatusTone.ok : AppStatusTone.critical,
+          ),
         ],
       ),
     );
@@ -293,7 +297,8 @@ class _ProfileSection extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Guardar',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -310,7 +315,6 @@ class _ProfileSection extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Guardar'),
           ),
         ],
       ),

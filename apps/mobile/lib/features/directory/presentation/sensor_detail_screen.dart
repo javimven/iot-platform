@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../readings/application/channel_type_labels.dart';
 import '../application/directory_controller.dart';
@@ -97,10 +98,12 @@ class SensorDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Deja un campo en blanco para no fijar ese límite (se usará el '
                 'de la organización, si existe).',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
               TextFormField(
                 controller: minController,
@@ -126,7 +129,8 @@ class SensorDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Guardar',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -144,7 +148,6 @@ class SensorDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Guardar'),
           ),
         ],
       ),

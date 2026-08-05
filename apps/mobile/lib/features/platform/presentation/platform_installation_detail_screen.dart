@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../directory/data/directory_models.dart';
 import '../../directory/presentation/directory_screen.dart'
     show showConfirmDialog, showGatewayCredentialDialog;
@@ -167,7 +168,8 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Guardar',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -183,7 +185,6 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Guardar'),
           ),
         ],
       ),
@@ -249,7 +250,8 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Guardar',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -269,7 +271,6 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Guardar'),
           ),
         ],
       ),
@@ -322,7 +323,8 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Crear',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -338,7 +340,6 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Crear'),
           ),
         ],
       ),
@@ -388,7 +389,8 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Crear',
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 try {
@@ -407,7 +409,6 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Crear'),
             ),
           ],
         ),

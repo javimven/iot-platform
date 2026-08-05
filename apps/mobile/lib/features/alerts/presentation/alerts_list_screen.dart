@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/status_chip.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../readings/application/channel_type_labels.dart';
 import '../application/alerts_controller.dart';
@@ -96,14 +97,14 @@ class _AlertTile extends ConsumerWidget {
     return 'Sin conexión';
   }
 
-  Color _statusColor(BuildContext context) {
+  ({String label, AppStatusTone tone}) get _statusChip {
     switch (alert.status) {
       case 'open':
-        return Theme.of(context).colorScheme.error;
+        return (label: 'Abierta', tone: AppStatusTone.critical);
       case 'acknowledged':
-        return Colors.orange;
+        return (label: 'Reconocida', tone: AppStatusTone.warn);
       default:
-        return Colors.green;
+        return (label: 'Resuelta', tone: AppStatusTone.ok);
     }
   }
 
@@ -129,13 +130,19 @@ class _AlertTile extends ConsumerWidget {
     final timeFormat = DateFormat('dd/MM HH:mm');
     final api = ref.read(alertsApiProvider);
 
+    final status = _statusChip;
+
     return ListTile(
-      leading: Icon(
-        alert.alertType == 'threshold' ? Icons.warning_amber : Icons.wifi_off,
-        color: _statusColor(context),
-      ),
+      leading: Icon(alert.alertType == 'threshold' ? Icons.warning_amber : Icons.wifi_off),
       title: Text(alert.installationName ?? 'Instalación desconocida'),
-      subtitle: Text('$_description\nAbierta: ${timeFormat.format(alert.openedAt.toLocal())}'),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$_description\nAbierta: ${timeFormat.format(alert.openedAt.toLocal())}'),
+          const SizedBox(height: 4),
+          StatusChip(label: status.label, tone: status.tone),
+        ],
+      ),
       isThreeLine: true,
       trailing: canAct && alert.status != 'resolved'
           ? Row(

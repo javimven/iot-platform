@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../directory/data/directory_models.dart';
 import '../../directory/presentation/directory_screen.dart' show showConfirmDialog;
 import '../application/platform_directory_controller.dart';
@@ -127,7 +128,8 @@ class PlatformDeviceDetailScreen extends ConsumerWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
-            FilledButton(
+            AppButton(
+              label: 'Guardar',
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 try {
@@ -147,7 +149,6 @@ class PlatformDeviceDetailScreen extends ConsumerWidget {
                   }
                 }
               },
-              child: const Text('Guardar'),
             ),
           ],
         ),
@@ -239,7 +240,8 @@ class PlatformDeviceDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Crear',
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               try {
@@ -258,7 +260,6 @@ class PlatformDeviceDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            child: const Text('Crear'),
           ),
         ],
       ),

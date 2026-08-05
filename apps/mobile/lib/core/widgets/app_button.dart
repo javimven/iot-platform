@@ -16,6 +16,7 @@ class AppButton extends StatelessWidget {
     this.variant = AppButtonVariant.primary,
     this.icon,
     this.expand = false,
+    this.loading = false,
     super.key,
   });
 
@@ -24,6 +25,12 @@ class AppButton extends StatelessWidget {
   final AppButtonVariant variant;
   final IconData? icon;
   final bool expand;
+
+  /// Deshabilita el botón y muestra un indicador de progreso en vez de la
+  /// etiqueta — patrón repetido en las 24 pantallas de la app antes de este
+  /// componente (login, formularios de alta/edición...), centralizado aquí
+  /// en vez de reconstruirlo pantalla por pantalla.
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -48,18 +55,31 @@ class AppButton extends StatelessWidget {
       ),
     );
 
-    final child = icon == null
-        ? Text(label)
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 8),
-              Text(label),
-            ],
-          );
+    final Widget child;
+    if (loading) {
+      child = SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2, color: foreground),
+      );
+    } else if (icon != null) {
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Text(label),
+        ],
+      );
+    } else {
+      child = Text(label);
+    }
 
-    final button = FilledButton(onPressed: onPressed, style: style, child: child);
+    final button = FilledButton(
+      onPressed: loading ? null : onPressed,
+      style: style,
+      child: child,
+    );
 
     return expand ? SizedBox(width: double.infinity, child: button) : button;
   }

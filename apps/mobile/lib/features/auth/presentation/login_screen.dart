@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../application/auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -80,15 +81,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: authState.isLoading ? null : _submit,
-                    child: authState.isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Entrar'),
+                  AppButton(
+                    label: 'Entrar',
+                    loading: authState.isLoading,
+                    onPressed: _submit,
                   ),
                   const SizedBox(height: 12),
                   TextButton(

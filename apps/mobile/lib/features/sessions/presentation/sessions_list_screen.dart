@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/status_chip.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/sessions_controller.dart';
 import '../data/sessions_models.dart';
@@ -41,7 +43,7 @@ class SessionsListScreen extends ConsumerWidget {
                   ),
                   isThreeLine: true,
                   trailing: isCurrent
-                      ? const Chip(label: Text('Este dispositivo'))
+                      ? const StatusChip(label: 'Este dispositivo', tone: AppStatusTone.ok)
                       : IconButton(
                           icon: const Icon(Icons.logout),
                           tooltip: 'Cerrar esta sesión',
@@ -72,9 +74,10 @@ class SessionsListScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          AppButton(
+            label: 'Cerrar sesión',
+            variant: AppButtonVariant.danger,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Cerrar sesión'),
           ),
         ],
       ),
