@@ -54,3 +54,13 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "public_udp_ports" {
+  description = <<-EOT
+    Puertos UDP abiertos a cualquier IP. Vacío por defecto: solo para
+    estaciones que no pueden hablar MQTT y entran por un puente (BACKLOG.md
+    #44: la estación WSC2-N manda su payload a 5555/udp).
+  EOT
+  type        = list(string)
+  default     = []
+}

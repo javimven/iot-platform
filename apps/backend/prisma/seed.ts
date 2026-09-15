@@ -26,6 +26,12 @@ const CHANNEL_TYPES = [
   { code: 'battery', unit: '%', dataType: 'continuous', defaultAggregation: 'average', minValid: 0, maxValid: 100 },
   { code: 'signal_strength', unit: 'dBm', dataType: 'continuous', defaultAggregation: 'average', minValid: -120, maxValid: 0 },
   { code: 'precipitation', unit: 'mm', dataType: 'counter', defaultAggregation: 'sum', minValid: 0, maxValid: 500 },
+  // Estación WSC2-N con sondas de suelo (BACKLOG.md #44): la temperatura de
+  // las sondas de suelo y la succión del tensiómetro, en centibares (1 cb =
+  // 1 kPa; 0 = suelo saturado). El mínimo admite -10 cb porque al aire el
+  // tensiómetro marca alrededor de 0 y su cero deriva un poco.
+  { code: 'temperature_soil', unit: '°C', dataType: 'continuous', defaultAggregation: 'average', minValid: -40, maxValid: 80 },
+  { code: 'tension_soil', unit: 'cb', dataType: 'continuous', defaultAggregation: 'average', minValid: -10, maxValid: 100 },
 ];
 
 // PERMISSIONS.md §14 — catálogo de ejemplo; se amplía a medida que cada

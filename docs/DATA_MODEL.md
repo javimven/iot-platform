@@ -247,7 +247,7 @@ Restricción: `UNIQUE (device_id, external_identifier)`. Un dispositivo tiene co
 ### `channel_types` (catálogo de plataforma)
 | Columna | Tipo | Restricción |
 |---|---|---|
-| code | text | PK (`temperature_air`, `humidity_air`, `humidity_soil`, `conductivity`, `tank_level`, `battery`, `signal_strength`, `precipitation`, ampliable) |
+| code | text | PK (`temperature_air`, `humidity_air`, `humidity_soil`, `conductivity`, `tank_level`, `battery`, `signal_strength`, `precipitation`, `temperature_soil`, `tension_soil` — estos dos, 2026-09-15, BACKLOG.md #44 —, ampliable) |
 | unit | text | NOT NULL |
 | data_type | enum(`continuous`,`boolean`,`counter`) | NOT NULL |
 | default_aggregation | enum(`average`,`sum`,`count_true`) | NOT NULL |

@@ -43,6 +43,20 @@ resource "hcloud_firewall" "this" {
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
+  # UDP público, solo los puertos que pida cada entorno (vacío por defecto):
+  # para estaciones que no hablan MQTT y entran por un puente. Hoy, la
+  # estación Dragino WSC2-N: su payload binario llega por UDP al puente, que
+  # lo publica en EMQX por la red interna (BACKLOG.md #44).
+  dynamic "rule" {
+    for_each = var.public_udp_ports
+    content {
+      direction  = "in"
+      protocol   = "udp"
+      port       = rule.value
+      source_ips = ["0.0.0.0/0", "::/0"]
+    }
+  }
+
   # SSH — nunca abierto a cualquier IP (DEPLOYMENT.md §6/§18).
   rule {
     direction  = "in"

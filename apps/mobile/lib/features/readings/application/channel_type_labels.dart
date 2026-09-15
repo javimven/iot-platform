@@ -11,6 +11,8 @@ class ChannelTypeLabels {
     'battery': ('Batería', '%'),
     'signal_strength': ('Señal', 'dBm'),
     'precipitation': ('Precipitación', 'mm'),
+    'temperature_soil': ('Temperatura de suelo', '°C'),
+    'tension_soil': ('Tensión de suelo', 'cb'),
   };
 
   static String labelFor(String code) => _labels[code]?.$1 ?? code;

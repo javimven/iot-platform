@@ -1,0 +1,34 @@
+# Puente de la estación Dragino WSC2-N (BACKLOG.md #44). Corre en la misma
+# VPS que la plataforma, pero FUERA de docker-compose.deploy.yml a propósito:
+# deploy.sh hace `compose pull` de todo lo que hay allí, y la imagen del
+# puente viene de otro repositorio (javimven/rs485-tool) con su paquete de
+# ghcr privado — si ese pull fallase, se caería el despliegue entero de la
+# plataforma. Así, un fallo del puente nunca bloquea un despliegue.
+#
+# Recibe por UDP el payload binario de la estación (5555, abierto en el
+# firewall con `public_udp_ports` de infra/terraform) y lo publica en EMQX
+# por la red interna como el gateway de la estación (MQTT_PROTOCOL.md §5), y
+# además en ThingsBoard. Sus variables, con el token de ThingsBoard, viven en
+# el `.env` junto a este archivo en la VPS, nunca en el repositorio
+# (plantilla: puente.env.example).
+#
+# En la VPS: /opt/iot-platform/puente/{docker-compose.yml,.env}
+#   docker compose up -d        # y `docker compose logs -f` para verlo
+services:
+  puente:
+    image: ghcr.io/javimven/rs485-puente:${PUENTE_TAG:?Falta PUENTE_TAG (SHA del commit de rs485-tool)}
+    env_file: [.env]
+    ports:
+      - "5555:5555/udp"
+    networks: [plataforma]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  plataforma:
+    name: iot-platform_default
+    external: true

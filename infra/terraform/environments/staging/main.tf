@@ -15,6 +15,9 @@ module "compute" {
   location        = var.hetzner_location
   ssh_public_key  = var.ssh_public_key
   admin_ssh_cidrs = var.admin_ssh_cidrs
+
+  # Puente de la estación WSC2-N (BACKLOG.md #44).
+  public_udp_ports = ["5555"]
 }
 
 module "database" {

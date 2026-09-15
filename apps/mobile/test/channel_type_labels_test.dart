@@ -12,5 +12,12 @@ void main() {
       expect(ChannelTypeLabels.labelFor('unknown_type'), 'unknown_type');
       expect(ChannelTypeLabels.unitFor('unknown_type'), '');
     });
+
+    test('tipos de suelo de la estación WSC2-N (BACKLOG.md #44)', () {
+      expect(ChannelTypeLabels.labelFor('temperature_soil'), 'Temperatura de suelo');
+      expect(ChannelTypeLabels.unitFor('temperature_soil'), '°C');
+      expect(ChannelTypeLabels.labelFor('tension_soil'), 'Tensión de suelo');
+      expect(ChannelTypeLabels.unitFor('tension_soil'), 'cb');
+    });
   });
 }
