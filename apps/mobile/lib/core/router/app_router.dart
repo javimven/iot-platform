@@ -29,6 +29,7 @@ import '../../features/platform/presentation/platform_organization_features_scre
 import '../../features/platform/presentation/platform_organizations_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
 import '../../features/sessions/presentation/sessions_list_screen.dart';
+import '../../features/stations/presentation/station_detail_screen.dart';
 import '../../features/stations/presentation/stations_screen.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/locked_feature_screen.dart';
@@ -127,7 +128,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
-            routes: [GoRoute(path: '/stations', builder: (context, state) => const StationsScreen())],
+            routes: [
+              GoRoute(
+                path: '/stations',
+                builder: (context, state) => const StationsScreen(),
+                routes: [
+                  // Pantalla de una estación (BACKLOG.md #49, mejora C): dentro de
+                  // la rama, así la barra inferior sigue visible y "atrás" vuelve
+                  // al resumen.
+                  GoRoute(
+                    path: ':gatewayId',
+                    builder: (context, state) => StationDetailScreen(gatewayId: state.pathParameters['gatewayId']!),
+                  ),
+                ],
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen())],

@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_shell.dart';
 import '../../directory/data/directory_models.dart';
 import '../application/stations_controller.dart';
+import '../application/station_detail_controller.dart';
 import 'station_card.dart';
+import 'station_detail_screen.dart';
+import 'station_summary_list.dart';
 
 /// Pantalla principal de datos en vivo (BACKLOG.md #30) — reemplaza a
 /// Instalaciones como aterrizaje de un usuario normal de organización.
-/// Barra lateral de selección (agrupada por Finca, mockup original:
-/// "Estaciones seleccionadas: N") + panel principal con la tarjeta de cada
-/// estación marcada, cada una independiente (su propio rango de gráfica y
-/// sus propios canales activados).
+/// En pantallas anchas, barra lateral de selección (agrupada por Finca,
+/// mockup original: "Estaciones seleccionadas: N") + panel principal con la
+/// tarjeta de cada estación marcada. En el móvil (BACKLOG.md #49, mejora B),
+/// el resumen de todas las estaciones sin paso de selección, y si solo hay
+/// una, directamente su pantalla.
 class StationsScreen extends ConsumerWidget {
   const StationsScreen({super.key});
 
@@ -23,7 +28,21 @@ class StationsScreen extends ConsumerWidget {
     final installationNames =
         ref.watch(stationGroupNamesProvider).valueOrNull ?? const <String, StationGroupName>{};
     final selected = ref.watch(selectedGatewayIdsProvider);
-    final isWide = MediaQuery.sizeOf(context).width >= 840;
+    final isWide = MediaQuery.sizeOf(context).width >= compactShellBreakpoint;
+
+    // Una sola estación en el móvil: nada que elegir, se abre directamente.
+    final onlyStation = gateways.valueOrNull?.length == 1 ? gateways.valueOrNull!.single : null;
+    if (!isWide && onlyStation != null) {
+      return StationDetailScreen(gatewayId: onlyStation.id);
+    }
+
+    Future<void> refreshAll() async {
+      ref.invalidate(stationGroupNamesProvider);
+      ref.invalidate(gatewayLatestReadingsProvider);
+      ref.invalidate(stationSparklineProvider);
+      ref.invalidate(allGatewaysProvider);
+      await ref.read(allGatewaysProvider.future);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -32,15 +51,12 @@ class StationsScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () {
-              ref.invalidate(allGatewaysProvider);
-              ref.invalidate(stationGroupNamesProvider);
-            },
+            onPressed: refreshAll,
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(allGatewaysProvider.future),
+        onRefresh: refreshAll,
         child: gateways.when(
           data: (items) {
             if (items.isEmpty) {
@@ -49,23 +65,17 @@ class StationsScreen extends ConsumerWidget {
                 detail: 'Cuando se dé de alta una en Infraestructura, aparecerá aquí.',
               );
             }
+            if (!isWide) {
+              return StationSummaryList(gateways: items, groupNames: installationNames);
+            }
             final sidebar = _StationSelectionList(gateways: items, installationNames: installationNames);
             final content = _SelectedStationsPanel(gateways: items, selected: selected);
 
-            if (isWide) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(width: 240, child: sidebar),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: content),
-                ],
-              );
-            }
-            return Column(
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(height: 280, child: sidebar),
-                const Divider(height: 1),
+                SizedBox(width: 240, child: sidebar),
+                const VerticalDivider(width: 1),
                 Expanded(child: content),
               ],
             );
