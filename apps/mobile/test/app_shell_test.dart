@@ -37,20 +37,28 @@ const _branches = [
   '/infrastructure',
 ];
 
-Future<void> _pumpShell(WidgetTester tester, Size size) async {
+Future<void> _pumpShell(WidgetTester tester, Size size, {String location = '/stations'}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
   final router = GoRouter(
-    initialLocation: '/stations',
+    initialLocation: location,
     routes: [
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(navigationShell: shell),
         branches: [
           for (final path in _branches)
             StatefulShellBranch(
-              routes: [GoRoute(path: path, builder: (context, state) => Scaffold(body: Text('Pantalla $path')))],
+              routes: [
+                GoRoute(
+                  path: path,
+                  builder: (context, state) => Scaffold(body: Text('Pantalla $path')),
+                  routes: [
+                    GoRoute(path: ':id', builder: (context, state) => const Scaffold(body: Text('Detalle'))),
+                  ],
+                ),
+              ],
             ),
         ],
       ),
@@ -105,6 +113,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pantalla /infrastructure'), findsOneWidget);
     expect(find.text('Cerrar sesión'), findsNothing); // la hoja se ha cerrado
+  });
+
+  testWidgets('un móvil girado sigue con la barra inferior, no con el menú lateral', (tester) async {
+    await _pumpShell(tester, const Size(844, 390));
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.text('Contraer menú'), findsNothing);
+  });
+
+  testWidgets('E: en la pantalla de una estación con el móvil girado no hay barra inferior', (tester) async {
+    await _pumpShell(tester, const Size(844, 390), location: '/stations/gw-1');
+    expect(find.text('Detalle'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
   });
 
   testWidgets('en pantalla ancha: menú lateral, sin barra inferior', (tester) async {

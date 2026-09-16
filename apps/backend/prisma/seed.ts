@@ -32,6 +32,11 @@ const CHANNEL_TYPES = [
   // tensiómetro marca alrededor de 0 y su cero deriva un poco.
   { code: 'temperature_soil', unit: '°C', dataType: 'continuous', defaultAggregation: 'average', minValid: -40, maxValid: 80 },
   { code: 'tension_soil', unit: 'cb', dataType: 'continuous', defaultAggregation: 'average', minValid: -10, maxValid: 100 },
+  // Estado de la propia estación (BACKLOG.md #49, mejora F): el puente manda en
+  // cada envío la tensión de su batería, en voltios (la WSC2-N no da porcentaje),
+  // junto con la cobertura en dBm. Así la plataforma sabe que la estación está
+  // viva aunque no lleguen datos de sus sensores.
+  { code: 'battery_voltage', unit: 'V', dataType: 'continuous', defaultAggregation: 'average', minValid: 0, maxValid: 15 },
 ];
 
 // PERMISSIONS.md §14 — catálogo de ejemplo; se amplía a medida que cada

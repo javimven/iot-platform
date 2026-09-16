@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/reading_format.dart';
 import '../../../core/format/relative_time.dart';
+import '../../../core/widgets/app_shell.dart';
 import '../../../core/widgets/retry_message.dart';
 import '../../directory/data/directory_models.dart';
 import '../../installations/data/installation_models.dart';
@@ -15,10 +16,13 @@ import '../data/gateway_status_labels.dart';
 import 'accumulated_chart.dart';
 import 'series_style.dart';
 import 'stacked_channel_charts.dart';
+import 'station_notices.dart';
 
 /// Pantalla de una estación (BACKLOG.md #49, mejora C), pensada para el móvil:
 /// un sensor cada vez en pestañas, sus magnitudes como cifras grandes que
 /// activan o quitan su gráfica, y la magnitud principal ya dibujada al entrar.
+/// Con el teléfono girado, solo la gráfica (mejora E). Avisa si la estación no
+/// envía o envía sin datos de sensores, y se refresca sola (mejora F).
 class StationDetailScreen extends ConsumerWidget {
   const StationDetailScreen({required this.gatewayId, super.key});
 
@@ -28,28 +32,30 @@ class StationDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final station = ref.watch(stationByIdProvider(gatewayId));
 
-    return station.when(
-      loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
-      error: (error, _) => Scaffold(
-        appBar: AppBar(title: const Text('Estación')),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: RetryMessage(
-            message: 'No se ha podido cargar la estación.',
-            technicalDetail: '$error',
-            onRetry: () => ref.invalidate(allGatewaysProvider),
+    return StationsAutoRefresh(
+      child: station.when(
+        loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
+        error: (error, _) => Scaffold(
+          appBar: AppBar(title: const Text('Estación')),
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: RetryMessage(
+              message: 'No se ha podido cargar la estación.',
+              technicalDetail: '$error',
+              onRetry: () => ref.invalidate(allGatewaysProvider),
+            ),
           ),
         ),
+        data: (gateway) => gateway == null
+            ? Scaffold(
+                appBar: AppBar(title: const Text('Estación')),
+                body: const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Esta estación ya no existe o no tienes acceso a ella.'),
+                ),
+              )
+            : _StationDetail(gateway: gateway),
       ),
-      data: (gateway) => gateway == null
-          ? Scaffold(
-              appBar: AppBar(title: const Text('Estación')),
-              body: const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Esta estación ya no existe o no tienes acceso a ella.'),
-              ),
-            )
-          : _StationDetail(gateway: gateway),
     );
   }
 }
@@ -99,8 +105,17 @@ class _StationDetail extends ConsumerWidget {
             ),
           );
         }
+        final selected = ref.watch(detailSelectedSensorProvider(gateway.id)).clamp(0, groups.length - 1);
+
+        if (isPhoneLandscape(MediaQuery.sizeOf(context))) {
+          return _FullScreenChart(gateway: gateway, group: groups[selected]);
+        }
+
+        final dataState = stationDataState(gateway, items);
+        final aliveAt = stationAliveAt(gateway, items);
         return DefaultTabController(
           length: groups.length,
+          initialIndex: selected,
           child: Scaffold(
             appBar: AppBar(
               title: title(),
@@ -109,14 +124,18 @@ class _StationDetail extends ConsumerWidget {
                   : TabBar(
                       isScrollable: true,
                       tabAlignment: TabAlignment.start,
-                      tabs: [for (final g in groups) Tab(text: g.label)],
+                      onTap: (index) => ref.read(detailSelectedSensorProvider(gateway.id).notifier).state = index,
+                      tabs: [for (final g in groups) Tab(text: sensorDisplayLabel(g))],
                     ),
             ),
             // Sin deslizar entre sensores: el arrastre horizontal es para leer
             // la gráfica; se cambia de sensor tocando su pestaña.
             body: TabBarView(
               physics: const NeverScrollableScrollPhysics(),
-              children: [for (final g in groups) _SensorPage(gateway: gateway, group: g)],
+              children: [
+                for (final g in groups)
+                  _SensorPage(gateway: gateway, group: g, dataState: dataState, aliveAt: aliveAt),
+              ],
             ),
           ),
         );
@@ -125,116 +144,238 @@ class _StationDetail extends ConsumerWidget {
   }
 }
 
+/// Lo que necesitan las gráficas de un sensor: qué magnitudes están activas, en
+/// qué orden y con qué estilo, y el rango.
+class _SensorChartModel {
+  _SensorChartModel(WidgetRef ref, BuildContext context, this.gateway, this.group)
+      : key = (gateway.id, group.key),
+        ordered = readingsByPriority(group) {
+    active = effectiveDetailChannels(group, ref.watch(detailActiveChannelsProvider(key)));
+    range = ref.watch(sensorChartRangeProvider(key));
+    organizationId = ref.watch(stationOrganizationIdProvider(gateway.id));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    styles = {for (var i = 0; i < ordered.length; i++) ordered[i].channelId: seriesStyle(i, isDark: isDark)};
+    final activeReadings = [for (final r in ordered) if (active.contains(r.channelId)) r];
+    lineReadings = [
+      for (final r in activeReadings)
+        if (ChannelTypeLabels.aggregationFor(r.channelTypeCode) != 'sum') r,
+    ];
+    sumReadings = [
+      for (final r in activeReadings)
+        if (ChannelTypeLabels.aggregationFor(r.channelTypeCode) == 'sum') r,
+    ];
+  }
+
+  final Gateway gateway;
+  final SensorReadings group;
+  final (String, String) key;
+  final List<LatestReading> ordered;
+  late final Set<String> active;
+  late final HistoryRange range;
+  late final String? organizationId;
+  late final Map<String, ({Color color, List<int>? dash})> styles;
+  late final List<LatestReading> lineReadings;
+  late final List<LatestReading> sumReadings;
+
+  void selectRange(WidgetRef ref, HistoryRange value) {
+    ref.read(sensorChartRangeProvider(key).notifier).state = value;
+    ref.read(chartCrosshairProvider(key).notifier).state = null;
+  }
+}
+
+class _RangeSelector extends ConsumerWidget {
+  const _RangeSelector({required this.model, this.compact = false});
+
+  final _SensorChartModel model;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SegmentedButton<HistoryRange>(
+      segments: [for (final r in HistoryRange.values) ButtonSegment(value: r, label: Text(r.shortLabel))],
+      selected: {model.range},
+      showSelectedIcon: false,
+      style: compact ? const ButtonStyle(visualDensity: VisualDensity.compact) : null,
+      onSelectionChanged: (selection) => model.selectRange(ref, selection.first),
+    );
+  }
+}
+
 class _SensorPage extends ConsumerWidget {
-  const _SensorPage({required this.gateway, required this.group});
+  const _SensorPage({required this.gateway, required this.group, required this.dataState, required this.aliveAt});
+
+  final Gateway gateway;
+  final SensorReadings group;
+  final ({StationDataState state, DateTime? since}) dataState;
+  final DateTime? aliveAt;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final model = _SensorChartModel(ref, context, gateway, group);
+    final theme = Theme.of(context);
+    final soft = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final isHealth = isStationHealthGroup(group);
+
+    void toggle(LatestReading reading) {
+      ref.read(detailActiveChannelsProvider(model.key).notifier).state =
+          toggleDetailChannel(model.active, reading.channelId);
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async => refreshStationData(ref),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: [
+          if (dataState.state != StationDataState.ok) ...[
+            StationDataNotice(state: dataState.state, since: dataState.since),
+            const SizedBox(height: 12),
+          ],
+          if (isHealth)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Batería y cobertura de la propia estación, en cada envío.', style: soft),
+            )
+          else if (group.externalIdentifier != null && group.externalIdentifier != group.label)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('${group.label}, conectado en ${group.externalIdentifier}', style: soft),
+            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Dos columnas como mucho: con tres en un móvil los nombres se cortan.
+              final columns = model.ordered.length == 1 ? 1 : 2;
+              const gap = 8.0;
+              final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final r in model.ordered)
+                    SizedBox(
+                      width: width,
+                      child: _MagnitudeToggle(
+                        reading: r,
+                        selected: model.active.contains(r.channelId),
+                        stale: !isHealth && isReadingStale(r, aliveAt),
+                        color: model.styles[r.channelId]!.color,
+                        dash: model.styles[r.channelId]!.dash,
+                        onTap: () => toggle(r),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _RangeSelector(model: model),
+          const SizedBox(height: 16),
+          if (model.lineReadings.isNotEmpty) _LineCharts(model: model),
+          for (final r in model.sumReadings) ...[
+            const SizedBox(height: 16),
+            _AccumulatedFor(model: model, reading: r),
+          ],
+          if (MediaQuery.sizeOf(context).shortestSide < 600) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.screen_rotation, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Flexible(child: Text('Gira el móvil para verla a pantalla completa', style: soft)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Teléfono girado: solo la gráfica del sensor que se estaba mirando, con su
+/// rango, sin menú ni cabecera (BACKLOG.md #49, mejora E). Arrastrar el dedo
+/// sigue leyendo valor y hora.
+class _FullScreenChart extends ConsumerWidget {
+  const _FullScreenChart({required this.gateway, required this.group});
 
   final Gateway gateway;
   final SensorReadings group;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final key = (gateway.id, group.key);
-    final active = effectiveDetailChannels(group, ref.watch(detailActiveChannelsProvider(key)));
-    final range = ref.watch(sensorChartRangeProvider(key));
-    final organizationId = ref.watch(stationOrganizationIdProvider(gateway.id));
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final model = _SensorChartModel(ref, context, gateway, group);
     final theme = Theme.of(context);
+    final magnitudes = [
+      for (final r in model.ordered)
+        if (model.active.contains(r.channelId)) ChannelTypeLabels.labelFor(r.channelTypeCode),
+    ].join(', ');
 
-    final ordered = readingsByPriority(group);
-    final styles = {
-      for (var i = 0; i < ordered.length; i++) ordered[i].channelId: seriesStyle(i, isDark: isDark),
-    };
-    final activeReadings = [for (final r in ordered) if (active.contains(r.channelId)) r];
-    final lineReadings = activeReadings.where((r) => ChannelTypeLabels.aggregationFor(r.channelTypeCode) != 'sum').toList();
-    final sumReadings = activeReadings.where((r) => ChannelTypeLabels.aggregationFor(r.channelTypeCode) == 'sum').toList();
-
-    void toggle(LatestReading reading) {
-      ref.read(detailActiveChannelsProvider(key).notifier).state = toggleDetailChannel(active, reading.channelId);
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        if (group.externalIdentifier != null && group.externalIdentifier != group.label)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              '${group.label}, conectado en ${group.externalIdentifier}',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // Dos columnas como mucho: con tres en un móvil los nombres se cortan.
-            final columns = ordered.length == 1 ? 1 : 2;
-            const gap = 8.0;
-            final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                for (final r in ordered)
-                  SizedBox(
-                    width: width,
-                    child: _MagnitudeToggle(
-                      reading: r,
-                      selected: active.contains(r.channelId),
-                      color: styles[r.channelId]!.color,
-                      dash: styles[r.channelId]!.dash,
-                      onTap: () => toggle(r),
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${gateway.name}, ${sensorDisplayLabel(group)}', style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          magnitudes,
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        if (activeReadings.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text(
-              'Toca una magnitud para ver su gráfica.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          )
-        else ...[
-          SegmentedButton<HistoryRange>(
-            segments: [for (final r in HistoryRange.values) ButtonSegment(value: r, label: Text(r.shortLabel))],
-            selected: {range},
-            showSelectedIcon: false,
-            onSelectionChanged: (selection) {
-              ref.read(sensorChartRangeProvider(key).notifier).state = selection.first;
-              ref.read(chartCrosshairProvider(key).notifier).state = null;
-            },
+                  const SizedBox(width: 12),
+                  _RangeSelector(model: model, compact: true),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final count = model.lineReadings.length;
+                    // Lectura (~28) + cabecera de cada gráfica (~24) + separaciones.
+                    final overhead = 36 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
+                    final height = count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
+                    return SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (count > 0) _LineCharts(model: model, chartHeight: height),
+                          for (final r in model.sumReadings) ...[
+                            const SizedBox(height: 12),
+                            _AccumulatedFor(model: model, reading: r, height: count == 0 ? constraints.maxHeight - 12 : 200),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          if (lineReadings.isNotEmpty)
-            _LineCharts(
-              gateway: gateway,
-              chartKey: key,
-              organizationId: organizationId,
-              readings: lineReadings,
-              styles: styles,
-              range: range,
-            ),
-          for (final r in sumReadings) ...[
-            const SizedBox(height: 16),
-            _AccumulatedFor(organizationId: organizationId, reading: r, color: styles[r.channelId]!.color, range: range),
-          ],
-        ],
-      ],
+        ),
+      ),
     );
   }
 }
 
 /// Cifra grande de una magnitud que a la vez activa o quita su gráfica. Activa,
 /// lleva el borde y la muestra de trazo de su serie; además del color, lo dice
-/// el lector de pantalla.
+/// el lector de pantalla. Si el sensor ha dejado de contestar, lo avisa debajo.
 class _MagnitudeToggle extends StatelessWidget {
   const _MagnitudeToggle({
     required this.reading,
     required this.selected,
+    required this.stale,
     required this.color,
     required this.dash,
     required this.onTap,
@@ -242,6 +383,7 @@ class _MagnitudeToggle extends StatelessWidget {
 
   final LatestReading reading;
   final bool selected;
+  final bool stale;
   final Color color;
   final List<int>? dash;
   final VoidCallback onTap;
@@ -251,11 +393,12 @@ class _MagnitudeToggle extends StatelessWidget {
     final theme = Theme.of(context);
     final label = ChannelTypeLabels.labelFor(reading.channelTypeCode);
     final unit = ChannelTypeLabels.unitFor(reading.channelTypeCode);
+    final staleText = stale ? ', sin datos desde ${formatAgo(reading.tsOrigin)}' : '';
 
     return Semantics(
       button: true,
       selected: selected,
-      label: '$label, ${formatReading(reading.value)} $unit, ${selected ? 'gráfica visible' : 'gráfica oculta'}',
+      label: '$label, ${formatReading(reading.value)} $unit, ${selected ? 'gráfica visible' : 'gráfica oculta'}$staleText',
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
@@ -290,7 +433,11 @@ class _MagnitudeToggle extends StatelessWidget {
                   children: [
                     TextSpan(
                       text: formatReading(reading.value),
-                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600, fontFeatures: tabularFigures),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: tabularFigures,
+                        color: stale ? theme.colorScheme.onSurfaceVariant : null,
+                      ),
                     ),
                     TextSpan(
                       text: ' $unit',
@@ -299,6 +446,7 @@ class _MagnitudeToggle extends StatelessWidget {
                   ],
                 ),
               ),
+              if (stale) StaleReadingNote(since: reading.tsOrigin),
             ],
           ),
         ),
@@ -308,29 +456,20 @@ class _MagnitudeToggle extends StatelessWidget {
 }
 
 class _LineCharts extends ConsumerWidget {
-  const _LineCharts({
-    required this.gateway,
-    required this.chartKey,
-    required this.organizationId,
-    required this.readings,
-    required this.styles,
-    required this.range,
-  });
+  const _LineCharts({required this.model, this.chartHeight});
 
-  final Gateway gateway;
-  final (String, String) chartKey;
-  final String? organizationId;
-  final List<LatestReading> readings;
-  final Map<String, ({Color color, List<int>? dash})> styles;
-  final HistoryRange range;
+  final _SensorChartModel model;
+  final double? chartHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final readings = model.lineReadings;
     final histories = [
-      for (final r in readings) ref.watch(stationChannelHistoryProvider((organizationId, r.channelId, range))),
+      for (final r in readings)
+        ref.watch(stationChannelHistoryProvider((model.organizationId, r.channelId, model.range))),
     ];
     if (histories.any((h) => h.isLoading && !h.hasValue)) {
-      return const SizedBox(height: 240, child: Center(child: CircularProgressIndicator()));
+      return SizedBox(height: chartHeight ?? 240, child: const Center(child: CircularProgressIndicator()));
     }
     final failed = histories.indexWhere((h) => h.hasError);
     if (failed != -1) {
@@ -339,16 +478,17 @@ class _LineCharts extends ConsumerWidget {
         technicalDetail: '${histories[failed].error}',
         onRetry: () {
           for (final r in readings) {
-            ref.invalidate(stationChannelHistoryProvider((organizationId, r.channelId, range)));
+            ref.invalidate(stationChannelHistoryProvider((model.organizationId, r.channelId, model.range)));
           }
         },
       );
     }
 
     return StackedChannelCharts(
-      range: range,
-      crosshairMillis: ref.watch(chartCrosshairProvider(chartKey)),
-      onCrosshair: (millis) => ref.read(chartCrosshairProvider(chartKey).notifier).state = millis,
+      range: model.range,
+      chartHeight: chartHeight,
+      crosshairMillis: ref.watch(chartCrosshairProvider(model.key)),
+      onCrosshair: (millis) => ref.read(chartCrosshairProvider(model.key).notifier).state = millis,
       series: [
         for (var i = 0; i < readings.length; i++)
           StackedSeries(
@@ -356,8 +496,8 @@ class _LineCharts extends ConsumerWidget {
             label: ChannelTypeLabels.labelFor(readings[i].channelTypeCode),
             unit: ChannelTypeLabels.unitFor(readings[i].channelTypeCode),
             points: histories[i].valueOrNull ?? const [],
-            color: styles[readings[i].channelId]!.color,
-            dash: styles[readings[i].channelId]!.dash,
+            color: model.styles[readings[i].channelId]!.color,
+            dash: model.styles[readings[i].channelId]!.dash,
           ),
       ],
     );
@@ -365,31 +505,31 @@ class _LineCharts extends ConsumerWidget {
 }
 
 class _AccumulatedFor extends ConsumerWidget {
-  const _AccumulatedFor({required this.organizationId, required this.reading, required this.color, required this.range});
+  const _AccumulatedFor({required this.model, required this.reading, this.height = 220});
 
-  final String? organizationId;
+  final _SensorChartModel model;
   final LatestReading reading;
-  final Color color;
-  final HistoryRange range;
+  final double height;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final history = ref.watch(stationAccumulatedHistoryProvider((organizationId, reading.channelId, range)));
+    final provider = stationAccumulatedHistoryProvider((model.organizationId, reading.channelId, model.range));
+    final history = ref.watch(provider);
     return history.when(
-      loading: () => const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+      loading: () => SizedBox(height: height, child: const Center(child: CircularProgressIndicator())),
       error: (error, _) => RetryMessage(
         message: 'No se ha podido cargar la gráfica.',
         technicalDetail: '$error',
-        onRetry: () => ref.invalidate(stationAccumulatedHistoryProvider((organizationId, reading.channelId, range))),
+        onRetry: () => ref.invalidate(provider),
       ),
       data: (points) => SizedBox(
-        height: 220,
+        height: height,
         child: AccumulatedChart(
           label: ChannelTypeLabels.labelFor(reading.channelTypeCode),
           unit: ChannelTypeLabels.unitFor(reading.channelTypeCode),
-          color: color,
+          color: model.styles[reading.channelId]!.color,
           rawPoints: points,
-          range: range,
+          range: model.range,
         ),
       ),
     );

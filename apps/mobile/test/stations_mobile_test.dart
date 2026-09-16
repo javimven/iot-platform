@@ -141,6 +141,26 @@ void main() {
     expect(find.byType(LineChart), findsOneWidget);
   });
 
+  testWidgets('E: con el móvil girado, la estación enseña solo la gráfica, sin pestañas', (tester) async {
+    await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
+
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.byType(LineChart), findsOneWidget);
+    expect(find.textContaining('Gira el móvil'), findsNothing);
+    expect(find.text('Estación WSC2-N, Tensiómetro'), findsOneWidget);
+  });
+
+  testWidgets('un móvil girado no pasa a la vista de escritorio del resumen', (tester) async {
+    await _pump(
+      tester,
+      gateways: [_gateway('gw-1', 'Estación WSC2-N'), _gateway('gw-2', 'Estación Norte')],
+      size: const Size(844, 390),
+    );
+
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Ver gráficas'), findsWidgets);
+  });
+
   testWidgets('en pantalla ancha sigue la lista para marcar estaciones (BACKLOG.md #30)', (tester) async {
     await _pump(
       tester,

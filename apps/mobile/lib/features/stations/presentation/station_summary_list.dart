@@ -15,6 +15,7 @@ import '../application/sensor_groups.dart';
 import '../application/station_detail_controller.dart';
 import '../application/stations_controller.dart';
 import '../data/gateway_status_labels.dart';
+import 'station_notices.dart';
 
 /// Resumen de todas las estaciones, lo primero que se ve en el móvil
 /// (BACKLOG.md #49, mejora B): sin paso de marcar estaciones, cada una con la
@@ -103,15 +104,37 @@ class StationSummaryCard extends ConsumerWidget {
               onRetry: () => ref.invalidate(gatewayLatestReadingsProvider(gateway.id)),
             ),
             data: (items) {
-              if (items.isEmpty) {
-                return Text('Aún no ha enviado datos de sensores.', style: theme.textTheme.bodyMedium);
+              final dataState = stationDataState(gateway, items);
+              final notice = dataState.state == StationDataState.ok
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: StationDataNotice(state: dataState.state, since: dataState.since),
+                    );
+              // El grupo de estado de la estación (batería, cobertura) no es un
+              // sensor de campo: no sale en las cifras ni cuenta en el pie.
+              final sensorGroups = [
+                for (final g in groupReadingsBySensor(items))
+                  if (!isStationHealthGroup(g)) g,
+              ];
+              if (sensorGroups.isEmpty) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (notice != null) notice,
+                    Text('Aún no ha enviado datos de sensores.', style: theme.textTheme.bodyMedium),
+                  ],
+                );
               }
+              final aliveAt = stationAliveAt(gateway, items);
               final primary = primaryReadingsPerSensor(items);
-              final sensorCount = groupReadingsBySensor(items).length;
+              final sensorCount = sensorGroups.length;
+              final magnitudeCount = sensorGroups.fold<int>(0, (sum, g) => sum + g.readings.length);
               final shown = primary.take(maxTiles).toList();
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (notice != null) notice,
                   LayoutBuilder(
                     builder: (context, constraints) {
                       const gap = 12.0;
@@ -123,7 +146,12 @@ class StationSummaryCard extends ConsumerWidget {
                           for (final item in shown)
                             SizedBox(
                               width: width,
-                              child: _SummaryTile(gateway: gateway, sensor: item.sensor, reading: item.reading),
+                              child: _SummaryTile(
+                                gateway: gateway,
+                                sensor: item.sensor,
+                                reading: item.reading,
+                                stale: isReadingStale(item.reading, aliveAt),
+                              ),
                             ),
                         ],
                       );
@@ -136,7 +164,7 @@ class StationSummaryCard extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          sensorCount == 1 ? '1 sensor, ${items.length} magnitudes' : '$sensorCount sensores, ${items.length} magnitudes',
+                          sensorCount == 1 ? '1 sensor, $magnitudeCount magnitudes' : '$sensorCount sensores, $magnitudeCount magnitudes',
                           style: soft,
                         ),
                       ),
@@ -155,11 +183,14 @@ class StationSummaryCard extends ConsumerWidget {
 }
 
 class _SummaryTile extends ConsumerWidget {
-  const _SummaryTile({required this.gateway, required this.sensor, required this.reading});
+  const _SummaryTile({required this.gateway, required this.sensor, required this.reading, required this.stale});
 
   final Gateway gateway;
   final SensorReadings sensor;
   final LatestReading reading;
+
+  /// El sensor ha dejado de contestar: su última cifra se queda atrás.
+  final bool stale;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -197,6 +228,7 @@ class _SummaryTile extends ConsumerWidget {
             if (trend != null && trend.length >= 2) Sparkline(points: trend, width: 48, height: 22),
           ],
         ),
+        if (stale) StaleReadingNote(since: reading.tsOrigin),
       ],
     );
   }

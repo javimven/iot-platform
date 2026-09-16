@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iot_platform_app/features/directory/data/directory_models.dart';
 import 'package:iot_platform_app/core/format/relative_time.dart';
 import 'package:iot_platform_app/features/installations/data/installation_models.dart';
 import 'package:iot_platform_app/features/readings/application/reading_history_controller.dart';
@@ -62,6 +63,62 @@ void main() {
       expect(effectiveDetailChannels(soil, null), {'a2-hum'});
       expect(effectiveDetailChannels(soil, {'a2-temp'}), {'a2-temp'});
       expect(effectiveDetailChannels(soil, const {}), isEmpty);
+    });
+  });
+
+  group('estado de los datos de una estación (F)', () {
+    final now = DateTime.utc(2026, 9, 16, 14);
+    Gateway gateway({String status = 'online', Duration seenAgo = const Duration(minutes: 3)}) => Gateway(
+          id: 'gw-1',
+          installationId: 'inst-1',
+          name: 'Estación',
+          connectivityType: 'direct_nbiot',
+          status: status,
+          lastSeenAt: now.subtract(seenAgo),
+        );
+    LatestReading at(String id, String code, String sensor, Duration ago) => LatestReading(
+          channelId: id,
+          channelTypeCode: code,
+          value: 1,
+          tsOrigin: now.subtract(ago),
+          tsReceived: now.subtract(ago),
+          sensorId: sensor,
+          sensorExternalIdentifier: sensor == 'est' ? 'estacion' : 'A1',
+          sensorLabel: null,
+        );
+
+    test('todo al día', () {
+      final readings = [at('t', 'tension_soil', 's1', const Duration(minutes: 3))];
+      expect(stationDataState(gateway(), readings).state, StationDataState.ok);
+    });
+
+    test('sin conexión', () {
+      final state = stationDataState(gateway(status: 'offline', seenAgo: const Duration(hours: 2)), const []);
+      expect(state.state, StationDataState.offline);
+      expect(state.since, now.subtract(const Duration(hours: 2)));
+    });
+
+    test('envía (batería y cobertura al día) pero sus sensores llevan más de 20 min sin datos', () {
+      final readings = [
+        at('t', 'tension_soil', 's1', const Duration(minutes: 50)),
+        at('bat', 'battery_voltage', 'est', const Duration(minutes: 2)),
+        at('sig', 'signal_strength', 'est', const Duration(minutes: 2)),
+      ];
+      final state = stationDataState(gateway(seenAgo: const Duration(minutes: 2)), readings);
+      expect(state.state, StationDataState.noSensorData);
+      expect(state.since, now.subtract(const Duration(minutes: 50)));
+      expect(isReadingStale(readings.first, stationAliveAt(gateway(), readings)), isTrue);
+    });
+
+    test('el grupo de estado de la estación no es un sensor de campo', () {
+      final readings = [
+        at('t', 'tension_soil', 's1', const Duration(minutes: 3)),
+        at('bat', 'battery_voltage', 'est', const Duration(minutes: 3)),
+      ];
+      final groups = groupReadingsBySensor(readings);
+      expect(groups.map(isStationHealthGroup), [false, true]);
+      expect(groups.map(sensorDisplayLabel), ['A1', 'Estación']);
+      expect(primaryReadingsPerSensor(readings).map((p) => p.reading.channelId), ['t']);
     });
   });
 

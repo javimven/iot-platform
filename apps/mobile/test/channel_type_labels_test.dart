@@ -26,5 +26,11 @@ void main() {
       expect(ChannelTypeLabels.unitFor('tension_soil'), 'cb');
       expect(ChannelTypeLabels.aggregationFor('tension_soil'), 'average');
     });
+
+    test('estado de la propia estación: batería en voltios y cobertura en dBm (BACKLOG.md #49)', () {
+      expect(ChannelTypeLabels.labelFor('battery_voltage'), 'Batería');
+      expect(ChannelTypeLabels.unitFor('battery_voltage'), 'V');
+      expect(ChannelTypeLabels.unitFor('signal_strength'), 'dBm');
+    });
   });
 }

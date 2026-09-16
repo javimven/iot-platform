@@ -16,6 +16,18 @@ final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 /// menú lateral (BACKLOG.md #49, mejora A).
 const compactShellBreakpoint = 840.0;
 
+/// Disposición de móvil: pantalla estrecha, o un teléfono aunque esté girado
+/// (un iPhone en horizontal mide 844 px de ancho y no debe pasar al menú
+/// lateral ni a la vista de escritorio).
+bool isCompactLayout(Size size) => size.width < compactShellBreakpoint || size.shortestSide < 600;
+
+/// Un teléfono girado: la pantalla de una estación pasa a enseñar solo la
+/// gráfica (BACKLOG.md #49, mejora E).
+bool isPhoneLandscape(Size size) => size.shortestSide < 600 && size.width > size.height;
+
+/// La ruta de la pantalla de una estación (`/stations/<id>`).
+final _stationDetailPath = RegExp(r'^/stations/[^/]+$');
+
 /// Ramas que van directamente en la barra inferior del móvil: Estaciones,
 /// Alertas y Gráficos. El resto se abre desde "Más".
 const bottomBarBranchCount = 3;
@@ -63,26 +75,31 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isWide = MediaQuery.sizeOf(context).width >= compactShellBreakpoint;
+    final size = MediaQuery.sizeOf(context);
 
-    if (!isWide) {
+    if (isCompactLayout(size)) {
+      // Con el teléfono girado en la pantalla de una estación, la gráfica ocupa
+      // todo: sin barra inferior. Vuelve al poner el móvil derecho.
+      final fullScreenChart = isPhoneLandscape(size) && _stationDetailPath.hasMatch(GoRouterState.of(context).uri.path);
       return Scaffold(
         body: navigationShell,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: bottomBarIndexFor(navigationShell.currentIndex),
-          onDestinationSelected: (index) {
-            if (index == bottomBarBranchCount) {
-              _showMoreSheet(context);
-              return;
-            }
-            navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex);
-          },
-          destinations: [
-            for (final entry in _entries.take(bottomBarBranchCount))
-              NavigationDestination(icon: Icon(entry.icon), label: entry.shortLabel ?? entry.label),
-            const NavigationDestination(icon: Icon(Icons.more_horiz), label: 'Más'),
-          ],
-        ),
+        bottomNavigationBar: fullScreenChart
+            ? null
+            : NavigationBar(
+                selectedIndex: bottomBarIndexFor(navigationShell.currentIndex),
+                onDestinationSelected: (index) {
+                  if (index == bottomBarBranchCount) {
+                    _showMoreSheet(context);
+                    return;
+                  }
+                  navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex);
+                },
+                destinations: [
+                  for (final entry in _entries.take(bottomBarBranchCount))
+                    NavigationDestination(icon: Icon(entry.icon), label: entry.shortLabel ?? entry.label),
+                  const NavigationDestination(icon: Icon(Icons.more_horiz), label: 'Más'),
+                ],
+              ),
       );
     }
 
@@ -259,8 +276,7 @@ class _Sidebar extends ConsumerWidget {
                       collapsed: collapsed,
                       selected: navigationShell.currentIndex == i,
                       locked: isLocked(entries[i].featureCode),
-                      onTap: () =>
-                          navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex),
+                      onTap: () => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex),
                     ),
                 ],
               ),

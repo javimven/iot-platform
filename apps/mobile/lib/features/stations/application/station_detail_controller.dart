@@ -12,6 +12,8 @@ import 'stations_controller.dart';
 /// (BACKLOG.md #49, mejoras B y C). Primero lo que se mira para regar, luego
 /// el ambiente y lo demás; un tipo que no esté aquí va después, por nombre.
 const primaryChannelOrder = [
+  // (Los de estado de la estación van al final: nunca son la principal de un
+  // sensor de campo.)
   'tension_soil',
   'humidity_soil',
   'temperature_air',
@@ -21,8 +23,64 @@ const primaryChannelOrder = [
   'conductivity',
   'tank_level',
   'battery',
+  'battery_voltage',
   'signal_strength',
 ];
+
+/// Canales que describen a la propia estación, no al campo.
+const stationHealthChannelTypes = {'battery', 'battery_voltage', 'signal_strength'};
+
+/// Un "sensor" formado solo por canales de estado de la estación (el que manda
+/// el puente con batería y cobertura): no sale en el resumen, no cuenta para
+/// saber si llegan datos de sensores y en la estación va en su pestaña, al final.
+bool isStationHealthGroup(SensorReadings group) =>
+    group.readings.isNotEmpty && group.readings.every((r) => stationHealthChannelTypes.contains(r.channelTypeCode));
+
+/// Nombre visible de un grupo: "Estación" para el de estado.
+String sensorDisplayLabel(SensorReadings group) => isStationHealthGroup(group) ? 'Estación' : group.label;
+
+/// A partir de cuánto se da por atrasado un dato respecto a lo último que se
+/// sabe de la estación: la WSC2-N envía cada 5 minutos, así que 20 son cuatro
+/// envíos perdidos.
+const staleAfter = Duration(minutes: 20);
+
+/// Lo último que se sabe de la estación: su último dato o su último envío.
+DateTime? stationAliveAt(Gateway gateway, List<LatestReading> readings) {
+  DateTime? latest = gateway.lastSeenAt;
+  for (final r in readings) {
+    if (latest == null || r.tsOrigin.isAfter(latest)) latest = r.tsOrigin;
+  }
+  return latest;
+}
+
+/// Si una lectura se ha quedado atrás respecto a lo último que se sabe de la
+/// estación (un sensor que ha dejado de contestar).
+bool isReadingStale(LatestReading reading, DateTime? aliveAt) =>
+    aliveAt != null && aliveAt.difference(reading.tsOrigin) > staleAfter;
+
+enum StationDataState { ok, offline, noSensorData }
+
+/// Estado de los datos de una estación, para avisar en el resumen y en su
+/// pantalla (BACKLOG.md #49, mejora F): sin conexión, o enviando pero sin datos
+/// de ningún sensor (lo que pasa tras un reinicio o quedarse sin batería, que
+/// borra la declaración de los sensores). [since] es desde cuándo.
+({StationDataState state, DateTime? since}) stationDataState(Gateway gateway, List<LatestReading> readings) {
+  if (gateway.status == 'offline') return (state: StationDataState.offline, since: gateway.lastSeenAt);
+  final sensorReadings = [
+    for (final group in groupReadingsBySensor(readings))
+      if (!isStationHealthGroup(group)) ...group.readings,
+  ];
+  final aliveAt = stationAliveAt(gateway, readings);
+  if (sensorReadings.isNotEmpty && sensorReadings.every((r) => isReadingStale(r, aliveAt))) {
+    final newest = sensorReadings.map((r) => r.tsOrigin).reduce((a, b) => a.isAfter(b) ? a : b);
+    return (state: StationDataState.noSensorData, since: newest);
+  }
+  return (state: StationDataState.ok, since: null);
+}
+
+/// Pestaña seleccionada en la pantalla de una estación, para no perderla al
+/// girar el móvil (la vista a pantalla completa es otro árbol de widgets).
+final detailSelectedSensorProvider = StateProvider.family<int, String>((ref, gatewayId) => 0);
 
 int _priority(String channelTypeCode) {
   final index = primaryChannelOrder.indexOf(channelTypeCode);
@@ -48,7 +106,8 @@ LatestReading primaryReadingOf(SensorReadings group) => readingsByPriority(group
 /// Para el resumen de una estación: la magnitud principal de cada sensor, en
 /// el orden de los sensores (A1–A4 en la WSC2-N).
 List<({SensorReadings sensor, LatestReading reading})> primaryReadingsPerSensor(List<LatestReading> readings) => [
-      for (final group in groupReadingsBySensor(readings)) (sensor: group, reading: primaryReadingOf(group)),
+      for (final group in groupReadingsBySensor(readings))
+        if (!isStationHealthGroup(group)) (sensor: group, reading: primaryReadingOf(group)),
     ];
 
 /// El punto de una serie más cercano a un instante (el que marca el dedo en
@@ -126,4 +185,17 @@ extension HistoryRangeShortLabel on HistoryRange {
         HistoryRange.month => '30 d',
         HistoryRange.twoMonths => '60 d',
       };
+}
+
+/// Vuelve a pedir todo lo de Estaciones: listado, nombres, últimas lecturas,
+/// tendencias e históricos. Lo usan "tirar para actualizar", el botón de
+/// actualizar y el refresco automático (BACKLOG.md #49, mejora F). Mientras
+/// recarga se sigue viendo lo anterior, sin parpadeos.
+void refreshStationData(WidgetRef ref) {
+  ref.invalidate(allGatewaysProvider);
+  ref.invalidate(stationGroupNamesProvider);
+  ref.invalidate(gatewayLatestReadingsProvider);
+  ref.invalidate(stationSparklineProvider);
+  ref.invalidate(stationChannelHistoryProvider);
+  ref.invalidate(stationAccumulatedHistoryProvider);
 }

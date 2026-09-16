@@ -18,7 +18,8 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- La app va incrustada en #app, así que el viewport lo pone esta página y no Flutter. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Estaciones, sensores y alertas de tus fincas.">
   <meta name="theme-color" content="#1F6F5C">
 
@@ -42,9 +43,13 @@
     lib/core/theme/app_colors.dart.
   -->
   <style>
-    html, body { margin: 0; height: 100%; background: #F7F8F5; }
+    html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #F7F8F5; }
+    /* Contenedor de la app (BACKLOG.md #52): fijo a los bordes de la zona visible.
+       Flutter lo mide con un ResizeObserver y se redimensiona cuando el navegador
+       del móvil muestra u oculta sus barras. */
+    #app { position: fixed; inset: 0; }
     #carga {
-      position: fixed; inset: 0; display: flex; flex-direction: column;
+      position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 18px;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       color: #4A5650; font-size: 15px; transition: opacity 0.2s ease;
@@ -71,6 +76,7 @@
   </style>
 </head>
 <body>
+  <div id="app"></div>
   <div id="carga" role="status" aria-live="polite">
     <div class="anillo" aria-hidden="true"></div>
     <div id="carga-texto">Cargando la plataforma…</div>

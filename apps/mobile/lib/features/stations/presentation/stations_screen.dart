@@ -8,6 +8,7 @@ import '../application/stations_controller.dart';
 import '../application/station_detail_controller.dart';
 import 'station_card.dart';
 import 'station_detail_screen.dart';
+import 'station_notices.dart';
 import 'station_summary_list.dart';
 
 /// Pantalla principal de datos en vivo (BACKLOG.md #30) — reemplaza a
@@ -25,10 +26,9 @@ class StationsScreen extends ConsumerWidget {
     final gateways = ref.watch(allGatewaysProvider);
     // Sin nombres (aún cargando, o si fallan) el listado sigue funcionando:
     // los grupos salen como "Sin finca asignada".
-    final installationNames =
-        ref.watch(stationGroupNamesProvider).valueOrNull ?? const <String, StationGroupName>{};
+    final installationNames = ref.watch(stationGroupNamesProvider).valueOrNull ?? const <String, StationGroupName>{};
     final selected = ref.watch(selectedGatewayIdsProvider);
-    final isWide = MediaQuery.sizeOf(context).width >= compactShellBreakpoint;
+    final isWide = !isCompactLayout(MediaQuery.sizeOf(context));
 
     // Una sola estación en el móvil: nada que elegir, se abre directamente.
     final onlyStation = gateways.valueOrNull?.length == 1 ? gateways.valueOrNull!.single : null;
@@ -37,59 +37,58 @@ class StationsScreen extends ConsumerWidget {
     }
 
     Future<void> refreshAll() async {
-      ref.invalidate(stationGroupNamesProvider);
-      ref.invalidate(gatewayLatestReadingsProvider);
-      ref.invalidate(stationSparklineProvider);
-      ref.invalidate(allGatewaysProvider);
+      refreshStationData(ref);
       await ref.read(allGatewaysProvider.future);
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Estaciones'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Actualizar',
-            onPressed: refreshAll,
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: refreshAll,
-        child: gateways.when(
-          data: (items) {
-            if (items.isEmpty) {
-              return const _Message(
-                title: 'Aún no hay estaciones',
-                detail: 'Cuando se dé de alta una en Infraestructura, aparecerá aquí.',
-              );
-            }
-            if (!isWide) {
-              return StationSummaryList(gateways: items, groupNames: installationNames);
-            }
-            final sidebar = _StationSelectionList(gateways: items, installationNames: installationNames);
-            final content = _SelectedStationsPanel(gateways: items, selected: selected);
+    return StationsAutoRefresh(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Estaciones'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Actualizar',
+              onPressed: refreshAll,
+            ),
+          ],
+        ),
+        body: RefreshIndicator(
+          onRefresh: refreshAll,
+          child: gateways.when(
+            data: (items) {
+              if (items.isEmpty) {
+                return const _Message(
+                  title: 'Aún no hay estaciones',
+                  detail: 'Cuando se dé de alta una en Infraestructura, aparecerá aquí.',
+                );
+              }
+              if (!isWide) {
+                return StationSummaryList(gateways: items, groupNames: installationNames);
+              }
+              final sidebar = _StationSelectionList(gateways: items, installationNames: installationNames);
+              final content = _SelectedStationsPanel(gateways: items, selected: selected);
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 240, child: sidebar),
-                const VerticalDivider(width: 1),
-                Expanded(child: content),
-              ],
-            );
-          },
-          error: (error, _) => _Message(
-            title: 'No se han podido cargar las estaciones',
-            detail: 'Comprueba la conexión y vuelve a intentarlo.',
-            technicalDetail: '$error',
-            onRetry: () {
-              ref.invalidate(allGatewaysProvider);
-              ref.invalidate(stationGroupNamesProvider);
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 240, child: sidebar),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: content),
+                ],
+              );
             },
+            error: (error, _) => _Message(
+              title: 'No se han podido cargar las estaciones',
+              detail: 'Comprueba la conexión y vuelve a intentarlo.',
+              technicalDetail: '$error',
+              onRetry: () {
+                ref.invalidate(allGatewaysProvider);
+                ref.invalidate(stationGroupNamesProvider);
+              },
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
         ),
       ),
     );
@@ -265,7 +264,8 @@ class _GroupHeader extends StatelessWidget {
             style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
           ),
           if (name?.organization != null)
-            Text(name!.organization!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            Text(name!.organization!,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ],
       ),
     );
@@ -295,7 +295,9 @@ class _Message extends StatelessWidget {
         Text(detail, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
         if (onRetry != null) ...[
           const SizedBox(height: 16),
-          Center(child: AppButton(label: 'Reintentar', icon: Icons.refresh, variant: AppButtonVariant.secondary, onPressed: onRetry)),
+          Center(
+              child: AppButton(
+                  label: 'Reintentar', icon: Icons.refresh, variant: AppButtonVariant.secondary, onPressed: onRetry)),
         ],
         if (technicalDetail != null) ...[
           const SizedBox(height: 16),

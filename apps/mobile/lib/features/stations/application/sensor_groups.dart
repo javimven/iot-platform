@@ -34,10 +34,11 @@ List<SensorReadings> groupReadingsBySensor(List<LatestReading> readings) {
     for (final entry in byKey.entries)
       SensorReadings(
         key: entry.key,
-        label: entry.value.first.sensorLabel ?? 'Sensor',
+        label: entry.value.first.sensorLabel ?? entry.value.first.sensorExternalIdentifier ?? 'Sensor',
         externalIdentifier: entry.value.first.sensorExternalIdentifier,
         readings: [...entry.value]..sort(
-            (a, b) => ChannelTypeLabels.labelFor(a.channelTypeCode).compareTo(ChannelTypeLabels.labelFor(b.channelTypeCode)),
+            (a, b) =>
+                ChannelTypeLabels.labelFor(a.channelTypeCode).compareTo(ChannelTypeLabels.labelFor(b.channelTypeCode)),
           ),
       ),
   ];
