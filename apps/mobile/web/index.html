@@ -55,6 +55,8 @@
       animation: girar 0.9s linear infinite;
     }
     #carga.oculta { opacity: 0; }
+    #carga-texto { max-width: 320px; text-align: center; padding: 0 20px; }
+    #carga-detalle { max-width: 90vw; font-size: 11px; color: #4A5650; word-break: break-word; text-align: center; padding: 0 16px; }
     @keyframes girar { to { transform: rotate(360deg); } }
     @media (prefers-color-scheme: dark) and (min-width: 600px) {
       /* En el móvil la app arranca en claro (tema automático); en pantallas
@@ -71,15 +73,54 @@
 <body>
   <div id="carga" role="status" aria-live="polite">
     <div class="anillo" aria-hidden="true"></div>
-    <div>Cargando la plataforma…</div>
+    <div id="carga-texto">Cargando la plataforma…</div>
+    <div id="carga-detalle"></div>
   </div>
   <script>
-    window.addEventListener('flutter-first-frame', function () {
-      var carga = document.getElementById('carga');
-      if (!carga) return;
-      carga.classList.add('oculta');
-      setTimeout(function () { carga.remove(); }, 250);
-    });
+    // Fases y fallos del arranque, antes de que Flutter pinte nada. Lo usa
+    // flutter_bootstrap.js; los errores de JavaScript sueltos también llegan
+    // aquí mientras no haya primer fotograma.
+    (function () {
+      var arrancada = false;
+      var fallida = false;
+      function texto(t) {
+        var el = document.getElementById('carga-texto');
+        if (el) el.textContent = t;
+      }
+      window.__carga = {
+        fase: function (t) {
+          if (!arrancada && !fallida) texto(t);
+        },
+        fallo: function (donde, error) {
+          if (arrancada) return;
+          fallida = true;
+          var anillo = document.querySelector('#carga .anillo');
+          if (anillo) anillo.remove();
+          texto('No se ha podido abrir la plataforma. Recarga la página; si vuelve a pasar, envía una captura de esta pantalla.');
+          var detalle = document.getElementById('carga-detalle');
+          if (detalle) {
+            var mensaje = error && (error.stack || error.message) ? (error.message || '') + ' ' + (error.stack || '') : String(error);
+            detalle.textContent = donde + ': ' + mensaje.slice(0, 600) + ' (' + navigator.userAgent + ')';
+          }
+        },
+      };
+      window.addEventListener('error', function (e) {
+        window.__carga.fallo('error de JavaScript', e.error || (e.message + ' ' + (e.filename || '') + ':' + (e.lineno || '')));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        window.__carga.fallo('promesa rechazada', e.reason);
+      });
+      setTimeout(function () {
+        if (!arrancada && !fallida) texto('Está tardando más de lo normal. Si la conexión es lenta, espera un poco más.');
+      }, 25000);
+      window.addEventListener('flutter-first-frame', function () {
+        arrancada = true;
+        var carga = document.getElementById('carga');
+        if (!carga) return;
+        carga.classList.add('oculta');
+        setTimeout(function () { carga.remove(); }, 250);
+      });
+    })();
   </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
