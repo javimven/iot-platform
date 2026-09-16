@@ -29,8 +29,16 @@ describe('PermissionsGuard', () => {
     roleCode: 'org_admin',
   } as const;
 
-  it('Admin de plataforma puro no lee telemetría (PERMISSIONS.md §5)', () => {
+  it('Admin de plataforma puro no usa las rutas de telemetría de miembro (PERMISSIONS.md §5)', () => {
     expect(check('telemetry.read_latest', { isPlatformAdmin: true })).toThrow(ForbiddenException);
+  });
+
+  it('la telemetría de cualquier organización se lee por la ruta de plataforma, solo como Admin de plataforma (ADR-0007)', () => {
+    expect(check('platform.telemetry.read', { isPlatformAdmin: true })()).toBe(true);
+    expect(check('platform.telemetry.read', mixedSession)()).toBe(true);
+    expect(
+      check('platform.telemetry.read', { organizationId: 'org-1', roleCode: 'org_admin' }),
+    ).toThrow(ForbiddenException);
   });
 
   it('Admin de plataforma puro sí gestiona Directorio IoT (ADR-0005)', () => {

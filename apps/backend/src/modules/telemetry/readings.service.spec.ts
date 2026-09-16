@@ -85,6 +85,81 @@ describe('ReadingsService.getLatestForGateway', () => {
 });
 
 /**
+ * Ruta de plataforma (ADR-0007): el Admin de plataforma lee la telemetría de
+ * la organización de la URL. La transacción fija esa organización como
+ * `app.current_org_id` (nunca `isPlatformAdmin`), de modo que la política RLS
+ * de `telemetry`/`latest_readings` sigue acotando a una sola organización.
+ */
+describe('ReadingsService con organización explícita (ADR-0007)', () => {
+  const platformAdmin: AccessTokenClaims = {
+    sub: 'admin-1',
+    type: 'access',
+    isPlatformAdmin: true,
+  };
+
+  function buildService() {
+    const contexts: unknown[] = [];
+    const tx = {
+      gateway: { findFirst: jest.fn().mockResolvedValue({ id: 'gw-1', installationId: 'inst-A' }) },
+      latestReading: { findMany: jest.fn().mockResolvedValue([]) },
+      channel: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'channel-1',
+          sensor: { device: { zone: { installationId: 'inst-A' } } },
+        }),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+    const runInTenantContext = jest.fn(async (ctx: unknown, fn: (tx: unknown) => unknown) => {
+      contexts.push(ctx);
+      return fn(tx);
+    });
+    const prisma = {
+      runInTenantContext,
+      memberInstallationScope: { findMany: jest.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    return { service: new ReadingsService(prisma), contexts, tx };
+  }
+
+  it('últimas lecturas de una estación: consulta dentro de la organización de la URL', async () => {
+    const { service, contexts, tx } = buildService();
+    await service.getLatestForGateway(platformAdmin, 'gw-1', 'org-2');
+    expect(contexts).toEqual([
+      { userId: 'admin-1', organizationId: 'org-2' },
+      { userId: 'admin-1', organizationId: 'org-2' },
+    ]);
+    expect(tx.gateway.findFirst).toHaveBeenCalledWith({
+      where: { id: 'gw-1', organizationId: 'org-2', deletedAt: null },
+    });
+  });
+
+  it('histórico de un canal: consulta dentro de la organización de la URL', async () => {
+    const { service, contexts } = buildService();
+    const from = new Date('2026-09-15T00:00:00Z');
+    const to = new Date('2026-09-16T00:00:00Z');
+    await service.getHistory(platformAdmin, 'channel-1', from, to, 'raw', 'org-2');
+    expect(contexts.length).toBeGreaterThan(0);
+    for (const ctx of contexts) {
+      expect(ctx).toEqual({ userId: 'admin-1', organizationId: 'org-2' });
+    }
+  });
+
+  it('un miembro normal no puede pedir otra organización', async () => {
+    const { service } = buildService();
+    const member: AccessTokenClaims = {
+      sub: 'user-1',
+      type: 'access',
+      organizationId: 'org-1',
+      roleCode: 'org_admin',
+      memberId: 'member-1',
+    };
+    await expect(service.getLatestForGateway(member, 'gw-1', 'org-2')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+});
+
+/**
  * `getHistory` — regresión de un bug real (2026-08-05, verificando la
  * pantalla "Estaciones" con datos reales por primera vez): las 3 ramas
  * consultaban `telemetry` con `this.prisma.$queryRaw` directamente, fuera de

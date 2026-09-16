@@ -1071,6 +1071,61 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GatewayCreated" }
 
+  /platform/organizations/{organizationId}/gateways/{gatewayId}/latest-readings:
+    get:
+      tags: [platform]
+      summary: >
+        Últimas lecturas de una Estación de cualquier organización, en solo
+        lectura (ADR-0007, `platform.telemetry.read`). Misma respuesta que
+        `/gateways/{gatewayId}/latest-readings`; la consulta se ejecuta con la
+        organización de la URL como organización activa.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LatestReading" }
+
+  /platform/organizations/{organizationId}/channels/{channelId}/readings:
+    get:
+      tags: [platform]
+      summary: >
+        Histórico de un canal de cualquier organización, en solo lectura
+        (ADR-0007, `platform.telemetry.read`). Mismos parámetros y límites que
+        `/channels/{channelId}/readings`.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { $ref: "#/components/parameters/PathId" }
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          schema: { type: string, enum: [raw, hourly, daily], default: raw }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Reading" }
+        "400":
+          description: "granularity=raw con un rango mayor a 7 días"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /platform/organizations/{organizationId}/installations:
     get:
       tags: [platform]

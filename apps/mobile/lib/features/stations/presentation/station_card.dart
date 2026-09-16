@@ -155,6 +155,7 @@ class _StationChart extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final latestReadings = ref.watch(gatewayLatestReadingsProvider(gatewayId));
+    final organizationId = ref.watch(stationOrganizationIdProvider(gatewayId));
     return latestReadings.when(
       data: (readings) {
         final byChannelId = {for (final r in readings) r.channelId: r};
@@ -170,10 +171,12 @@ class _StationChart extends ConsumerWidget {
         final defaultColor = isDark ? AppColors.inkSoftDark : AppColors.inkSoft;
 
         final lineHistories = [
-          for (final channelId in lineChannelIds) ref.watch(stationChannelHistoryProvider((channelId, range))),
+          for (final channelId in lineChannelIds)
+            ref.watch(stationChannelHistoryProvider((organizationId, channelId, range))),
         ];
         final sumHistories = [
-          for (final channelId in sumChannelIds) ref.watch(stationAccumulatedHistoryProvider((channelId, range))),
+          for (final channelId in sumChannelIds)
+            ref.watch(stationAccumulatedHistoryProvider((organizationId, channelId, range))),
         ];
         final allHistories = [...lineHistories, ...sumHistories];
         if (allHistories.any((h) => h.isLoading)) {

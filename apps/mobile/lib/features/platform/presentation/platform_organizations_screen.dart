@@ -21,6 +21,12 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Organizaciones'),
         actions: [
+          // Estaciones de todas las organizaciones, en solo lectura (ADR-0007).
+          IconButton(
+            icon: const Icon(Icons.sensors),
+            tooltip: 'Estaciones',
+            onPressed: () => context.go('/stations'),
+          ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Auditoría de plataforma',

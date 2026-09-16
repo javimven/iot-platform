@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../directory/data/directory_models.dart';
-import '../../installations/application/installations_controller.dart';
-import '../../installations/data/installation_models.dart';
 import '../application/stations_controller.dart';
 import 'station_card.dart';
 
@@ -19,7 +17,9 @@ class StationsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final gateways = ref.watch(allGatewaysProvider);
-    final installations = ref.watch(installationsListProvider);
+    // Sin nombres (aún cargando, o si fallan) el listado sigue funcionando:
+    // los grupos salen como "Sin finca asignada".
+    final installationNames = ref.watch(stationGroupNamesProvider).valueOrNull ?? const <String, String>{};
     final selected = ref.watch(selectedGatewayIdsProvider);
     final isWide = MediaQuery.sizeOf(context).width >= 840;
 
@@ -30,7 +30,10 @@ class StationsScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () => ref.invalidate(allGatewaysProvider),
+            onPressed: () {
+              ref.invalidate(allGatewaysProvider);
+              ref.invalidate(stationGroupNamesProvider);
+            },
           ),
         ],
       ),
@@ -43,9 +46,6 @@ class StationsScreen extends ConsumerWidget {
                 child: Text('Todavía no hay estaciones dadas de alta.', textAlign: TextAlign.center),
               );
             }
-            final installationNames = <String, String>{
-              for (final i in installations.value ?? const <Installation>[]) i.id: i.name,
-            };
             final sidebar = _StationSelectionList(gateways: items, installationNames: installationNames);
             final content = _SelectedStationsPanel(gateways: items, selected: selected);
 

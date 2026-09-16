@@ -32,6 +32,20 @@ void main() {
       expect(gateway.status, 'online');
       expect(gateway.lastSeenAt, isNotNull);
     });
+
+    test('lee la organización, que usa la vista de plataforma de Estaciones (ADR-0007)', () {
+      final gateway = Gateway.fromJson({
+        'id': 'gw-3',
+        'organizationId': 'org-1',
+        'installationId': 'inst-1',
+        'name': 'Estación WSC2-N',
+        'connectivityType': 'direct_nbiot',
+        'status': 'online',
+        'lastSeenAt': null,
+      });
+
+      expect(gateway.organizationId, 'org-1');
+    });
   });
 
   group('Channel.fromJson', () {

@@ -114,7 +114,7 @@ export class AuthService {
       organizationId,
       membership.memberId,
       membership.roleCode,
-      false,
+      await this.users.isPlatformAdmin(claims.sub),
       meta,
     );
   }
@@ -124,9 +124,12 @@ export class AuthService {
     const membership = rotated.organizationId
       ? await this.members.findMembership(rotated.userId, rotated.organizationId)
       : null;
-    const isPlatformAdmin = rotated.organizationId
-      ? false
-      : await this.users.isPlatformAdmin(rotated.userId);
+    // Igual que `login` y `selectOrganization`: la marca sale de
+    // `platform_admins`, tenga o no la sesión organización. Antes una sesión
+    // con organización la perdía al renovarse, y un Admin de plataforma que
+    // además es miembro dejaba de ver lo de plataforma a los pocos minutos
+    // (BACKLOG.md #46).
+    const isPlatformAdmin = await this.users.isPlatformAdmin(rotated.userId);
 
     const accessToken = await this.signAccessToken({
       sub: rotated.userId,

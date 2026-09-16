@@ -24,6 +24,11 @@ class Zone {
 
 class Gateway {
   final String id;
+
+  /// Solo hace falta en la vista de plataforma de "Estaciones" (ADR-0007),
+  /// que recorre varias organizaciones y pide sus lecturas por la ruta
+  /// `/platform/organizations/{id}/...`.
+  final String? organizationId;
   final String installationId;
   final String name;
   final String connectivityType;
@@ -32,6 +37,7 @@ class Gateway {
 
   const Gateway({
     required this.id,
+    this.organizationId,
     required this.installationId,
     required this.name,
     required this.connectivityType,
@@ -43,6 +49,7 @@ class Gateway {
     final lastSeenRaw = json['lastSeenAt'] as String?;
     return Gateway(
       id: json['id'] as String,
+      organizationId: json['organizationId'] as String?,
       installationId: json['installationId'] as String,
       name: json['name'] as String,
       connectivityType: json['connectivityType'] as String,

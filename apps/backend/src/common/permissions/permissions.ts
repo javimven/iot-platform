@@ -193,6 +193,8 @@ export const PLATFORM_ACTIONS = [
   'platform.organizations.suspend',
   'platform.organizations.reactivate',
   'platform.audit.read',
+  // Solo lectura de telemetría de cualquier organización (ADR-0007).
+  'platform.telemetry.read',
   'org_features.update',
   'org_features.read',
 ] as const;

@@ -151,4 +151,66 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
   });
+
+  /**
+   * BACKLOG.md #46: un Admin de plataforma que además es miembro conserva la
+   * marca por los tres caminos. Antes `selectOrganization` y `refresh` la
+   * ponían a false en cuanto había organización, y `login` no.
+   */
+  describe('Admin de plataforma que además es miembro', () => {
+    const membership = {
+      memberId: 'member-1',
+      organizationId: 'org-1',
+      organizationName: 'Finca A',
+      roleCode: 'org_admin' as const,
+    };
+
+    it('login con 1 membresía emite organización y isPlatformAdmin', async () => {
+      const { service, jwt } = buildService({ memberships: [membership], isPlatformAdmin: true });
+      await service.login('tecnico@example.com', 'pw', {});
+      expect(jwt.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: 'org-1', isPlatformAdmin: true }),
+      );
+    });
+
+    it('selectOrganization emite organización y isPlatformAdmin', async () => {
+      const { service, jwt, members } = buildService({ isPlatformAdmin: true });
+      jwt.verifyAsync.mockResolvedValue({ sub: 'user-1', type: 'pre_auth' });
+      (members.findMembership as jest.Mock).mockResolvedValue(membership);
+      await service.selectOrganization('token', 'org-1', {});
+      expect(jwt.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: 'org-1', isPlatformAdmin: true }),
+      );
+    });
+
+    it('refresh de una sesión con organización no pierde isPlatformAdmin', async () => {
+      const { service, jwt, members, sessions } = buildService({ isPlatformAdmin: true });
+      (sessions.rotate as jest.Mock).mockResolvedValue({
+        sessionId: 'session-1',
+        secret: 'secret-2',
+        userId: 'user-1',
+        organizationId: 'org-1',
+      });
+      (members.findMembership as jest.Mock).mockResolvedValue(membership);
+      await service.refresh('session-1', 'secret-1');
+      expect(jwt.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: 'org-1', isPlatformAdmin: true }),
+      );
+    });
+
+    it('un miembro que no es Admin de plataforma sigue sin la marca al renovar', async () => {
+      const { service, jwt, members, sessions } = buildService();
+      (sessions.rotate as jest.Mock).mockResolvedValue({
+        sessionId: 'session-1',
+        secret: 'secret-2',
+        userId: 'user-1',
+        organizationId: 'org-1',
+      });
+      (members.findMembership as jest.Mock).mockResolvedValue(membership);
+      await service.refresh('session-1', 'secret-1');
+      expect(jwt.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: 'org-1', isPlatformAdmin: false }),
+      );
+    });
+  });
 });

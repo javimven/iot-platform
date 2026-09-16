@@ -2,6 +2,7 @@
 
 - Estado: Aceptada
 - Fecha: 2026-07-27
+- Ampliado por: [ADR-0007](0007-admin-plataforma-lectura-telemetria.md) (2026-09-16), que abre la lectura de telemetría
 
 ## Contexto
 Hasta ahora (Etapa 1, nota ¹; Etapa 4, matriz de `PERMISSIONS.md`) el Admin de plataforma no tenía acceso a ningún dato dentro de una organización, ni siquiera de lectura — solo podía crear/suspender la organización completa. El usuario ha confirmado que, en la práctica, su empresa (como Admin de plataforma) va a **dar de alta y gestionar estaciones y sensores de cualquier organización directamente**, sin pasar por ser miembro (Admin de organización/Técnico) de cada una — típicamente porque es su propia empresa quien instala físicamente el equipo en la finca del cliente.

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/auth_controller.dart';
 import '../../directory/data/directory_models.dart';
+import '../../installations/application/installations_controller.dart';
 import '../../installations/data/installation_models.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../../readings/data/reading_history_models.dart';
@@ -11,13 +12,56 @@ final stationsApiProvider = Provider<StationsApi>(
   (ref) => StationsApi(ref.watch(apiClientProvider)),
 );
 
-final allGatewaysProvider = FutureProvider.autoDispose<List<Gateway>>(
-  (ref) => ref.watch(stationsApiProvider).allGateways(),
+/// El Admin de plataforma ve las estaciones de todas las organizaciones, en
+/// solo lectura (ADR-0007), tenga o no además una organización activa.
+final stationsAcrossOrganizationsProvider = Provider<bool>(
+  (ref) => ref.watch(authControllerProvider.select((state) => state.isPlatformAdmin)),
 );
 
-final gatewayLatestReadingsProvider =
-    FutureProvider.autoDispose.family<List<LatestReading>, String>(
-  (ref, gatewayId) => ref.watch(stationsApiProvider).latestReadingsForGateway(gatewayId),
+final allGatewaysProvider = FutureProvider.autoDispose<List<Gateway>>((ref) async {
+  final api = ref.watch(stationsApiProvider);
+  if (!ref.watch(stationsAcrossOrganizationsProvider)) {
+    return api.allGateways();
+  }
+  final organizations = await api.organizations();
+  final perOrganization = await Future.wait(organizations.map((o) => api.gatewaysOfOrganization(o.id)));
+  return [for (final gateways in perOrganization) ...gateways];
+});
+
+/// Nombre de la cabecera de cada grupo del listado, por `installationId`: la
+/// finca para un miembro, y "Organización · Finca" en la vista de plataforma,
+/// donde se mezclan fincas de varios clientes.
+final stationGroupNamesProvider = FutureProvider.autoDispose<Map<String, String>>((ref) async {
+  final api = ref.watch(stationsApiProvider);
+  if (!ref.watch(stationsAcrossOrganizationsProvider)) {
+    final installations = await ref.watch(installationsApiProvider).list();
+    return {for (final i in installations) i.id: i.name};
+  }
+  final organizations = await api.organizations();
+  final perOrganization = await Future.wait(organizations.map((o) => api.installationsOfOrganization(o.id)));
+  return {
+    for (var n = 0; n < organizations.length; n++)
+      for (final i in perOrganization[n]) i.id: '${organizations[n].name} · ${i.name}',
+  };
+});
+
+/// Organización por la que pedir los datos de una estación: la suya en la
+/// vista de plataforma (ruta `/platform/organizations/{id}/...`), o null para
+/// un miembro (ruta de miembro, organización implícita del JWT).
+final stationOrganizationIdProvider = Provider.autoDispose.family<String?, String>((ref, gatewayId) {
+  if (!ref.watch(stationsAcrossOrganizationsProvider)) return null;
+  final gateways = ref.watch(allGatewaysProvider).valueOrNull ?? const <Gateway>[];
+  for (final gateway in gateways) {
+    if (gateway.id == gatewayId) return gateway.organizationId;
+  }
+  return null;
+});
+
+final gatewayLatestReadingsProvider = FutureProvider.autoDispose.family<List<LatestReading>, String>(
+  (ref, gatewayId) => ref.watch(stationsApiProvider).latestReadingsForGateway(
+        gatewayId,
+        organizationId: ref.watch(stationOrganizationIdProvider(gatewayId)),
+      ),
 );
 
 /// Un único buscador para todo el listado (filtra por nombre en cliente,
@@ -31,8 +75,7 @@ final selectedGatewayIdsProvider = StateProvider.autoDispose<Set<String>>((ref) 
 
 /// Por estación, no global (a diferencia de `historyRangeProvider`): varias
 /// tarjetas pueden estar abiertas a la vez, cada una con su propio rango.
-final stationChartRangeProvider =
-    StateProvider.family<HistoryRange, String>((ref, gatewayId) => HistoryRange.day);
+final stationChartRangeProvider = StateProvider.family<HistoryRange, String>((ref, gatewayId) => HistoryRange.day);
 
 /// Minimizado a mano por el usuario (botón en la cabecera de la tarjeta) —
 /// oculta solo la gráfica, las píldoras siguen visibles.
@@ -42,8 +85,7 @@ final stationChartMinimizedProvider = StateProvider.family<bool, String>((ref, g
 /// el usuario — vacío mientras no haya tocado ninguna píldora todavía.
 /// Ver [effectiveActiveChannelsProvider] para el conjunto que de verdad se
 /// pinta (con el primer canal ya activado por defecto).
-final stationActiveChannelsProvider =
-    StateProvider.family<Set<String>, String>((ref, gatewayId) => {});
+final stationActiveChannelsProvider = StateProvider.family<Set<String>, String>((ref, gatewayId) => {});
 
 /// Conjunto de canales a mostrar en la gráfica de una estación: el elegido a
 /// mano si el usuario ya tocó alguna píldora, o si no, el primero que
@@ -61,16 +103,19 @@ final effectiveActiveChannelsProvider = Provider.family<Set<String>, String>((re
 
 /// Histórico de un canal (agregación `average`) para el rango de SU
 /// tarjeta — reutiliza `ReadingsApi.history` ya existente
-/// (readings/application), solo añade la clave compuesta (canal + rango).
+/// (readings/application), solo añade la clave compuesta (organización +
+/// canal + rango). La organización es la de [stationOrganizationIdProvider]:
+/// null para un miembro.
 final stationChannelHistoryProvider = FutureProvider.autoDispose
-    .family<List<HistoryPoint>, (String channelId, HistoryRange range)>((ref, key) {
-  final (channelId, range) = key;
+    .family<List<HistoryPoint>, (String? organizationId, String channelId, HistoryRange range)>((ref, key) {
+  final (organizationId, channelId, range) = key;
   final to = DateTime.now().toUtc();
   return ref.watch(readingsApiProvider).history(
         channelId: channelId,
         from: to.subtract(range.span),
         to: to,
         granularity: range.granularity,
+        organizationId: organizationId,
       );
 });
 
@@ -81,8 +126,8 @@ final stationChannelHistoryProvider = FutureProvider.autoDispose
 /// semana/mes/2 meses necesitan `daily` siempre (acumulado por día, pedido
 /// explícito — no `hourly` para semana como sí usan las líneas).
 final stationAccumulatedHistoryProvider = FutureProvider.autoDispose
-    .family<List<HistoryPoint>, (String channelId, HistoryRange range)>((ref, key) {
-  final (channelId, range) = key;
+    .family<List<HistoryPoint>, (String? organizationId, String channelId, HistoryRange range)>((ref, key) {
+  final (organizationId, channelId, range) = key;
   final isShortRange = range == HistoryRange.day || range == HistoryRange.twoDays;
 
   if (isShortRange) {
@@ -95,6 +140,7 @@ final stationAccumulatedHistoryProvider = FutureProvider.autoDispose
           from: from.toUtc(),
           to: now.toUtc(),
           granularity: 'raw',
+          organizationId: organizationId,
         );
   }
 
@@ -104,5 +150,6 @@ final stationAccumulatedHistoryProvider = FutureProvider.autoDispose
         from: to.subtract(range.span),
         to: to,
         granularity: 'daily',
+        organizationId: organizationId,
       );
 });

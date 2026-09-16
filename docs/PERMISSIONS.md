@@ -30,7 +30,7 @@ Estas decisiones añaden piezas nuevas al modelo que no estaban previstas en la 
 
 | Grupo | Acciones |
 |---|---|
-| Plataforma (fuera de organización) | `platform.organizations.create`, `platform.organizations.read`, `platform.organizations.suspend`, `platform.organizations.reactivate`, `platform.audit.read` |
+| Plataforma (fuera de organización) | `platform.organizations.create`, `platform.organizations.read`, `platform.organizations.suspend`, `platform.organizations.reactivate`, `platform.audit.read`, `platform.telemetry.read` |
 | Organización | `org.profile.read`, `org.profile.update` |
 | Miembros | `members.read`, `members.invite`, `members.update_role`, `members.suspend`, `members.reactivate`, `members.remove` |
 | Alcance de miembro | `member_scope.read`, `member_scope.assign` |
@@ -55,6 +55,7 @@ Todas las acciones salvo el grupo "Plataforma" viven dentro del contexto de una 
 |---|---|---|---|---|---|
 | `platform.organizations.*` | Sí³ | No | No | No | No |
 | `platform.audit.read` | Sí | No | No | No | No |
+| `platform.telemetry.read` | Sí⁴ | No | No | No | No |
 | `org.profile.read` | No¹ | Sí | Sí | Sí | Sí |
 | `org.profile.update` | No¹ | Sí | No | No | No |
 | `members.read` | No¹ | Sí | No | No | No |
@@ -82,9 +83,11 @@ Todas las acciones salvo el grupo "Plataforma" viven dentro del contexto de una 
 | `org_features.read` | Sí (global) | Sí (la propia) | No | No | No |
 | `org_features.update` | Sí (global) | No | No | No | No |
 
-² Excepción introducida en esta etapa ([ADR-0005](ADR/0005-admin-plataforma-gestion-global-iot.md)): el Admin de plataforma puede gestionar el Directorio IoT (instalaciones→canales) de **cualquier** organización sin ser miembro de ella — porque en la práctica es su empresa quien instala el hardware. Queda **acotado a estas acciones**; no se extiende a telemetría, alertas, miembros ni auditoría de negocio, que siguen marcadas No¹. Toda acción bajo esta excepción se registra en el `audit_log` **de la organización afectada**, visible para su Admin de organización.
+² Excepción introducida en esta etapa ([ADR-0005](ADR/0005-admin-plataforma-gestion-global-iot.md)): el Admin de plataforma puede gestionar el Directorio IoT (instalaciones→canales) de **cualquier** organización sin ser miembro de ella — porque en la práctica es su empresa quien instala el hardware. Queda **acotado a estas acciones**; no se extiende a alertas, miembros ni auditoría de negocio, que siguen marcadas No¹. La telemetría, solo en lectura, se abrió después con su propia acción (⁴). Toda acción bajo esta excepción se registra en el `audit_log` **de la organización afectada**, visible para su Admin de organización.
 
 ³ `platform.organizations.create` incluye, como parte de la misma acción (FUNCTIONAL_REQUIREMENTS.md §2), invitar al primer Admin de organización — internamente escribe una fila en `members`, la única vez que el Admin de plataforma lo hace. Esto **no** convierte `members.*` en accesible para el Admin de plataforma: sigue sin poder llamar a ningún endpoint de `/members` (PermissionsGuard lo bloquea igual que antes); la excepción de RLS que lo permite a nivel de base de datos (`DATA_MODEL.md`, migración 0002) solo la ejercita el código de `PlatformOrganizationsService.create()`, ningún otro camino de la aplicación.
+
+⁴ Ampliación del 2026-09-16 ([ADR-0007](ADR/0007-admin-plataforma-lectura-telemetria.md)): el Admin de plataforma lee las últimas lecturas y el histórico de cualquier organización, **solo lectura**, por `/platform/organizations/{id}/...`. La consulta se ejecuta con esa organización como `app.current_org_id`, así que la política RLS de `telemetry`/`latest_readings` no cambia y nunca devuelve filas de otra organización. Alertas, miembros y auditoría de negocio siguen fuera.
 
 ¹ El Admin de plataforma no tiene acceso a ninguna acción dentro de una organización — ni siquiera de solo lectura — salvo su capacidad de suspender/reactivar la organización completa (`platform.organizations.suspend/reactivate`), que no requiere leer ni un solo dato de negocio de esa organización. Es la respuesta de este modelo a "¿cómo actúa el Admin de plataforma ante un incidente de seguridad en una organización sin violar el aislamiento?": puede cortar el acceso por completo, no puede fisgonear.
 
@@ -111,7 +114,8 @@ Todas las acciones salvo el grupo "Plataforma" viven dentro del contexto de una 
 ## 9. Pruebas necesarias derivadas
 - Un Técnico sin alcance asignado ve todas las instalaciones de su organización; en cuanto se le asigna una, deja de ver el resto inmediatamente.
 - Un Operador no puede crear ni editar una zona (solo lectura de zonas), aunque sí reconocer/resolver alertas.
-- Un Admin de plataforma recibe 403 al intentar leer telemetría, alertas o miembros de cualquier organización, pero puede suspenderla.
+- Un Admin de plataforma recibe 403 al intentar leer alertas o miembros de cualquier organización, o telemetría por las rutas de miembro, pero puede suspenderla.
+- Un Admin de plataforma lee las últimas lecturas y el histórico de cualquier organización por `/platform/organizations/{id}/...` (ADR-0007), y esa consulta no ve filas de ninguna otra organización.
 - Un Admin de plataforma puede crear/editar un gateway o sensor de cualquier organización sin ser miembro de ella, y esa acción aparece en el `audit_log` de esa organización, visible para su Admin de organización.
 - Un Admin de organización no puede leer ni modificar `org_features` de otra organización; solo el Admin de plataforma puede activarlas/desactivarlas.
 - Un Técnico con alcance restringido a la Instalación A recibe 403 (no 404, para no filtrar existencia) al intentar leer o modificar un gateway de la Instalación B de la misma organización.
@@ -131,7 +135,8 @@ Todas las acciones salvo el grupo "Plataforma" viven dentro del contexto de una 
 ## 12. Aspectos que se aplazan explícitamente
 - Restricción a nivel de zona individual (no solo instalación) — V2, si aparece necesidad real.
 - Permisos configurables por organización más allá de los 5 roles fijos — V2 (ya decidido en Etapa 0).
-- Un "modo soporte" auditado para que el Admin de plataforma pueda excepcionalmente leer **telemetría/alertas/miembros** de una organización con consentimiento explícito — Futuro. (La gestión de Directorio IoT ya no está en este cajón: se resolvió en esta etapa, ADR-0005.)
+- Un "modo soporte" auditado para que el Admin de plataforma pueda excepcionalmente leer **alertas/miembros** de una organización con consentimiento explícito — Futuro. (La gestión de Directorio IoT ya no está en este cajón: se resolvió en esta etapa, ADR-0005; tampoco la lectura de telemetría, ADR-0007.)
+- Auditar en el `audit_log` de cada organización las lecturas de telemetría del Admin de plataforma (ADR-0007) — V2, si algún cliente pide esa transparencia.
 - Exigir un motivo/referencia (p. ej. ticket de soporte) al ejecutar acciones bajo la excepción del ADR-0005 — V2; hoy basta con quedar auditado.
 - Catálogo definitivo de `features` gateables (informes, campañas, clima, satélite...) — se irá ampliando a medida que cada función V2/Futuro se construya; el mecanismo (sección 14) ya está listo para recibirlas.
 
@@ -160,4 +165,5 @@ Mecanismo distinto del RBAC de roles (secciones 3-4): controla qué **módulos/p
 | 2026-07-27 | Un Gateway pertenece a una única instalación | Gateway compartido entre varias instalaciones (descartado, añade complejidad sin caso de uso claro) |
 | 2026-07-27 | Admin de plataforma con gestión global de Directorio IoT, acotada y auditada (ADR-0005) | Mantener aislamiento estricto (Admin de plataforma sería miembro de cada organización); "modo soporte" genérico de solo lectura |
 | 2026-07-27 | Feature flags por organización, gestión exclusiva del Admin de plataforma | Que cada Admin de organización autogestione sus propias funciones activas (descartado, contradice "siempre lo voy a tener yo como administrador") |
+| 2026-09-16 | Admin de plataforma con lectura de telemetría de cualquier organización, solo lectura y por organización (ADR-0007) | Excepción de RLS en `telemetry`/`latest_readings` (descartada: permitiría consultas entre organizaciones); ruta global de todas las estaciones (aplazada) |
 | 2026-07-27 | Añadido `channels.read` como acción propia (Etapa 13, descubierto al implementar el endpoint de listado de canales) | Asumir que `sensors.read` cubría implícitamente la lectura de canales (dejaba el listado sin permiso explícito — un vacío real de la matriz original) |

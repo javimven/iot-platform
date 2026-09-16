@@ -82,10 +82,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           final isOnAuthRoute = location == '/' || location == '/login' || location == '/select-organization';
           if (!isOnAuthRoute) return null;
           // Un Admin de plataforma "puro" (sin membresía en ninguna
-          // organización) no tiene nada que hacer en `/stations` —
-          // `GET /gateways` requiere `organizationId`, que aquí es
-          // nulo, y devolvería 403. Su punto de entrada es el panel de
-          // plataforma (`API_DESIGN.md` §2: "Admin de plataforma puro").
+          // organización) entra por el panel de plataforma (`API_DESIGN.md`
+          // §2). Desde ahí llega a `/stations`, que para él lista las
+          // estaciones de todas las organizaciones (ADR-0007).
           final isPurePlatformAdmin =
               authState.isPlatformAdmin && authState.organizationId == null;
           // Estaciones (BACKLOG.md #30) es el nuevo aterrizaje de un usuario

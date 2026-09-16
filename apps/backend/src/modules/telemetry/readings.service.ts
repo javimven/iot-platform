@@ -17,8 +17,8 @@ export class ReadingsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getLatest(user: AccessTokenClaims, channelId: string) {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
-    await this.assertChannelInScope(user, channelId);
+    const tenantContext = this.telemetryContext(user);
+    await this.assertChannelInScope(user, channelId, tenantContext);
     const reading = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.latestReading.findUnique({
         where: { channelId },
@@ -57,10 +57,16 @@ export class ReadingsService {
    * instalación (`resolveInstallationScope`) se sigue comprobando contra
    * `gateway.installationId`, no contra el propio gateway.
    */
-  async getLatestForGateway(user: AccessTokenClaims, gatewayId: string) {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  async getLatestForGateway(
+    user: AccessTokenClaims,
+    gatewayId: string,
+    explicitOrganizationId?: string,
+  ) {
+    const tenantContext = this.telemetryContext(user, explicitOrganizationId);
     const gateway = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.gateway.findFirst({ where: { id: gatewayId, deletedAt: null } }),
+      tx.gateway.findFirst({
+        where: { id: gatewayId, organizationId: tenantContext.organizationId, deletedAt: null },
+      }),
     );
     if (!gateway) {
       throw new NotFoundException('Gateway not found');
@@ -101,9 +107,10 @@ export class ReadingsService {
     from: Date,
     to: Date,
     granularity: Granularity,
+    explicitOrganizationId?: string,
   ) {
-    await this.assertChannelInScope(user, channelId);
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+    const tenantContext = this.telemetryContext(user, explicitOrganizationId);
+    await this.assertChannelInScope(user, channelId, tenantContext);
 
     if (granularity === 'raw') {
       const rangeDays = (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24);
@@ -159,11 +166,34 @@ export class ReadingsService {
     });
   }
 
-  private async assertChannelInScope(user: AccessTokenClaims, channelId: string): Promise<void> {
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+  /**
+   * Contexto de una consulta de telemetría: por la ruta de miembro, la
+   * organización del JWT; por la de plataforma (ADR-0007), la de la URL, y
+   * solo para un Admin de plataforma. Se fija como `app.current_org_id`, no
+   * como `app.is_platform_admin`: la política RLS de `telemetry` y
+   * `latest_readings` no tiene excepción de plataforma, así que cada consulta
+   * sigue acotada a una única organización también para él.
+   */
+  private telemetryContext(user: AccessTokenClaims, explicitOrganizationId?: string) {
+    if (explicitOrganizationId === undefined) {
+      return { userId: user.sub, organizationId: user.organizationId };
+    }
+    if (!user.isPlatformAdmin) {
+      // Defensa en profundidad, igual que `resolveOrgContext`: PermissionsGuard
+      // ya exige `platform.telemetry.read` en las rutas de plataforma.
+      throw new ForbiddenException('Only platform admins can act on an explicit organization');
+    }
+    return { userId: user.sub, organizationId: explicitOrganizationId };
+  }
+
+  private async assertChannelInScope(
+    user: AccessTokenClaims,
+    channelId: string,
+    tenantContext: { userId: string; organizationId?: string },
+  ): Promise<void> {
     const channel = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.channel.findFirst({
-        where: { id: channelId, deletedAt: null },
+        where: { id: channelId, organizationId: tenantContext.organizationId, deletedAt: null },
         include: { sensor: { include: { device: { include: { zone: true } } } } },
       }),
     );

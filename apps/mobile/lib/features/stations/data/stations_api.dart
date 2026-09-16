@@ -1,6 +1,7 @@
 import '../../../core/api/api_client.dart';
 import '../../directory/data/directory_models.dart';
 import '../../installations/data/installation_models.dart';
+import '../../organization/data/organization_models.dart';
 
 /// Cliente de la pantalla "Estaciones" (BACKLOG.md #30) — reutiliza los
 /// modelos `Gateway`/`LatestReading` ya existentes en vez de duplicarlos,
@@ -19,8 +20,34 @@ class StationsApi {
     return list.map((e) => Gateway.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<List<LatestReading>> latestReadingsForGateway(String gatewayId) async {
-    final list = await _client.getJsonList('/gateways/$gatewayId/latest-readings');
+  /// Vista del Admin de plataforma (ADR-0007): no hay una ruta que liste las
+  /// estaciones de todas las organizaciones a la vez, así que se recorren
+  /// una a una con las rutas de plataforma que ya existen (ADR-0005).
+  Future<List<OrganizationProfile>> organizations() async {
+    final list = await _client.getJsonList('/platform/organizations');
+    return list.map((e) => OrganizationProfile.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<Gateway>> gatewaysOfOrganization(String organizationId) async {
+    final list = await _client.getJsonList('/platform/organizations/$organizationId/gateways');
+    return list.map((e) => Gateway.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<Installation>> installationsOfOrganization(String organizationId) async {
+    final list = await _client.getJsonList('/platform/organizations/$organizationId/installations');
+    return list.map((e) => Installation.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Con [organizationId], por la ruta de plataforma (ADR-0007); sin él, por
+  /// la de miembro, con la organización de la sesión.
+  Future<List<LatestReading>> latestReadingsForGateway(String gatewayId, {String? organizationId}) async {
+    final list = await _client.getJsonList('${stationsPathPrefix(organizationId)}/gateways/$gatewayId/latest-readings');
     return list.map((e) => LatestReading.fromJson(e as Map<String, dynamic>)).toList();
   }
 }
+
+/// Prefijo de las rutas de lectura: vacío para un miembro (organización
+/// implícita del JWT) o `/platform/organizations/{id}` para el Admin de
+/// plataforma (ADR-0007).
+String stationsPathPrefix(String? organizationId) =>
+    organizationId == null ? '' : '/platform/organizations/$organizationId';
