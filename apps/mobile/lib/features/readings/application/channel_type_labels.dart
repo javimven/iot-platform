@@ -18,4 +18,10 @@ class ChannelTypeLabels {
   static String labelFor(String code) => _labels[code]?.$1 ?? code;
 
   static String unitFor(String code) => _labels[code]?.$2 ?? '';
+
+  /// Espejo de `channel_types.default_aggregation` (`prisma/seed.ts`) — solo
+  /// `precipitation` es `sum` hoy, el resto `average`. Necesario en cliente
+  /// para que la gráfica combinada de Estaciones (BACKLOG.md #30) sepa qué
+  /// canal dibujar como barra y cuál como línea, sin pedirlo al backend.
+  static String aggregationFor(String code) => code == 'precipitation' ? 'sum' : 'average';
 }

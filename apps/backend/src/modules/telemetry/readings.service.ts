@@ -51,6 +51,38 @@ export class ReadingsService {
   }
 
   /**
+   * Equivalente a `getLatestForInstallation` pero para una única Estación
+   * (Gateway) — pantalla "Estaciones" (BACKLOG.md #30). `Device.gatewayId`
+   * es FK directo (no hace falta pasar por `zone`), pero el alcance por
+   * instalación (`resolveInstallationScope`) se sigue comprobando contra
+   * `gateway.installationId`, no contra el propio gateway.
+   */
+  async getLatestForGateway(user: AccessTokenClaims, gatewayId: string) {
+    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
+    const gateway = await this.prisma.runInTenantContext(tenantContext, (tx) =>
+      tx.gateway.findFirst({ where: { id: gatewayId, deletedAt: null } }),
+    );
+    if (!gateway) {
+      throw new NotFoundException('Gateway not found');
+    }
+    const scope = await resolveInstallationScope(this.prisma, {
+      memberId: user.memberId,
+      roleCode: user.roleCode,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+    if (scope !== 'all' && !scope.includes(gateway.installationId)) {
+      throw new ForbiddenException('Installation is outside your assigned scope');
+    }
+    const readings = await this.prisma.runInTenantContext(tenantContext, (tx) =>
+      tx.latestReading.findMany({
+        where: { channel: { sensor: { device: { gatewayId } } } },
+        include: { channel: { select: { channelTypeCode: true } } },
+      }),
+    );
+    return readings.map((reading) => this.flattenChannelTypeCode(reading));
+  }
+
+  /**
    * OPENAPI.yaml documenta `channelTypeCode` como campo plano de
    * `LatestReading` (necesario para que el cliente muestre una etiqueta sin
    * una segunda llamada) — `latest_readings` no lo desnormaliza en columna
@@ -71,6 +103,7 @@ export class ReadingsService {
     granularity: Granularity,
   ) {
     await this.assertChannelInScope(user, channelId);
+    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
 
     if (granularity === 'raw') {
       const rangeDays = (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24);
@@ -79,38 +112,51 @@ export class ReadingsService {
           `granularity=raw is limited to ${MAX_RAW_RANGE_DAYS} days (API_DESIGN.md §8); use hourly or daily for longer ranges`,
         );
       }
-      return this.prisma.$queryRaw`
-        SELECT ts_origin AS "tsOrigin", value FROM telemetry
-        WHERE channel_id = ${channelId}::uuid AND ts_origin BETWEEN ${from} AND ${to}
-        ORDER BY ts_origin ASC
-      `;
+      // `telemetry` tiene RLS (tenant_isolation, DATA_MODEL.md §7) — sin
+      // pasar por `runInTenantContext` (que fija `app.current_org_id`), esta
+      // consulta siempre devolvía 0 filas, silenciosamente, para cualquier
+      // canal/organización. Bug real encontrado en vivo (2026-08-05)
+      // verificando la pantalla "Estaciones" (BACKLOG.md #30) con datos
+      // reales por primera vez — nunca antes había telemetría real que
+      // consultar, así que nunca se había notado.
+      return this.prisma.runInTenantContext(
+        tenantContext,
+        (tx) =>
+          tx.$queryRaw`
+          SELECT ts_origin AS "tsOrigin", value FROM telemetry
+          WHERE channel_id = ${channelId}::uuid AND ts_origin BETWEEN ${from} AND ${to}
+          ORDER BY ts_origin ASC
+        `,
+      );
     }
 
-    const tenantContext = { userId: user.sub, organizationId: user.organizationId };
-    const channel = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.channel.findUniqueOrThrow({ where: { id: channelId }, include: { channelType: true } }),
-    );
-    const bucket = granularity === 'hourly' ? 'hour' : 'day';
+    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
+      const channel = await tx.channel.findUniqueOrThrow({
+        where: { id: channelId },
+        include: { channelType: true },
+      });
+      const bucket = granularity === 'hourly' ? 'hour' : 'day';
 
-    // MQTT_PROTOCOL.md §9 / DATA_MODEL.md: la función de agregación depende
-    // del tipo de canal (media+min/max para continuous, suma para counter) —
-    // nunca elegida por el cliente (API_DESIGN.md §8).
-    if (channel.channelType.defaultAggregation === 'sum') {
-      return this.prisma.$queryRaw`
-        SELECT date_trunc(${bucket}, ts_origin) AS "tsOrigin", SUM(value) AS value
+      // MQTT_PROTOCOL.md §9 / DATA_MODEL.md: la función de agregación
+      // depende del tipo de canal (media+min/max para continuous, suma para
+      // counter) — nunca elegida por el cliente (API_DESIGN.md §8).
+      if (channel.channelType.defaultAggregation === 'sum') {
+        return tx.$queryRaw`
+          SELECT date_trunc(${bucket}, ts_origin) AS "tsOrigin", SUM(value) AS value
+          FROM telemetry
+          WHERE channel_id = ${channelId}::uuid AND ts_origin BETWEEN ${from} AND ${to}
+          GROUP BY 1 ORDER BY 1 ASC
+        `;
+      }
+
+      return tx.$queryRaw`
+        SELECT date_trunc(${bucket}, ts_origin) AS "tsOrigin",
+               AVG(value) AS value, MIN(value) AS min, MAX(value) AS max
         FROM telemetry
         WHERE channel_id = ${channelId}::uuid AND ts_origin BETWEEN ${from} AND ${to}
         GROUP BY 1 ORDER BY 1 ASC
       `;
-    }
-
-    return this.prisma.$queryRaw`
-      SELECT date_trunc(${bucket}, ts_origin) AS "tsOrigin",
-             AVG(value) AS value, MIN(value) AS min, MAX(value) AS max
-      FROM telemetry
-      WHERE channel_id = ${channelId}::uuid AND ts_origin BETWEEN ${from} AND ${to}
-      GROUP BY 1 ORDER BY 1 ASC
-    `;
+    });
   }
 
   private async assertChannelInScope(user: AccessTokenClaims, channelId: string): Promise<void> {

@@ -2,7 +2,15 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-const DEFAULT_HEARTBEAT_SECONDS = 15 * 60; // Etapa 2 — valor por defecto si la organización no fijó uno
+// Etapa 2 — valor por defecto si el gateway no fijó su propio
+// `heartbeatIntervalSeconds`. Subido de 15 min a 144 min (2026-08-10,
+// feedback explícito): con 15 min × `OFFLINE_MULTIPLIER` el umbral por
+// defecto era ~37 min, demasiado sensible en la práctica (marcaba offline
+// estaciones reales que solo tardaban algo más entre lecturas) — 144 min
+// da un umbral por defecto de 6h exactas, con el mismo multiplicador ya
+// documentado en MQTT_PROTOCOL.md §8. Sigue siendo configurable por
+// gateway si una organización necesita algo más ajustado.
+const DEFAULT_HEARTBEAT_SECONDS = 144 * 60;
 const OFFLINE_MULTIPLIER = 2.5; // MQTT_PROTOCOL.md §8
 const SCAN_INTERVAL_MS = 60_000;
 
@@ -45,9 +53,20 @@ export class OfflineDetectionService implements OnModuleInit, OnModuleDestroy {
 
   /** Público (no solo por conveniencia de pruebas): útil para forzar un escaneo puntual. */
   async scanGateways(): Promise<void> {
-    const gateways = await this.prisma.gateway.findMany({
-      where: { status: { in: ['online', 'offline'] }, deletedAt: null },
-    });
+    // Recorre TODAS las organizaciones (job de sistema, no de un tenant
+    // concreto) — necesita el bypass de RLS de `is_platform_admin`, nunca
+    // `this.prisma.gateway.findMany()` a pelo: sin pasar por
+    // `runInTenantContext`, la política RLS de `gateways` evalúa
+    // `current_setting('app.is_platform_admin', true)::boolean` sobre un GUC
+    // en estado inconsistente entre conexiones del pool — error real en vivo
+    // (2026-08-06): el escaneo llevaba fallando en cada ejecución desde
+    // siempre, `OfflineDetectionService` nunca había marcado un gateway como
+    // offline de verdad hasta arreglar esto (BACKLOG.md).
+    const gateways = await this.prisma.runInTenantContext({ isPlatformAdmin: true }, (tx) =>
+      tx.gateway.findMany({
+        where: { status: { in: ['online', 'offline'] }, deletedAt: null },
+      }),
+    );
     for (const gateway of gateways) {
       const thresholdMs =
         (gateway.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_SECONDS) * OFFLINE_MULTIPLIER * 1000;
@@ -70,10 +89,12 @@ export class OfflineDetectionService implements OnModuleInit, OnModuleDestroy {
   }
 
   async scanDevices(): Promise<void> {
-    const devices = await this.prisma.device.findMany({
-      where: { status: { in: ['online', 'offline'] }, deletedAt: null },
-      include: { gateway: true },
-    });
+    const devices = await this.prisma.runInTenantContext({ isPlatformAdmin: true }, (tx) =>
+      tx.device.findMany({
+        where: { status: { in: ['online', 'offline'] }, deletedAt: null },
+        include: { gateway: true },
+      }),
+    );
     for (const device of devices) {
       const thresholdMs =
         (device.gateway.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_SECONDS) *

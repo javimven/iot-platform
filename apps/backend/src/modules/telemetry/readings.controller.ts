@@ -25,6 +25,15 @@ export class ReadingsController {
     return this.readings.getLatestForInstallation(user, installationId);
   }
 
+  @RequirePermission('telemetry.read_latest')
+  @Get('gateways/:gatewayId/latest-readings')
+  getLatestForGateway(
+    @CurrentUser() user: AccessTokenClaims,
+    @Param('gatewayId') gatewayId: string,
+  ) {
+    return this.readings.getLatestForGateway(user, gatewayId);
+  }
+
   @RequirePermission('telemetry.read_history')
   @Get('channels/:channelId/readings')
   getHistory(

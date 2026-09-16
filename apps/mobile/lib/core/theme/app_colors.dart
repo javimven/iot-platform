@@ -34,4 +34,31 @@ abstract final class AppColors {
   static const warnDark = Color(0xFFD99A4E);
   static const critical = Color(0xFFC13A2E);
   static const criticalDark = Color(0xFFE2726A);
+
+  // Menú lateral (Etapa 14 V2, BACKLOG.md #29) — cromo siempre oscuro,
+  // independiente del tema claro/oscuro del resto de la app (como
+  // Aigro/IKOS). Mismos valores de partida que paperDark/paperRaisedDark/
+  // inkDark/inkSoftDark/lineDark/brandDark, pero como constantes propias:
+  // son conceptos distintos que hoy comparten valor, no el mismo dato — un
+  // cambio futuro de uno no debe mover el otro en silencio.
+  static const sidebarBackground = Color(0xFF101513);
+  static const sidebarSurfaceRaised = Color(0xFF182019);
+  static const sidebarInk = Color(0xFFE7ECE7);
+  static const sidebarInkSoft = Color(0xFFAAB6B0);
+  static const sidebarLine = Color(0xFF24302B);
+  static const sidebarBrand = Color(0xFF3CA98C);
+
+  // Series de gráfica combinada (Estaciones, BACKLOG.md #30) — categórico,
+  // distinto por tono de brand/ok/warn/critical (esos son de estado, no de
+  // identidad de serie). Validado con la skill `dataviz`
+  // (`scripts/validate_palette.js`, banda de luminosidad OKLCH, separación
+  // CVD Machado-Oliveira-Fernandes, contraste ≥3:1) contra la superficie
+  // real de cada modo — claro `#4F46E5`/`#C2185B` pasa todos los checks tal
+  // cual; oscuro necesitó un tono más oscuro que el primer intento
+  // (`#818CF8`/`#F06292`, L~0.68, fuera de la banda 0.48-0.67 en oscuro) —
+  // `#6366F1`/`#EC4899` sí pasa completo.
+  static const chartIndigo = Color(0xFF4F46E5);
+  static const chartIndigoDark = Color(0xFF6366F1);
+  static const chartRose = Color(0xFFC2185B);
+  static const chartRoseDark = Color(0xFFEC4899);
 }

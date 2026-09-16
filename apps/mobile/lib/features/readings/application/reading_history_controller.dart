@@ -11,25 +11,31 @@ final readingsApiProvider = Provider<ReadingsApi>(
 /// Presets de rango (FUNCTIONAL_REQUIREMENTS.md §12): cada uno fija tanto la
 /// ventana de tiempo como la granularidad — el usuario elige "cuánto quiero
 /// ver", nunca la función de agregación directamente (API_DESIGN.md §8).
-enum HistoryRange { day, week, month }
+/// `twoDays`/`twoMonths` añadidos en Etapa 14 V2 (BACKLOG.md #30) para la
+/// pantalla "Estaciones" — reutilizados aquí en vez de duplicar el enum.
+enum HistoryRange { day, twoDays, week, month, twoMonths }
 
 extension HistoryRangeX on HistoryRange {
   String get granularity => switch (this) {
-        HistoryRange.day => 'raw',
+        HistoryRange.day || HistoryRange.twoDays => 'raw', // ambos ≤7 días (MAX_RAW_RANGE_DAYS)
         HistoryRange.week => 'hourly',
-        HistoryRange.month => 'daily',
+        HistoryRange.month || HistoryRange.twoMonths => 'daily',
       };
 
   Duration get span => switch (this) {
         HistoryRange.day => const Duration(hours: 24),
+        HistoryRange.twoDays => const Duration(days: 2),
         HistoryRange.week => const Duration(days: 7),
         HistoryRange.month => const Duration(days: 30),
+        HistoryRange.twoMonths => const Duration(days: 60),
       };
 
   String get label => switch (this) {
-        HistoryRange.day => '24 h',
-        HistoryRange.week => '7 días',
-        HistoryRange.month => '30 días',
+        HistoryRange.day => '1 día',
+        HistoryRange.twoDays => '2 días',
+        HistoryRange.week => '1 semana',
+        HistoryRange.month => '1 mes',
+        HistoryRange.twoMonths => '2 meses',
       };
 }
 

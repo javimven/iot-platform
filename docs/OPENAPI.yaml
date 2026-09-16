@@ -638,6 +638,20 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GatewayCreated" }
 
+  /gateways/{gatewayId}/latest-readings:
+    get:
+      tags: [readings]
+      summary: Últimas lecturas de todos los canales de una Estación (pantalla "Estaciones", BACKLOG.md #30)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LatestReading" }
+
   /gateways/{gatewayId}/devices:
     get:
       tags: [devices]

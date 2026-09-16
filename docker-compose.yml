@@ -91,6 +91,15 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgres://iot_platform_app:dev_only_app_password@postgres:5432/iot_platform
       REDIS_URL: redis://redis:6379
+      # `.env.development` fija SMTP_HOST=localhost (correcto solo si se
+      # ejecuta el backend directamente en el host) — `api` (a diferencia de
+      # `worker`, que ya lo sobreescribía) no lo corregía, así que las
+      # invitaciones enviadas directamente por `PlatformOrganizationsService`
+      # (no solo las que pasan por `worker`) fallaban con ECONNREFUSED contra
+      # 127.0.0.1:1025 dentro del contenedor. Encontrado en vivo verificando
+      # la pantalla "Estaciones" (BACKLOG.md #30).
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
       - "3000:3000"
@@ -105,10 +114,18 @@ services:
     environment:
       PROCESS_ROLE: ingestion
       NODE_ENV: development
+      # A diferencia de `api`/`worker`, a este servicio le faltaba el
+      # `DATABASE_URL` de red del contenedor — sin él caía al valor de
+      # `.env.development` (`localhost:5432`, correcto solo si se ejecuta
+      # el backend directamente en el host), y el proceso no llegaba ni a
+      # arrancar (`PrismaClientInitializationError`, crash-loop). Encontrado
+      # en vivo verificando la ingesta real de un dato MQTT para la pantalla
+      # "Estaciones" (BACKLOG.md #30).
+      DATABASE_URL: postgres://iot_platform_app:dev_only_app_password@postgres:5432/iot_platform
       MQTT_BROKER_URL: mqtt://emqx:1883
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-    depends_on: [emqx, redis, otel-collector]
+    depends_on: [postgres, emqx, redis, otel-collector]
 
   worker:
     build:

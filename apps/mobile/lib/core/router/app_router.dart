@@ -29,6 +29,10 @@ import '../../features/platform/presentation/platform_organization_features_scre
 import '../../features/platform/presentation/platform_organizations_screen.dart';
 import '../../features/readings/presentation/channel_history_screen.dart';
 import '../../features/sessions/presentation/sessions_list_screen.dart';
+import '../../features/stations/presentation/stations_screen.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/locked_feature_screen.dart';
+import '../widgets/under_construction_screen.dart';
 
 /// Traduce los cambios de `AuthState` (Riverpod) en notificaciones que
 /// GoRouter entiende (`Listenable`), para que reevalúe `redirect` cada vez
@@ -78,13 +82,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           final isOnAuthRoute = location == '/' || location == '/login' || location == '/select-organization';
           if (!isOnAuthRoute) return null;
           // Un Admin de plataforma "puro" (sin membresía en ninguna
-          // organización) no tiene nada que hacer en `/installations` —
-          // `GET /installations` requiere `organizationId`, que aquí es
+          // organización) no tiene nada que hacer en `/stations` —
+          // `GET /gateways` requiere `organizationId`, que aquí es
           // nulo, y devolvería 403. Su punto de entrada es el panel de
           // plataforma (`API_DESIGN.md` §2: "Admin de plataforma puro").
           final isPurePlatformAdmin =
               authState.isPlatformAdmin && authState.organizationId == null;
-          return isPurePlatformAdmin ? '/platform' : '/installations';
+          // Estaciones (BACKLOG.md #30) es el nuevo aterrizaje de un usuario
+          // normal de organización — antes era Instalaciones.
+          return isPurePlatformAdmin ? '/platform' : '/stations';
       }
     },
     routes: [
@@ -110,9 +116,74 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/select-organization',
         builder: (context, state) => const SelectOrganizationScreen(),
       ),
-      GoRoute(
-        path: '/installations',
-        builder: (context, state) => const InstallationsListScreen(),
+      // Menú lateral persistente (Etapa 14 V2, BACKLOG.md #29-#41) — 8 ramas
+      // con su propio `Navigator`/back-stack independiente (`goBranch`,
+      // AppShell). Todo lo que NO es una de estas 8 pantallas de aterrizaje
+      // (detalle de instalación/gateway/dispositivo/sensor, Perfil, panel
+      // de plataforma) sigue siendo un `GoRoute` normal fuera del shell, sin
+      // cambios: un `context.push(...)` a esas rutas simplemente cubre el
+      // menú con una pantalla completa, igual que hacía antes de existir
+      // este shell.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/stations', builder: (context, state) => const StationsScreen())],
+          ),
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen())],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/custom-charts',
+                builder: (context, state) =>
+                    const UnderConstructionScreen(title: 'Gráficos personalizados'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/reports',
+                builder: (context, state) =>
+                    const LockedFeatureScreen(featureCode: 'reports_pdf', title: 'Informes'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/campaigns',
+                builder: (context, state) =>
+                    const LockedFeatureScreen(featureCode: 'campaigns', title: 'Campañas'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/pathogens',
+                builder: (context, state) => const LockedFeatureScreen(
+                  featureCode: 'disease_risk',
+                  title: 'Afecciones y patógenos',
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/satellite',
+                builder: (context, state) =>
+                    const LockedFeatureScreen(featureCode: 'satellite_imagery', title: 'Satélite'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [GoRoute(path: '/installations', builder: (context, state) => const InstallationsListScreen())],
+          ),
+        ],
       ),
       GoRoute(
         path: '/installations/:id',
@@ -120,7 +191,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           installationId: state.pathParameters['id']!,
         ),
       ),
-      GoRoute(path: '/alerts', builder: (context, state) => const AlertsListScreen()),
       GoRoute(path: '/members', builder: (context, state) => const MembersListScreen()),
       GoRoute(
         path: '/members/:id/sessions',

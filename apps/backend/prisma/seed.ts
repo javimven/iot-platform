@@ -42,6 +42,7 @@ const FEATURES = [
   { code: 'weather_widget', label: 'Pestaña de tiempo/clima' },
   { code: 'satellite_imagery', label: 'Imágenes satelitales' },
   { code: 'recommendations', label: 'Recomendaciones' },
+  { code: 'disease_risk', label: 'Afecciones y patógenos' },
 ];
 
 async function main(): Promise<void> {
