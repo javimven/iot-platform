@@ -61,4 +61,14 @@ abstract final class AppColors {
   static const chartIndigoDark = Color(0xFF6366F1);
   static const chartRose = Color(0xFFC2185B);
   static const chartRoseDark = Color(0xFFEC4899);
+
+  // Tercera serie (2026-09-16): las sondas de suelo miden tres magnitudes y
+  // cada sensor lleva su propia gráfica. Ocre, comprobado con el mismo
+  // criterio frente a las dos anteriores: L OKLCH 0.54 en claro y 0.67 en
+  // oscuro (dentro de banda), contraste 5.1:1 y 5.4:1 con `paperRaised`/
+  // `paperRaisedDark`, y distancia OKLab mínima entre pares de 7.4 en claro y
+  // 12.9 en oscuro en el peor caso (deuteranopia en claro, tritanopia en
+  // oscuro), simulando con Machado-Oliveira-Fernandes.
+  static const chartOchre = Color(0xFF8A6A00);
+  static const chartOchreDark = Color(0xFFBD8A0A);
 }

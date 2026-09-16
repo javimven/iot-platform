@@ -29,7 +29,13 @@ describe('ReadingsService.getLatestForGateway', () => {
 
   function buildService(params: {
     gateway: { id: string; installationId: string } | null;
-    latestReadings?: Array<{ value: number; channel: { channelTypeCode: string } }>;
+    latestReadings?: Array<{
+      value: number;
+      channel: {
+        channelTypeCode: string;
+        sensor: { id: string; externalIdentifier: string; label: string | null };
+      };
+    }>;
     memberInstallationScope?: Array<{ installationId: string }>;
   }) {
     const runInTenantContext = jest.fn(async (_ctx: unknown, fn: (tx: unknown) => unknown) =>
@@ -65,21 +71,50 @@ describe('ReadingsService.getLatestForGateway', () => {
   it('devuelve las lecturas aplanadas cuando el rol no tiene alcance restringido (org_admin -> "all")', async () => {
     const service = buildService({
       gateway: { id: 'gw-1', installationId: 'inst-A' },
-      latestReadings: [{ value: 21.5, channel: { channelTypeCode: 'temperature_air' } }],
+      latestReadings: [
+        {
+          value: 21.5,
+          channel: {
+            channelTypeCode: 'temperature_air',
+            sensor: { id: 'sensor-1', externalIdentifier: 'A4', label: 'Ambiente' },
+          },
+        },
+      ],
     });
     await expect(service.getLatestForGateway(orgAdmin, 'gw-1')).resolves.toEqual([
-      { value: 21.5, channelTypeCode: 'temperature_air' },
+      {
+        value: 21.5,
+        channelTypeCode: 'temperature_air',
+        sensorId: 'sensor-1',
+        sensorExternalIdentifier: 'A4',
+        sensorLabel: 'Ambiente',
+      },
     ]);
   });
 
   it('devuelve las lecturas cuando la instalación del gateway sí está dentro del alcance del miembro', async () => {
     const service = buildService({
       gateway: { id: 'gw-1', installationId: 'inst-A' },
-      latestReadings: [{ value: 60, channel: { channelTypeCode: 'humidity_soil' } }],
+      latestReadings: [
+        {
+          value: 60,
+          channel: {
+            channelTypeCode: 'humidity_soil',
+            sensor: { id: 'sensor-2', externalIdentifier: 'A3', label: null },
+          },
+        },
+      ],
       memberInstallationScope: [{ installationId: 'inst-A' }],
     });
+    // Sin nombre puesto, el sensor se muestra por su identificador externo.
     await expect(service.getLatestForGateway(scopedTechnician, 'gw-1')).resolves.toEqual([
-      { value: 60, channelTypeCode: 'humidity_soil' },
+      {
+        value: 60,
+        channelTypeCode: 'humidity_soil',
+        sensorId: 'sensor-2',
+        sensorExternalIdentifier: 'A3',
+        sensorLabel: 'A3',
+      },
     ]);
   });
 });

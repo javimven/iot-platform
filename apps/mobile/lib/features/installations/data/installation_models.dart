@@ -34,12 +34,21 @@ class LatestReading {
   final DateTime tsOrigin;
   final DateTime tsReceived;
 
+  /// Solo llegan en las lecturas de una Estación (`/gateways/{id}/latest-readings`):
+  /// la tarjeta agrupa los canales por sensor.
+  final String? sensorId;
+  final String? sensorExternalIdentifier;
+  final String? sensorLabel;
+
   const LatestReading({
     required this.channelId,
     required this.channelTypeCode,
     required this.value,
     required this.tsOrigin,
     required this.tsReceived,
+    this.sensorId,
+    this.sensorExternalIdentifier,
+    this.sensorLabel,
   });
 
   factory LatestReading.fromJson(Map<String, dynamic> json) => LatestReading(
@@ -48,5 +57,8 @@ class LatestReading {
         value: (json['value'] as num).toDouble(),
         tsOrigin: DateTime.parse(json['tsOrigin'] as String),
         tsReceived: DateTime.parse((json['tsReceived'] as String?) ?? json['tsOrigin'] as String),
+        sensorId: json['sensorId'] as String?,
+        sensorExternalIdentifier: json['sensorExternalIdentifier'] as String?,
+        sensorLabel: json['sensorLabel'] as String?,
       );
 }

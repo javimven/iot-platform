@@ -82,10 +82,26 @@ export class ReadingsService {
     const readings = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.latestReading.findMany({
         where: { channel: { sensor: { device: { gatewayId } } } },
-        include: { channel: { select: { channelTypeCode: true } } },
+        include: {
+          channel: {
+            select: {
+              channelTypeCode: true,
+              sensor: { select: { id: true, externalIdentifier: true, label: true } },
+            },
+          },
+        },
       }),
     );
-    return readings.map((reading) => this.flattenChannelTypeCode(reading));
+    // La pantalla "Estaciones" agrupa los canales por sensor (una gráfica por
+    // sensor con sus magnitudes), así que aquí cada lectura dice de qué sensor
+    // es. `sensorLabel` cae al identificador externo si nadie le puso nombre.
+    return readings.map(({ channel, ...rest }) => ({
+      ...rest,
+      channelTypeCode: channel.channelTypeCode,
+      sensorId: channel.sensor.id,
+      sensorExternalIdentifier: channel.sensor.externalIdentifier,
+      sensorLabel: channel.sensor.label ?? channel.sensor.externalIdentifier,
+    }));
   }
 
   /**

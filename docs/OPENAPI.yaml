@@ -1758,6 +1758,9 @@ components:
         value: { type: number }
         tsOrigin: { type: string, format: date-time }
         tsReceived: { type: string, format: date-time }
+        sensorId: { type: string, format: uuid, description: "Solo en las rutas de una Estación (`/gateways/{gatewayId}/latest-readings` y su variante de plataforma): la pantalla agrupa los canales por sensor" }
+        sensorExternalIdentifier: { type: string, description: "Solo en las rutas de una Estación. Identificador del sensor en el dispositivo (p. ej. la ranura A1-A4 de la WSC2-N)" }
+        sensorLabel: { type: string, description: "Solo en las rutas de una Estación. Nombre del sensor, o su identificador externo si no tiene" }
 
     Reading:
       type: object

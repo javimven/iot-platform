@@ -5,17 +5,18 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../../directory/data/directory_models.dart';
-import '../../installations/data/installation_models.dart';
 import '../../readings/application/channel_type_labels.dart';
 import '../../readings/application/reading_history_controller.dart';
+import '../application/sensor_groups.dart';
 import '../application/stations_controller.dart';
 import '../data/gateway_status_labels.dart';
 import 'accumulated_chart.dart';
 import 'combined_station_chart.dart';
 
 /// Tarjeta de una Estación en la pantalla principal (BACKLOG.md #30):
-/// estado + último dato → píldoras de canal (valor actual, activable) →
-/// gráfica combinada del/de los canal(es) activado(s) con selector de rango.
+/// estado + último dato → selector de rango (común a la estación) → un
+/// bloque por sensor, con las píldoras de sus magnitudes (valor actual,
+/// activables) y su propia gráfica con las que estén activadas.
 class StationCard extends ConsumerWidget {
   const StationCard({required this.gateway, super.key});
 
@@ -24,7 +25,6 @@ class StationCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final latestReadings = ref.watch(gatewayLatestReadingsProvider(gateway.id));
-    final activeChannels = ref.watch(effectiveActiveChannelsProvider(gateway.id));
     final range = ref.watch(stationChartRangeProvider(gateway.id));
     final minimized = ref.watch(stationChartMinimizedProvider(gateway.id));
     final (statusLabel, statusTone) = GatewayStatusLabels.forStatus(gateway.status);
@@ -41,7 +41,7 @@ class StationCard extends ConsumerWidget {
               StatusChip(label: statusLabel, tone: statusTone),
               IconButton(
                 icon: Icon(minimized ? Icons.expand_more : Icons.expand_less),
-                tooltip: minimized ? 'Mostrar gráfica' : 'Minimizar gráfica',
+                tooltip: minimized ? 'Mostrar gráficas' : 'Minimizar gráficas',
                 onPressed: () =>
                     ref.read(stationChartMinimizedProvider(gateway.id).notifier).state = !minimized,
               ),
@@ -62,30 +62,34 @@ class StationCard extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           latestReadings.when(
-            data: (readings) => _ChannelPills(
-              gatewayId: gateway.id,
-              readings: readings,
-              activeChannels: activeChannels,
-            ),
+            data: (readings) {
+              if (readings.isEmpty) {
+                return const Text('Esta estación todavía no ha reportado ningún canal.');
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Un único rango para toda la estación: así las gráficas de
+                  // sus sensores cubren el mismo periodo y se comparan de un
+                  // vistazo.
+                  if (!minimized)
+                    SegmentedButton<HistoryRange>(
+                      segments: HistoryRange.values.map((r) => ButtonSegment(value: r, label: Text(r.label))).toList(),
+                      selected: {range},
+                      onSelectionChanged: (selection) =>
+                          ref.read(stationChartRangeProvider(gateway.id).notifier).state = selection.first,
+                    ),
+                  for (final group in groupReadingsBySensor(readings))
+                    _SensorSection(gatewayId: gateway.id, group: group, range: range, minimized: minimized),
+                ],
+              );
+            },
             error: (error, _) => Text('No se pudieron cargar los datos.\n$error'),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Center(child: CircularProgressIndicator()),
             ),
           ),
-          if (activeChannels.isEmpty || minimized)
-            const SizedBox.shrink() // Sin canales todavía (ya lo dice _ChannelPills) o minimizada a mano.
-          else ...[
-            const SizedBox(height: 12),
-            SegmentedButton<HistoryRange>(
-              segments: HistoryRange.values.map((r) => ButtonSegment(value: r, label: Text(r.label))).toList(),
-              selected: {range},
-              onSelectionChanged: (selection) =>
-                  ref.read(stationChartRangeProvider(gateway.id).notifier).state = selection.first,
-            ),
-            const SizedBox(height: 8),
-            _StationChart(gatewayId: gateway.id, activeChannels: activeChannels, range: range),
-          ],
         ],
       ),
     );
@@ -98,59 +102,95 @@ class StationCard extends ConsumerWidget {
   }
 }
 
-class _ChannelPills extends ConsumerWidget {
-  const _ChannelPills({required this.gatewayId, required this.readings, required this.activeChannels});
+/// Un sensor de la estación: su nombre, las píldoras de sus magnitudes y la
+/// gráfica con las que estén activadas. Minimizar la tarjeta oculta solo la
+/// gráfica; las píldoras siguen visibles con el valor actual.
+class _SensorSection extends ConsumerWidget {
+  const _SensorSection({
+    required this.gatewayId,
+    required this.group,
+    required this.range,
+    required this.minimized,
+  });
 
   final String gatewayId;
-  final List<LatestReading> readings;
-  final Set<String> activeChannels;
+  final SensorReadings group;
+  final HistoryRange range;
+  final bool minimized;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (readings.isEmpty) {
-      return const Text('Esta estación todavía no ha reportado ningún canal.');
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: readings.map((r) {
-        final label = ChannelTypeLabels.labelFor(r.channelTypeCode);
-        final unit = ChannelTypeLabels.unitFor(r.channelTypeCode);
-        return FilterChip(
-          label: Text('$label: ${r.value.toStringAsFixed(1)} $unit'),
-          selected: activeChannels.contains(r.channelId),
-          onSelected: (checked) {
-            // Parte del conjunto EFECTIVO (incluye el primer canal
-            // preseleccionado por defecto), no del manual en crudo — si no,
-            // tocar una segunda píldora perdería la preselección implícita
-            // de la primera en vez de añadirse a ella.
-            final updated = {...ref.read(effectiveActiveChannelsProvider(gatewayId))};
-            checked ? updated.add(r.channelId) : updated.remove(r.channelId);
-            ref.read(stationActiveChannelsProvider(gatewayId).notifier).state = updated;
-          },
-        );
-      }).toList(),
+    final key = (gatewayId, group.key);
+    final activeChannels = ref.watch(effectiveSensorChannelsProvider(key));
+    final identifier = group.externalIdentifier;
+    final title = identifier == null || identifier == group.label ? group.label : '${group.label} · $identifier';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: group.readings.map((r) {
+              final label = ChannelTypeLabels.labelFor(r.channelTypeCode);
+              final unit = ChannelTypeLabels.unitFor(r.channelTypeCode);
+              return FilterChip(
+                label: Text('$label: ${r.value.toStringAsFixed(1)} $unit'),
+                selected: activeChannels.contains(r.channelId),
+                onSelected: (checked) {
+                  // Parte del conjunto EFECTIVO (incluye la magnitud
+                  // preseleccionada por defecto), no del manual en crudo — si
+                  // no, tocar una segunda píldora perdería la preselección de
+                  // la primera en vez de añadirse a ella.
+                  final updated = {...ref.read(effectiveSensorChannelsProvider(key))};
+                  checked ? updated.add(r.channelId) : updated.remove(r.channelId);
+                  ref.read(sensorActiveChannelsProvider(key).notifier).state = updated;
+                },
+              );
+            }).toList(),
+          ),
+          if (activeChannels.isNotEmpty && !minimized) ...[
+            const SizedBox(height: 8),
+            _StationChart(
+              gatewayId: gatewayId,
+              channelOrder: [for (final r in group.readings) r.channelId],
+              activeChannels: activeChannels,
+              range: range,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
 
-/// Reúne el histórico de cada canal activado en la gráfica que le
-/// corresponde — [CombinedStationChart] (línea, agregación `average`,
-/// varios canales combinables) o [AccumulatedChart] (barras por franja,
-/// agregación `sum`, uno por canal, nunca combinado con los de línea:
+/// Reúne el histórico de cada magnitud activada de un sensor en la gráfica
+/// que le corresponde — [CombinedStationChart] (línea, agregación `average`,
+/// varias magnitudes combinables) o [AccumulatedChart] (barras por franja,
+/// agregación `sum`, una por magnitud, nunca combinada con las de línea:
 /// BACKLOG.md #30, no tiene sentido visual mezclar una magnitud continua
-/// con una acumulada). Colores fijos por posición (no por orden de
-/// activación), para que un canal no cambie de color si se desactiva y
-/// reactiva otro antes que él.
+/// con una acumulada). El color de cada magnitud sale de su posición entre
+/// las del sensor ([channelOrder]), no del orden de activación, para que no
+/// cambie de color al activar o quitar otra.
 class _StationChart extends ConsumerWidget {
-  const _StationChart({required this.gatewayId, required this.activeChannels, required this.range});
+  const _StationChart({
+    required this.gatewayId,
+    required this.channelOrder,
+    required this.activeChannels,
+    required this.range,
+  });
 
   final String gatewayId;
+  final List<String> channelOrder;
   final Set<String> activeChannels;
   final HistoryRange range;
 
-  static const _palette = [AppColors.chartIndigo, AppColors.chartRose];
-  static const _paletteDark = [AppColors.chartIndigoDark, AppColors.chartRoseDark];
+  static const _palette = [AppColors.chartIndigo, AppColors.chartRose, AppColors.chartOchre];
+  static const _paletteDark = [AppColors.chartIndigoDark, AppColors.chartRoseDark, AppColors.chartOchreDark];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -159,7 +199,8 @@ class _StationChart extends ConsumerWidget {
     return latestReadings.when(
       data: (readings) {
         final byChannelId = {for (final r in readings) r.channelId: r};
-        final channelIds = activeChannels.where(byChannelId.containsKey).toList()..sort();
+        final channelIds =
+            channelOrder.where((id) => activeChannels.contains(id) && byChannelId.containsKey(id)).toList();
         final lineChannelIds = channelIds
             .where((id) => ChannelTypeLabels.aggregationFor(byChannelId[id]!.channelTypeCode) != 'sum')
             .toList();
@@ -169,6 +210,10 @@ class _StationChart extends ConsumerWidget {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final palette = isDark ? _paletteDark : _palette;
         final defaultColor = isDark ? AppColors.inkSoftDark : AppColors.inkSoft;
+        Color colorFor(String channelId) {
+          final position = channelOrder.indexOf(channelId);
+          return position < palette.length ? palette[position] : defaultColor;
+        }
 
         final lineHistories = [
           for (final channelId in lineChannelIds)
@@ -194,7 +239,7 @@ class _StationChart extends ConsumerWidget {
               label: ChannelTypeLabels.labelFor(byChannelId[lineChannelIds[i]]!.channelTypeCode),
               unit: ChannelTypeLabels.unitFor(byChannelId[lineChannelIds[i]]!.channelTypeCode),
               points: lineHistories[i].value ?? const [],
-              color: i < palette.length ? palette[i] : defaultColor,
+              color: colorFor(lineChannelIds[i]),
             ),
         ];
 
@@ -209,7 +254,7 @@ class _StationChart extends ConsumerWidget {
                 child: AccumulatedChart(
                   label: ChannelTypeLabels.labelFor(byChannelId[sumChannelIds[i]]!.channelTypeCode),
                   unit: ChannelTypeLabels.unitFor(byChannelId[sumChannelIds[i]]!.channelTypeCode),
-                  color: i < palette.length ? palette[i] : defaultColor,
+                  color: colorFor(sumChannelIds[i]),
                   rawPoints: sumHistories[i].value ?? const [],
                   range: range,
                 ),

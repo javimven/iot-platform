@@ -7,6 +7,7 @@ import '../../installations/data/installation_models.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../../readings/data/reading_history_models.dart';
 import '../data/stations_api.dart';
+import 'sensor_groups.dart';
 
 final stationsApiProvider = Provider<StationsApi>(
   (ref) => StationsApi(ref.watch(apiClientProvider)),
@@ -81,24 +82,29 @@ final stationChartRangeProvider = StateProvider.family<HistoryRange, String>((re
 /// oculta solo la gráfica, las píldoras siguen visibles.
 final stationChartMinimizedProvider = StateProvider.family<bool, String>((ref, gatewayId) => false);
 
-/// Canales activados (píldoras pulsadas) por estación, elegidos a mano por
-/// el usuario — vacío mientras no haya tocado ninguna píldora todavía.
-/// Ver [effectiveActiveChannelsProvider] para el conjunto que de verdad se
-/// pinta (con el primer canal ya activado por defecto).
-final stationActiveChannelsProvider = StateProvider.family<Set<String>, String>((ref, gatewayId) => {});
+/// Magnitudes activadas a mano (píldoras pulsadas) en la gráfica de un
+/// sensor, por (estación, sensor). Null mientras el usuario no haya tocado
+/// ninguna píldora de ese sensor; un conjunto vacío es que las ha quitado
+/// todas, y entonces ese sensor se queda sin gráfica.
+/// Ver [effectiveSensorChannelsProvider] para lo que de verdad se pinta.
+final sensorActiveChannelsProvider =
+    StateProvider.family<Set<String>?, (String gatewayId, String sensorKey)>((ref, key) => null);
 
-/// Conjunto de canales a mostrar en la gráfica de una estación: el elegido a
-/// mano si el usuario ya tocó alguna píldora, o si no, el primero que
-/// reporte la estación — para que la gráfica se vea directamente al abrir
-/// la tarjeta, sin un paso extra de "toca una píldora primero".
-final effectiveActiveChannelsProvider = Provider.family<Set<String>, String>((ref, gatewayId) {
-  final manual = ref.watch(stationActiveChannelsProvider(gatewayId));
-  if (manual.isNotEmpty) return manual;
-  final readings = ref.watch(gatewayLatestReadingsProvider(gatewayId));
-  return readings.maybeWhen(
-    data: (items) => items.isEmpty ? const {} : {items.first.channelId},
-    orElse: () => const {},
-  );
+/// Magnitudes a mostrar en la gráfica de un sensor: las elegidas a mano o,
+/// si no se ha tocado nada, la primera del sensor, para que cada gráfica se
+/// vea directamente al abrir la tarjeta.
+final effectiveSensorChannelsProvider =
+    Provider.family<Set<String>, (String gatewayId, String sensorKey)>((ref, key) {
+  final manual = ref.watch(sensorActiveChannelsProvider(key));
+  if (manual != null) return manual;
+  final (gatewayId, sensorKey) = key;
+  final readings = ref.watch(gatewayLatestReadingsProvider(gatewayId)).valueOrNull ?? const <LatestReading>[];
+  for (final group in groupReadingsBySensor(readings)) {
+    if (group.key == sensorKey) {
+      return group.readings.isEmpty ? const {} : {group.readings.first.channelId};
+    }
+  }
+  return const {};
 });
 
 /// Histórico de un canal (agregación `average`) para el rango de SU
