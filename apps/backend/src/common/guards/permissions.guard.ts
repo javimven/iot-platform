@@ -32,6 +32,19 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const { authContext } = request;
 
+    // Un Admin de plataforma que además es miembro de una organización entra
+    // con una sesión que lleva las dos cosas (login con una sola membresía):
+    // dentro de su organización manda su rol, y lo de plataforma se suma. Sin
+    // esto, su propia telemetría le daba 403 (`telemetry.*` no es una acción
+    // de plataforma) y la pantalla "Estaciones" no cargaba.
+    if (
+      authContext.isPlatformAdmin &&
+      authContext.roleCode &&
+      roleHasPermission(authContext.roleCode, action as PermissionAction)
+    ) {
+      return true;
+    }
+
     if (authContext.isPlatformAdmin) {
       // PLATFORM_DIRECTORY_ACTIONS es un subconjunto de PermissionAction
       // (ADR-0005) — el cast es seguro: si `action` fuera una PlatformAction
