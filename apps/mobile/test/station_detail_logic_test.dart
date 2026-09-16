@@ -65,6 +65,12 @@ void main() {
     });
   });
 
+  test('toggleDetailChannel: añade y quita, pero nunca deja la pantalla sin gráfica', () {
+    expect(toggleDetailChannel({'hum'}, 'temp'), {'hum', 'temp'});
+    expect(toggleDetailChannel({'hum', 'temp'}, 'hum'), {'temp'});
+    expect(toggleDetailChannel({'tension'}, 'tension'), {'tension'});
+  });
+
   test('nearestPoint: el punto más cercano al instante tocado', () {
     HistoryPoint p(int hour) => HistoryPoint(tsOrigin: DateTime.utc(2026, 9, 16, hour), value: hour.toDouble(), min: null, max: null);
     final points = [p(8), p(10), p(12)];

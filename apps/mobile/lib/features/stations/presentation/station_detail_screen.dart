@@ -149,9 +149,7 @@ class _SensorPage extends ConsumerWidget {
     final sumReadings = activeReadings.where((r) => ChannelTypeLabels.aggregationFor(r.channelTypeCode) == 'sum').toList();
 
     void toggle(LatestReading reading) {
-      final updated = {...active};
-      updated.contains(reading.channelId) ? updated.remove(reading.channelId) : updated.add(reading.channelId);
-      ref.read(detailActiveChannelsProvider(key).notifier).state = updated;
+      ref.read(detailActiveChannelsProvider(key).notifier).state = toggleDetailChannel(active, reading.channelId);
     }
 
     return ListView(

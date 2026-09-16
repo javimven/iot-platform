@@ -113,6 +113,24 @@
       setTimeout(function () {
         if (!arrancada && !fallida) texto('Está tardando más de lo normal. Si la conexión es lenta, espera un poco más.');
       }, 25000);
+      // iOS (Safari y Chrome) puede dejar la zona visible desplazada hacia
+      // arriba tras cerrar el teclado: la app se ve cortada por arriba y con
+      // un hueco debajo de la barra inferior. Si no se está escribiendo en
+      // ningún campo, se devuelve la página a su sitio.
+      function recolocar() {
+        var activo = document.activeElement;
+        var escribiendo = activo && /^(INPUT|TEXTAREA)$/.test(activo.tagName);
+        var vv = window.visualViewport;
+        var desplazada = window.scrollY !== 0 || (vv && vv.offsetTop !== 0);
+        if (!escribiendo && desplazada) window.scrollTo(0, 0);
+      }
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () { setTimeout(recolocar, 50); });
+        window.visualViewport.addEventListener('scroll', function () { setTimeout(recolocar, 50); });
+      }
+      window.addEventListener('focusout', function () { setTimeout(recolocar, 300); });
+      window.addEventListener('orientationchange', function () { setTimeout(recolocar, 300); });
+
       window.addEventListener('flutter-first-frame', function () {
         arrancada = true;
         var carga = document.getElementById('carga');

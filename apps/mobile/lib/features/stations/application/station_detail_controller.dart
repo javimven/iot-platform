@@ -86,6 +86,16 @@ final detailActiveChannelsProvider =
 Set<String> effectiveDetailChannels(SensorReadings group, Set<String>? manual) =>
     manual ?? {primaryReadingOf(group).channelId};
 
+/// Activa o quita una magnitud en la pantalla de la estación, sin dejarla nunca
+/// sin ninguna: esa pantalla existe para ver la gráfica, y en un sensor de una
+/// sola magnitud (el tensiómetro) un toque la dejaba en blanco. Visto en un
+/// iPhone el 2026-09-16.
+Set<String> toggleDetailChannel(Set<String> active, String channelId) {
+  if (!active.contains(channelId)) return {...active, channelId};
+  if (active.length == 1) return active;
+  return {...active}..remove(channelId);
+}
+
 /// Instante que marca el dedo en las gráficas de un sensor (milisegundos),
 /// compartido por todas sus gráficas apiladas: tocar una marca la misma hora
 /// en las demás.
