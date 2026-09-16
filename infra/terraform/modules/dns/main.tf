@@ -1,8 +1,12 @@
-# Registros DNS de un entorno dentro de la zona ya creada (infra/terraform/dns-zone) —
-# DEPLOYMENT.md §6: api/app proxiadas por Cloudflare (HTTPS/CDN/mitigación
-# básica de DoS), mqtt SIN proxiar (Cloudflare gratuito no proxia TCP puro,
-# solo lo resolvería mal) — TLS de mqtt lo gestiona EMQX directamente
-# (Let's Encrypt vía acme.sh), no Caddy.
+# Registros DNS de un entorno dentro de la zona ya creada (infra/terraform/dns-zone).
+# Ninguno pasa por el proxy de Cloudflare: todos apuntan directamente al
+# servidor. api/app lo estuvieron hasta el 2026-09-16 (HTTPS/CDN/mitigación
+# básica de DoS), pero las IPs compartidas de Cloudflare que les tocaron
+# (188.114.96.5 y 188.114.97.5) las bloquean Movistar, Orange, Vodafone, DIGI
+# y MásMóvil por orden de LaLiga en días de fútbol (17 días entre julio y
+# septiembre de 2026, de la tarde a la medianoche): la plataforma dejaba de
+# abrir para cualquier cliente de esos operadores (BACKLOG.md #51). El TLS
+# de api/app ya lo daba Caddy con Let's Encrypt en el origen; el de mqtt, EMQX.
 
 data "cloudflare_zone" "this" {
   filter = {
@@ -30,8 +34,8 @@ resource "cloudflare_dns_record" "api" {
   type    = "A"
   name    = "${local.subdomain_prefix}api.${var.domain}"
   content = var.api_ipv4
-  ttl     = 1 # "Automático" cuando proxied = true
-  proxied = true
+  ttl     = 300
+  proxied = false # ver la cabecera: bloqueos de IPs de Cloudflare en España
 }
 
 resource "cloudflare_dns_record" "app" {
@@ -39,8 +43,8 @@ resource "cloudflare_dns_record" "app" {
   type    = "A"
   name    = "${local.subdomain_prefix}app.${var.domain}"
   content = var.api_ipv4
-  ttl     = 1
-  proxied = true
+  ttl     = 300
+  proxied = false # ver la cabecera: bloqueos de IPs de Cloudflare en España
 }
 
 resource "cloudflare_dns_record" "mqtt" {
