@@ -25,7 +25,6 @@ class StationCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final latestReadings = ref.watch(gatewayLatestReadingsProvider(gateway.id));
-    final range = ref.watch(stationChartRangeProvider(gateway.id));
     final minimized = ref.watch(stationChartMinimizedProvider(gateway.id));
     final (statusLabel, statusTone) = GatewayStatusLabels.forStatus(gateway.status);
 
@@ -69,18 +68,8 @@ class StationCard extends ConsumerWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Un único rango para toda la estación: así las gráficas de
-                  // sus sensores cubren el mismo periodo y se comparan de un
-                  // vistazo.
-                  if (!minimized)
-                    SegmentedButton<HistoryRange>(
-                      segments: HistoryRange.values.map((r) => ButtonSegment(value: r, label: Text(r.label))).toList(),
-                      selected: {range},
-                      onSelectionChanged: (selection) =>
-                          ref.read(stationChartRangeProvider(gateway.id).notifier).state = selection.first,
-                    ),
                   for (final group in groupReadingsBySensor(readings))
-                    _SensorSection(gatewayId: gateway.id, group: group, range: range, minimized: minimized),
+                    _SensorSection(gatewayId: gateway.id, group: group, minimized: minimized),
                 ],
               );
             },
@@ -102,26 +91,23 @@ class StationCard extends ConsumerWidget {
   }
 }
 
-/// Un sensor de la estación: su nombre, las píldoras de sus magnitudes y la
-/// gráfica con las que estén activadas. Minimizar la tarjeta oculta solo la
-/// gráfica; las píldoras siguen visibles con el valor actual.
+/// Un sensor de la estación: su nombre y las píldoras de sus magnitudes con
+/// el valor actual. Al activar alguna aparece debajo su gráfica, con el
+/// selector de rango encima; sin ninguna activada, el sensor ocupa solo sus
+/// píldoras. Minimizar la tarjeta oculta las gráficas abiertas, no las
+/// píldoras.
 class _SensorSection extends ConsumerWidget {
-  const _SensorSection({
-    required this.gatewayId,
-    required this.group,
-    required this.range,
-    required this.minimized,
-  });
+  const _SensorSection({required this.gatewayId, required this.group, required this.minimized});
 
   final String gatewayId;
   final SensorReadings group;
-  final HistoryRange range;
   final bool minimized;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final key = (gatewayId, group.key);
-    final activeChannels = ref.watch(effectiveSensorChannelsProvider(key));
+    final activeChannels = ref.watch(sensorActiveChannelsProvider(key));
+    final range = ref.watch(sensorChartRangeProvider(key));
     final identifier = group.externalIdentifier;
     final title = identifier == null || identifier == group.label ? group.label : '${group.label} · $identifier';
 
@@ -142,11 +128,7 @@ class _SensorSection extends ConsumerWidget {
                 label: Text('$label: ${r.value.toStringAsFixed(1)} $unit'),
                 selected: activeChannels.contains(r.channelId),
                 onSelected: (checked) {
-                  // Parte del conjunto EFECTIVO (incluye la magnitud
-                  // preseleccionada por defecto), no del manual en crudo — si
-                  // no, tocar una segunda píldora perdería la preselección de
-                  // la primera en vez de añadirse a ella.
-                  final updated = {...ref.read(effectiveSensorChannelsProvider(key))};
+                  final updated = {...ref.read(sensorActiveChannelsProvider(key))};
                   checked ? updated.add(r.channelId) : updated.remove(r.channelId);
                   ref.read(sensorActiveChannelsProvider(key).notifier).state = updated;
                 },
@@ -154,6 +136,12 @@ class _SensorSection extends ConsumerWidget {
             }).toList(),
           ),
           if (activeChannels.isNotEmpty && !minimized) ...[
+            const SizedBox(height: 12),
+            SegmentedButton<HistoryRange>(
+              segments: HistoryRange.values.map((r) => ButtonSegment(value: r, label: Text(r.label))).toList(),
+              selected: {range},
+              onSelectionChanged: (selection) => ref.read(sensorChartRangeProvider(key).notifier).state = selection.first,
+            ),
             const SizedBox(height: 8),
             _StationChart(
               gatewayId: gatewayId,

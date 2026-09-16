@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iot_platform_app/features/installations/data/installation_models.dart';
+import 'package:iot_platform_app/features/readings/application/reading_history_controller.dart';
 import 'package:iot_platform_app/features/stations/application/sensor_groups.dart';
 import 'package:iot_platform_app/features/stations/application/stations_controller.dart';
 
@@ -66,35 +67,32 @@ void main() {
     expect(reading.sensorLabel, 'Sonda de suelo plana');
   });
 
-  group('magnitudes activas por sensor', () {
-    Future<ProviderContainer> container() async {
-      final c = ProviderContainer(overrides: [
-        gatewayLatestReadingsProvider('gw-1').overrideWith((ref) async => _stationReadings),
-      ]);
+  group('gráficas por sensor', () {
+    ProviderContainer container() {
+      final c = ProviderContainer();
       addTearDown(c.dispose);
-      final sub = c.listen(gatewayLatestReadingsProvider('gw-1'), (_, __) {});
-      addTearDown(sub.close);
-      await c.read(gatewayLatestReadingsProvider('gw-1').future);
       return c;
     }
 
-    test('sin tocar nada, cada sensor muestra su primera magnitud', () async {
-      final c = await container();
-      expect(c.read(effectiveSensorChannelsProvider(('gw-1', 's2'))), {'ch-ec'});
-      expect(c.read(effectiveSensorChannelsProvider(('gw-1', 's4'))), {'ch-hum-air'});
+    test('la tarjeta abre sin ninguna gráfica desplegada', () {
+      final c = container();
+      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's2'))), isEmpty);
+      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's4'))), isEmpty);
     });
 
-    test('elegir magnitudes en un sensor no cambia las de otro', () async {
-      final c = await container();
+    test('elegir magnitudes en un sensor no cambia las de otro', () {
+      final c = container();
       c.read(sensorActiveChannelsProvider(('gw-1', 's2')).notifier).state = {'ch-temp-soil', 'ch-hum-soil'};
-      expect(c.read(effectiveSensorChannelsProvider(('gw-1', 's2'))), {'ch-temp-soil', 'ch-hum-soil'});
-      expect(c.read(effectiveSensorChannelsProvider(('gw-1', 's4'))), {'ch-hum-air'});
+      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's2'))), {'ch-temp-soil', 'ch-hum-soil'});
+      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's4'))), isEmpty);
     });
 
-    test('quitar todas las magnitudes de un sensor lo deja sin gráfica, sin volver a la de por defecto', () async {
-      final c = await container();
-      c.read(sensorActiveChannelsProvider(('gw-1', 's2')).notifier).state = {};
-      expect(c.read(effectiveSensorChannelsProvider(('gw-1', 's2'))), isEmpty);
+    test('cada gráfica tiene su propio rango: cambiar uno no mueve los demás', () {
+      final c = container();
+      expect(c.read(sensorChartRangeProvider(('gw-1', 's2'))), HistoryRange.day);
+      c.read(sensorChartRangeProvider(('gw-1', 's2')).notifier).state = HistoryRange.week;
+      expect(c.read(sensorChartRangeProvider(('gw-1', 's2'))), HistoryRange.week);
+      expect(c.read(sensorChartRangeProvider(('gw-1', 's4'))), HistoryRange.day);
     });
   });
 }

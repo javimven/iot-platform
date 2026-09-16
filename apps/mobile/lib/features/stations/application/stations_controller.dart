@@ -7,7 +7,6 @@ import '../../installations/data/installation_models.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../../readings/data/reading_history_models.dart';
 import '../data/stations_api.dart';
-import 'sensor_groups.dart';
 
 final stationsApiProvider = Provider<StationsApi>(
   (ref) => StationsApi(ref.watch(apiClientProvider)),
@@ -74,38 +73,22 @@ final stationSearchQueryProvider = StateProvider.autoDispose<String>((ref) => ''
 /// muestran su tarjeta con datos.
 final selectedGatewayIdsProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
 
-/// Por estación, no global (a diferencia de `historyRangeProvider`): varias
-/// tarjetas pueden estar abiertas a la vez, cada una con su propio rango.
-final stationChartRangeProvider = StateProvider.family<HistoryRange, String>((ref, gatewayId) => HistoryRange.day);
+/// Rango de la gráfica de un sensor, por (estación, sensor): cada gráfica
+/// abierta lleva su propio selector encima, así que cambiar uno no mueve las
+/// demás.
+final sensorChartRangeProvider =
+    StateProvider.family<HistoryRange, (String gatewayId, String sensorKey)>((ref, key) => HistoryRange.day);
 
 /// Minimizado a mano por el usuario (botón en la cabecera de la tarjeta) —
-/// oculta solo la gráfica, las píldoras siguen visibles.
+/// oculta las gráficas abiertas, las píldoras siguen visibles.
 final stationChartMinimizedProvider = StateProvider.family<bool, String>((ref, gatewayId) => false);
 
-/// Magnitudes activadas a mano (píldoras pulsadas) en la gráfica de un
-/// sensor, por (estación, sensor). Null mientras el usuario no haya tocado
-/// ninguna píldora de ese sensor; un conjunto vacío es que las ha quitado
-/// todas, y entonces ese sensor se queda sin gráfica.
-/// Ver [effectiveSensorChannelsProvider] para lo que de verdad se pinta.
+/// Magnitudes activadas (píldoras pulsadas) en la gráfica de un sensor, por
+/// (estación, sensor). Vacío por defecto: la tarjeta abre con las píldoras y
+/// sus valores actuales, y un sensor solo muestra gráfica cuando se activa
+/// alguna de sus magnitudes.
 final sensorActiveChannelsProvider =
-    StateProvider.family<Set<String>?, (String gatewayId, String sensorKey)>((ref, key) => null);
-
-/// Magnitudes a mostrar en la gráfica de un sensor: las elegidas a mano o,
-/// si no se ha tocado nada, la primera del sensor, para que cada gráfica se
-/// vea directamente al abrir la tarjeta.
-final effectiveSensorChannelsProvider =
-    Provider.family<Set<String>, (String gatewayId, String sensorKey)>((ref, key) {
-  final manual = ref.watch(sensorActiveChannelsProvider(key));
-  if (manual != null) return manual;
-  final (gatewayId, sensorKey) = key;
-  final readings = ref.watch(gatewayLatestReadingsProvider(gatewayId)).valueOrNull ?? const <LatestReading>[];
-  for (final group in groupReadingsBySensor(readings)) {
-    if (group.key == sensorKey) {
-      return group.readings.isEmpty ? const {} : {group.readings.first.channelId};
-    }
-  }
-  return const {};
-});
+    StateProvider.family<Set<String>, (String gatewayId, String sensorKey)>((ref, key) => const {});
 
 /// Histórico de un canal (agregación `average`) para el rango de SU
 /// tarjeta — reutiliza `ReadingsApi.history` ya existente
