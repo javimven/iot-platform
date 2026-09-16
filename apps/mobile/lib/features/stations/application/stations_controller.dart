@@ -4,6 +4,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../directory/data/directory_models.dart';
 import '../../installations/application/installations_controller.dart';
 import '../../installations/data/installation_models.dart';
+import '../../organization/data/organization_models.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../../readings/data/reading_history_models.dart';
 import '../data/stations_api.dart';
@@ -18,12 +19,18 @@ final stationsAcrossOrganizationsProvider = Provider<bool>(
   (ref) => ref.watch(authControllerProvider.select((state) => state.isPlatformAdmin)),
 );
 
+/// Organizaciones de la vista de plataforma, pedidas una sola vez para las
+/// estaciones y para los nombres de finca (antes eran dos peticiones iguales).
+final stationOrganizationsProvider = FutureProvider.autoDispose<List<OrganizationProfile>>(
+  (ref) => ref.watch(stationsApiProvider).organizations(),
+);
+
 final allGatewaysProvider = FutureProvider.autoDispose<List<Gateway>>((ref) async {
   final api = ref.watch(stationsApiProvider);
   if (!ref.watch(stationsAcrossOrganizationsProvider)) {
     return api.allGateways();
   }
-  final organizations = await api.organizations();
+  final organizations = await ref.watch(stationOrganizationsProvider.future);
   final perOrganization = await Future.wait(organizations.map((o) => api.gatewaysOfOrganization(o.id)));
   return [for (final gateways in perOrganization) ...gateways];
 });
@@ -39,7 +46,7 @@ final stationGroupNamesProvider = FutureProvider.autoDispose<Map<String, Station
     final installations = await ref.watch(installationsApiProvider).list();
     return {for (final i in installations) i.id: (farm: i.name, organization: null)};
   }
-  final organizations = await api.organizations();
+  final organizations = await ref.watch(stationOrganizationsProvider.future);
   final perOrganization = await Future.wait(organizations.map((o) => api.installationsOfOrganization(o.id)));
   return {
     for (var n = 0; n < organizations.length; n++)

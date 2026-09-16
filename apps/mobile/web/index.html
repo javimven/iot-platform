@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,21 +18,69 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Estaciones, sensores y alertas de tus fincas.">
+  <meta name="theme-color" content="#1F6F5C">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="iot_platform_app">
+  <meta name="apple-mobile-web-app-title" content="Plataforma IoT">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>iot_platform_app</title>
+  <title>Plataforma IoT</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Pantalla de carga (BACKLOG.md #50): en un móvil la app tarda unos segundos
+    en descargar y arrancar su motor de dibujo, y hasta ahora la página se
+    quedaba en blanco todo ese rato. Solo HTML y CSS, para que aparezca al
+    instante; se quita con el primer fotograma de Flutter. Colores de
+    lib/core/theme/app_colors.dart.
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #F7F8F5; }
+    #carga {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #4A5650; font-size: 15px; transition: opacity 0.2s ease;
+    }
+    #carga .anillo {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid #DCE3DD; border-top-color: #1F6F5C;
+      animation: girar 0.9s linear infinite;
+    }
+    #carga.oculta { opacity: 0; }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    @media (prefers-color-scheme: dark) and (min-width: 600px) {
+      /* En el móvil la app arranca en claro (tema automático); en pantallas
+         grandes sigue al sistema, así que la carga también. */
+      html, body { background: #101513; }
+      #carga { color: #AAB6B0; }
+      #carga .anillo { border-color: #24302B; border-top-color: #3CA98C; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #carga .anillo { animation-duration: 2.5s; }
+    }
+  </style>
 </head>
 <body>
+  <div id="carga" role="status" aria-live="polite">
+    <div class="anillo" aria-hidden="true"></div>
+    <div>Cargando la plataforma…</div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var carga = document.getElementById('carga');
+      if (!carga) return;
+      carga.classList.add('oculta');
+      setTimeout(function () { carga.remove(); }, 250);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
