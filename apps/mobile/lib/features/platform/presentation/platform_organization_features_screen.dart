@@ -34,7 +34,7 @@ class _PlatformOrganizationFeaturesScreenState
     final orgFeatures = ref.watch(platformOrganizationFeaturesProvider(widget.organizationId));
 
     return Scaffold(
-      appBar: AppBar(title: Text('Funciones · ${widget.organizationName}')),
+      appBar: AppBar(title: Text('Funciones de ${widget.organizationName}')),
       body: catalog.when(
         data: (features) => orgFeatures.when(
           data: (enabledRows) {

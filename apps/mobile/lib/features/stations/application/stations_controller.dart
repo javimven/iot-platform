@@ -28,20 +28,22 @@ final allGatewaysProvider = FutureProvider.autoDispose<List<Gateway>>((ref) asyn
   return [for (final gateways in perOrganization) ...gateways];
 });
 
-/// Nombre de la cabecera de cada grupo del listado, por `installationId`: la
-/// finca para un miembro, y "Organización · Finca" en la vista de plataforma,
-/// donde se mezclan fincas de varios clientes.
-final stationGroupNamesProvider = FutureProvider.autoDispose<Map<String, String>>((ref) async {
+/// Cabecera de un grupo del listado: la finca y, en la vista de plataforma,
+/// donde se mezclan fincas de varios clientes, también su organización.
+typedef StationGroupName = ({String farm, String? organization});
+
+/// Cabecera de cada grupo del listado, por `installationId`.
+final stationGroupNamesProvider = FutureProvider.autoDispose<Map<String, StationGroupName>>((ref) async {
   final api = ref.watch(stationsApiProvider);
   if (!ref.watch(stationsAcrossOrganizationsProvider)) {
     final installations = await ref.watch(installationsApiProvider).list();
-    return {for (final i in installations) i.id: i.name};
+    return {for (final i in installations) i.id: (farm: i.name, organization: null)};
   }
   final organizations = await api.organizations();
   final perOrganization = await Future.wait(organizations.map((o) => api.installationsOfOrganization(o.id)));
   return {
     for (var n = 0; n < organizations.length; n++)
-      for (final i in perOrganization[n]) i.id: '${organizations[n].name} · ${i.name}',
+      for (final i in perOrganization[n]) i.id: (farm: i.name, organization: organizations[n].name),
   };
 });
 

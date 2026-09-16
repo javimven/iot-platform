@@ -58,7 +58,7 @@ class PlatformOrganizationsScreen extends ConsumerWidget {
                 final org = items[index];
                 return ListTile(
                   title: Text(org.name),
-                  subtitle: Text('${org.slug} · ${org.status == 'active' ? 'Activa' : 'Suspendida'}'),
+                  subtitle: Text('${org.status == 'active' ? 'Activa' : 'Suspendida'} (${org.slug})'),
                   trailing: PopupMenuButton<String>(
                     onSelected: (action) => _handleAction(context, ref, org, action),
                     itemBuilder: (context) => [

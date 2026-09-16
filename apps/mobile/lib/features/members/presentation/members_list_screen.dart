@@ -48,7 +48,7 @@ class MembersListScreen extends ConsumerWidget {
                 return ListTile(
                   title: Text(member.fullName),
                   subtitle: Text(
-                    '${member.email}\n${memberRoleLabel(member.roleCode)} · ${memberStatusLabel(member.status)}',
+                    '${member.email}\n${memberRoleLabel(member.roleCode)}, ${memberStatusLabel(member.status).toLowerCase()}',
                   ),
                   isThreeLine: true,
                   trailing: PopupMenuButton<String>(

@@ -24,7 +24,7 @@ class PlatformInstallationsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Directorio IoT · $organizationName'),
+        title: Text('Directorio IoT de $organizationName'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),

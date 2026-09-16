@@ -80,11 +80,14 @@ void main() {
     sub.close();
   });
 
-  test('el Admin de plataforma agrupa por "Organización · Finca"', () async {
+  test('el Admin de plataforma agrupa por finca, con su organización aparte', () async {
     final c = container(platformAdmin: true, api: _FakeStationsApi());
     final sub = c.listen(stationGroupNamesProvider, (_, __) {});
     final names = await c.read(stationGroupNamesProvider.future);
-    expect(names, {'inst-a': 'JMV Soluciones · Finca Norte', 'inst-b': 'Finca Cliente · Finca Norte'});
+    expect(names, {
+      'inst-a': (farm: 'Finca Norte', organization: 'JMV Soluciones'),
+      'inst-b': (farm: 'Finca Norte', organization: 'Finca Cliente'),
+    });
     sub.close();
   });
 

@@ -125,7 +125,7 @@ class _ChannelThresholdsSection extends ConsumerWidget {
                 subtitle: Text(
                   current == null
                       ? 'Sin definir'
-                      : 'Mín: ${current.defaultMin ?? '—'} · Máx: ${current.defaultMax ?? '—'}',
+                      : 'Mínimo ${current.defaultMin ?? '—'}, máximo ${current.defaultMax ?? '—'}',
                 ),
                 trailing: canEdit
                     ? IconButton(

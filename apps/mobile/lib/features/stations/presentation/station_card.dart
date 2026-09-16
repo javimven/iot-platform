@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/format/reading_format.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/status_chip.dart';
 import '../../directory/data/directory_models.dart';
@@ -63,7 +65,9 @@ class StationCard extends ConsumerWidget {
           latestReadings.when(
             data: (readings) {
               if (readings.isEmpty) {
-                return const Text('Esta estación todavía no ha reportado ningún canal.');
+                return const Text(
+                  'Esta estación aún no ha enviado datos de sensores. Aparecerán aquí con su próximo envío.',
+                );
               }
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +77,11 @@ class StationCard extends ConsumerWidget {
                 ],
               );
             },
-            error: (error, _) => Text('No se pudieron cargar los datos.\n$error'),
+            error: (error, _) => _InlineError(
+              message: 'No se han podido cargar los datos de esta estación.',
+              technicalDetail: '$error',
+              onRetry: () => ref.invalidate(gatewayLatestReadingsProvider(gateway.id)),
+            ),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Center(child: CircularProgressIndicator()),
@@ -109,14 +117,32 @@ class _SensorSection extends ConsumerWidget {
     final activeChannels = ref.watch(sensorActiveChannelsProvider(key));
     final range = ref.watch(sensorChartRangeProvider(key));
     final identifier = group.externalIdentifier;
-    final title = identifier == null || identifier == group.label ? group.label : '${group.label} · $identifier';
+    final showIdentifier = identifier != null && identifier != group.label;
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          // Nombre del sensor y, aparte y en pequeño, su identificador (la
+          // ranura A1–A4 en la WSC2-N).
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(child: Text(group.label, style: Theme.of(context).textTheme.titleSmall)),
+              if (showIdentifier) ...[
+                const SizedBox(width: 8),
+                Text(
+                  identifier,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -125,7 +151,10 @@ class _SensorSection extends ConsumerWidget {
               final label = ChannelTypeLabels.labelFor(r.channelTypeCode);
               final unit = ChannelTypeLabels.unitFor(r.channelTypeCode);
               return FilterChip(
-                label: Text('$label: ${r.value.toStringAsFixed(1)} $unit'),
+                label: Text(
+                  '$label: ${formatReading(r.value)} $unit',
+                  style: const TextStyle(fontFeatures: tabularFigures),
+                ),
                 selected: activeChannels.contains(r.channelId),
                 onSelected: (checked) {
                   final updated = {...ref.read(sensorActiveChannelsProvider(key))};
@@ -217,7 +246,18 @@ class _StationChart extends ConsumerWidget {
         }
         final firstError = allHistories.indexWhere((h) => h.hasError);
         if (firstError != -1) {
-          return Text('No se pudo cargar el histórico.\n${allHistories[firstError].error}');
+          return _InlineError(
+            message: 'No se ha podido cargar la gráfica.',
+            technicalDetail: '${allHistories[firstError].error}',
+            onRetry: () {
+              for (final channelId in lineChannelIds) {
+                ref.invalidate(stationChannelHistoryProvider((organizationId, channelId, range)));
+              }
+              for (final channelId in sumChannelIds) {
+                ref.invalidate(stationAccumulatedHistoryProvider((organizationId, channelId, range)));
+              }
+            },
+          );
         }
 
         final lineSeries = [
@@ -251,8 +291,40 @@ class _StationChart extends ConsumerWidget {
           ],
         );
       },
-      error: (error, _) => Text('No se pudo cargar el histórico.\n$error'),
+      error: (error, _) => _InlineError(
+        message: 'No se ha podido cargar la gráfica.',
+        technicalDetail: '$error',
+        onRetry: () => ref.invalidate(gatewayLatestReadingsProvider(gatewayId)),
+      ),
       loading: () => const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+/// Error dentro de la tarjeta: qué ha fallado, un botón para reintentar y el
+/// detalle técnico en pequeño para poder diagnosticarlo.
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.message, required this.technicalDetail, required this.onRetry});
+
+  final String message;
+  final String technicalDetail;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 8),
+          AppButton(label: 'Reintentar', icon: Icons.refresh, variant: AppButtonVariant.secondary, onPressed: onRetry),
+          const SizedBox(height: 8),
+          Text(technicalDetail, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 }

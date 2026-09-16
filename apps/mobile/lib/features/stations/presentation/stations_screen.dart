@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_button.dart';
 import '../../directory/data/directory_models.dart';
 import '../application/stations_controller.dart';
 import 'station_card.dart';
@@ -19,7 +20,8 @@ class StationsScreen extends ConsumerWidget {
     final gateways = ref.watch(allGatewaysProvider);
     // Sin nombres (aún cargando, o si fallan) el listado sigue funcionando:
     // los grupos salen como "Sin finca asignada".
-    final installationNames = ref.watch(stationGroupNamesProvider).valueOrNull ?? const <String, String>{};
+    final installationNames =
+        ref.watch(stationGroupNamesProvider).valueOrNull ?? const <String, StationGroupName>{};
     final selected = ref.watch(selectedGatewayIdsProvider);
     final isWide = MediaQuery.sizeOf(context).width >= 840;
 
@@ -42,8 +44,9 @@ class StationsScreen extends ConsumerWidget {
         child: gateways.when(
           data: (items) {
             if (items.isEmpty) {
-              return const Center(
-                child: Text('Todavía no hay estaciones dadas de alta.', textAlign: TextAlign.center),
+              return const _Message(
+                title: 'Aún no hay estaciones',
+                detail: 'Cuando se dé de alta una en Infraestructura, aparecerá aquí.',
               );
             }
             final sidebar = _StationSelectionList(gateways: items, installationNames: installationNames);
@@ -67,7 +70,15 @@ class StationsScreen extends ConsumerWidget {
               ],
             );
           },
-          error: (error, _) => Center(child: Text('No se pudieron cargar las estaciones.\n$error')),
+          error: (error, _) => _Message(
+            title: 'No se han podido cargar las estaciones',
+            detail: 'Comprueba la conexión y vuelve a intentarlo.',
+            technicalDetail: '$error',
+            onRetry: () {
+              ref.invalidate(allGatewaysProvider);
+              ref.invalidate(stationGroupNamesProvider);
+            },
+          ),
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
       ),
@@ -83,7 +94,7 @@ class _StationSelectionList extends ConsumerWidget {
   const _StationSelectionList({required this.gateways, required this.installationNames});
 
   final List<Gateway> gateways;
-  final Map<String, String> installationNames;
+  final Map<String, StationGroupName> installationNames;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -99,7 +110,7 @@ class _StationSelectionList extends ConsumerWidget {
       (byInstallation[g.installationId] ??= []).add(g);
     }
     final installationIds = byInstallation.keys.toList()
-      ..sort((a, b) => (installationNames[a] ?? a).compareTo(installationNames[b] ?? b));
+      ..sort((a, b) => _sortKey(installationNames[a], a).compareTo(_sortKey(installationNames[b], b)));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,16 +135,7 @@ class _StationSelectionList extends ConsumerWidget {
               : ListView(
                   children: [
                     for (final installationId in installationIds) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                        child: Text(
-                          installationNames[installationId] ?? 'Sin finca asignada',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(color: Theme.of(context).colorScheme.primary),
-                        ),
-                      ),
+                      _GroupHeader(name: installationNames[installationId]),
                       for (final gateway in byInstallation[installationId]!)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -173,6 +175,8 @@ class _StationSelectorBox extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
+        // Al menos 48 px de alto: se toca con el pulgar.
+        constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
@@ -214,7 +218,7 @@ class _SelectedStationsPanel extends StatelessWidget {
         if (selected.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text('No hay estaciones seleccionadas.', textAlign: TextAlign.center),
+            child: Text('Marca una estación en la lista para ver sus datos.', textAlign: TextAlign.center),
           )
         else
           for (final gateway in gateways.where((g) => selected.contains(g.id)))
@@ -222,6 +226,75 @@ class _SelectedStationsPanel extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: StationCard(gateway: gateway),
             ),
+      ],
+    );
+  }
+}
+
+/// Orden de los grupos: por organización (vista de plataforma) y luego finca.
+String _sortKey(StationGroupName? name, String fallback) =>
+    name == null ? '~$fallback' : '${name.organization ?? ''}\u0000${name.farm}';
+
+/// Cabecera de un grupo: la finca y, debajo, la organización cuando la vista
+/// mezcla varias.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.name});
+
+  final StationGroupName? name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name?.farm ?? 'Sin finca asignada',
+            style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
+          ),
+          if (name?.organization != null)
+            Text(name!.organization!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Estado vacío o de error de la pantalla: qué pasa, qué hacer y, si hay
+/// error, el detalle técnico en pequeño para poder diagnosticarlo.
+class _Message extends StatelessWidget {
+  const _Message({required this.title, required this.detail, this.technicalDetail, this.onRetry});
+
+  final String title;
+  final String detail;
+  final String? technicalDetail;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Dentro de un ListView para que "tirar para actualizar" funcione también aquí.
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const SizedBox(height: 48),
+        Text(title, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text(detail, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
+        if (onRetry != null) ...[
+          const SizedBox(height: 16),
+          Center(child: AppButton(label: 'Reintentar', icon: Icons.refresh, variant: AppButtonVariant.secondary, onPressed: onRetry)),
+        ],
+        if (technicalDetail != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            technicalDetail!,
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ],
     );
   }

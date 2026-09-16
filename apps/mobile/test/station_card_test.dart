@@ -57,8 +57,13 @@ void main() {
   testWidgets('abre con los sensores y sus píldoras, sin gráficas ni selector de rango', (tester) async {
     await pumpCard(tester);
 
-    expect(find.text('Sonda de suelo redonda · A2'), findsOneWidget);
-    expect(find.text('Ambiente · A4'), findsOneWidget);
+    // Nombre del sensor y su identificador, por separado (sin punto medio).
+    expect(find.text('Sonda de suelo redonda'), findsOneWidget);
+    expect(find.text('A2'), findsOneWidget);
+    expect(find.text('Ambiente'), findsOneWidget);
+    expect(find.text('A4'), findsOneWidget);
+    // Coma decimal en las cifras.
+    expect(find.textContaining('25,0'), findsNWidgets(3));
     expect(find.byType(FilterChip), findsNWidgets(3));
     expect(find.byType(SegmentedButton<HistoryRange>), findsNothing);
   });
@@ -72,7 +77,7 @@ void main() {
 
     // Selector encima de la gráfica del sensor Ambiente, debajo de sus píldoras.
     final selectorTop = tester.getTopLeft(find.byType(SegmentedButton<HistoryRange>)).dy;
-    final ambientTitle = tester.getTopLeft(find.text('Ambiente · A4')).dy;
+    final ambientTitle = tester.getTopLeft(find.text('Ambiente')).dy;
     final ambientPill = tester.getTopLeft(find.textContaining('Temperatura ambiente:')).dy;
     expect(selectorTop, greaterThan(ambientTitle));
     expect(selectorTop, greaterThan(ambientPill));

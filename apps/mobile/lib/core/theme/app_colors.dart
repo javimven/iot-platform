@@ -35,6 +35,19 @@ abstract final class AppColors {
   static const critical = Color(0xFFC13A2E);
   static const criticalDark = Color(0xFFE2726A);
 
+  // Texto dentro de un chip de estado (2026-09-16). Con el propio tono sobre su
+  // fondo tintado no se llegaba a 4,5:1 (azul 3,4, ámbar 2,9 en claro; azul
+  // 4,1 y rojo 3,9 en oscuro): el punto y el fondo siguen con el tono de
+  // estado, y el texto usa una variante más oscura (claro) o más clara
+  // (oscuro). Medido sobre `paperRaised`/`paper` y sus equivalentes oscuros:
+  // todos por encima de 5:1.
+  static const okInk = Color(0xFF1E63A6);
+  static const okInkDark = Color(0xFF7FB4E8);
+  static const warnInk = Color(0xFF8A5410);
+  static const warnInkDark = Color(0xFFE0AC6C);
+  static const criticalInk = Color(0xFFA4302A);
+  static const criticalInkDark = Color(0xFFEC9791);
+
   // Menú lateral (Etapa 14 V2, BACKLOG.md #29) — cromo siempre oscuro,
   // independiente del tema claro/oscuro del resto de la app (como
   // Aigro/IKOS). Mismos valores de partida que paperDark/paperRaisedDark/

@@ -33,7 +33,7 @@ class AuditLogView extends StatelessWidget {
                 title: Text(entry.action),
                 subtitle: Text(
                   [
-                    if (entry.targetType != null) '${entry.targetType}${entry.targetId != null ? ' · ${entry.targetId}' : ''}',
+                    if (entry.targetType != null) '${entry.targetType}${entry.targetId != null ? ' ${entry.targetId}' : ''}',
                     _formatDate(entry.createdAt),
                   ].join('\n'),
                 ),

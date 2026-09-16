@@ -120,7 +120,7 @@ class PlatformInstallationDetailScreen extends ConsumerWidget {
                       children: items
                           .map((g) => ListTile(
                                 title: Text(g.name),
-                                subtitle: Text('${g.connectivityType} · ${g.status}'),
+                                subtitle: Text('Conexión ${g.connectivityType}, estado ${g.status}'),
                                 trailing: const Icon(Icons.chevron_right),
                                 onTap: () => context.push(
                                   '/platform/organizations/$organizationId/gateways/${g.id}',

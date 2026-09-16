@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/format/reading_format.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../../readings/data/reading_history_models.dart';
@@ -147,7 +148,8 @@ class CombinedStationChart extends StatelessWidget {
                             showTitles: showAxisValues,
                             reservedSize: 40,
                             interval: niceY.step,
-                            getTitlesWidget: (value, meta) => Text(niceY.format(value)),
+                            getTitlesWidget: (value, meta) =>
+                                Text(niceY.format(value), style: const TextStyle(fontFeatures: tabularFigures)),
                           ),
                         ),
                         bottomTitles: AxisTitles(
@@ -196,8 +198,8 @@ class CombinedStationChart extends StatelessWidget {
                               final spot = entry.value;
                               final s = series[spot.barIndex];
                               final real = rawByChannelMillis[s.channelId]?[spot.x.round()];
-                              final reading = real == null ? s.label : '${s.label}: ${real.toStringAsFixed(1)} ${s.unit}';
-                              final readingStyle = TextStyle(color: s.color, fontWeight: FontWeight.w600);
+                              final reading = real == null ? s.label : '${s.label}: ${formatReading(real)} ${s.unit}';
+                              final readingStyle = TextStyle(color: s.color, fontWeight: FontWeight.w600, fontFeatures: tabularFigures);
                               if (entry.key != 0) return LineTooltipItem(reading, readingStyle);
                               return LineTooltipItem(
                                 '$header\n',

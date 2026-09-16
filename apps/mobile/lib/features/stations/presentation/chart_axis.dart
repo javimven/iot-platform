@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../../core/format/reading_format.dart';
+
 /// Lógica de ejes compartida por todas las gráficas de Estaciones
 /// (`CombinedStationChart`, `AccumulatedChart`) — pensada para no
 /// duplicarse por gráfica: cálculo de intervalos "bonitos" del eje Y
@@ -24,7 +26,7 @@ class NiceYAxis {
   final double step;
   final int decimals;
 
-  String format(double value) => value.toStringAsFixed(decimals);
+  String format(double value) => formatReading(value, decimals: decimals);
 }
 
 double _niceNum(double range, {required bool round}) {

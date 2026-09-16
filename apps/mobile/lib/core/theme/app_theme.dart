@@ -72,6 +72,32 @@ abstract final class AppTheme {
         color: isDark ? AppColors.lineDark : AppColors.line,
         space: 1,
       ),
+      // Barra inferior del móvil (BACKLOG.md #49): la sección activa, en color
+      // de marca y en negrita, además del indicador (nunca solo color).
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: isDark ? AppColors.paperRaisedDark : AppColors.paperRaised,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: (isDark ? AppColors.brandDark : AppColors.brand).withValues(alpha: isDark ? 0.24 : 0.14),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? (isDark ? AppColors.brandDark : AppColors.brand)
+                : (isDark ? AppColors.inkSoftDark : AppColors.inkSoft),
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => bodyTextTheme.labelMedium?.copyWith(
+            color: states.contains(WidgetState.selected)
+                ? (isDark ? AppColors.brandDark : AppColors.brand)
+                : (isDark ? AppColors.inkSoftDark : AppColors.inkSoft),
+            fontWeight: states.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: isDark ? AppColors.paperRaisedDark : AppColors.paperRaised,
+        surfaceTintColor: Colors.transparent,
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../application/accumulated_slots.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../../readings/data/reading_history_models.dart';
 import 'chart_axis.dart';
+import '../../../core/format/reading_format.dart';
 import 'chart_axis_format.dart';
 
 /// Gráfica "de acumulados" (lluvia, `channel_types.default_aggregation =
@@ -180,7 +181,7 @@ class _SlotBox extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: Tooltip(
             message: '${slot.start.hour}h-${slot.start.add(const Duration(hours: 6)).hour}h: '
-                '${slot.value.toStringAsFixed(1)} $unit acumulados',
+                '${formatReading(slot.value)} $unit acumulados',
             child: Align(
               alignment: Alignment.bottomCenter,
               child: SizedBox(
@@ -240,7 +241,7 @@ class _LongRangeBarChart extends StatelessWidget {
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       final s = slots[group.x];
                       return BarTooltipItem(
-                        '${DateFormat('dd/MM/yyyy').format(s.start)}\n${s.value.toStringAsFixed(1)} $unit',
+                        '${DateFormat('dd/MM/yyyy').format(s.start)}\n${formatReading(s.value)} $unit',
                         TextStyle(color: color, fontWeight: FontWeight.w600),
                       );
                     },
@@ -254,7 +255,8 @@ class _LongRangeBarChart extends StatelessWidget {
                       showTitles: true,
                       reservedSize: 40,
                       interval: niceY.step,
-                      getTitlesWidget: (value, meta) => Text(niceY.format(value)),
+                      getTitlesWidget: (value, meta) =>
+                          Text(niceY.format(value), style: const TextStyle(fontFeatures: tabularFigures)),
                     ),
                   ),
                   bottomTitles: AxisTitles(

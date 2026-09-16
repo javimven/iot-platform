@@ -21,6 +21,15 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Punto y fondo con el tono de estado; el texto, con su variante de
+    // contraste (AppColors.*Ink), para llegar a 4,5:1 en los dos temas.
+    final textColor = switch (tone) {
+      AppStatusTone.ok => isDark ? AppColors.okInkDark : AppColors.okInk,
+      AppStatusTone.warn => isDark ? AppColors.warnInkDark : AppColors.warnInk,
+      AppStatusTone.critical => isDark ? AppColors.criticalInkDark : AppColors.criticalInk,
+      AppStatusTone.neutral => isDark ? AppColors.inkSoftDark : AppColors.inkSoft,
+    };
+
     final color = switch (tone) {
       AppStatusTone.ok => isDark ? AppColors.okDark : AppColors.ok,
       AppStatusTone.warn => isDark ? AppColors.warnDark : AppColors.warn,
@@ -46,7 +55,7 @@ class StatusChip extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
+                  color: textColor,
                   fontWeight: FontWeight.w600,
                 ),
           ),
