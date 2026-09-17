@@ -118,6 +118,25 @@
         if (sucesos.length > 8) sucesos.shift();
       }
 
+      // Chrome para iOS (BACKLOG.md #52): si con la página ya abierta se vuelve a
+      // pulsar «Ir» en la barra de direcciones, la página nueva queda dibujada
+      // debajo de las barras de Chrome y eso no se puede deshacer desde ella;
+      // la primera entrada, en cambio, carga bien. Así que, si en esta pestaña ya
+      // se había cargado la plataforma, se vuelve a entrar una vez más, sola,
+      // antes de arrancar la app y cuando Chrome ya ha cerrado su barra. La marca
+      // con la hora evita repetirlo en la carga que sale de aquí.
+      var recargaLimpia = false;
+      var trasRecargaLimpia = false;
+      try {
+        var yaVista = sessionStorage.getItem('vista') === '1';
+        var propia = Number(sessionStorage.getItem('recargaLimpia') || 0);
+        sessionStorage.setItem('vista', '1');
+        sessionStorage.removeItem('recargaLimpia');
+        trasRecargaLimpia = Date.now() - propia < 30000;
+        recargaLimpia = navigator.userAgent.indexOf('CriOS/') !== -1 && yaVista && !trasRecargaLimpia;
+      } catch (e) {}
+      if (trasRecargaLimpia) anotar('tras recarga limpia');
+
       function texto(t) {
         var el = document.getElementById('carga-texto');
         if (el) el.textContent = t;
@@ -139,6 +158,15 @@
           }
         },
       };
+      if (recargaLimpia) {
+        window.__carga.enEspera = true;
+        setTimeout(function () {
+          try { sessionStorage.setItem('recargaLimpia', String(Date.now())); } catch (e) {}
+          // reload y no replace con la misma dirección: con las rutas tras «#»
+          // eso es un salto dentro de la página y no vuelve a cargar nada.
+          location.reload();
+        }, 700);
+      }
       window.addEventListener('error', function (e) {
         window.__carga.fallo('error de JavaScript', e.error || (e.message + ' ' + (e.filename || '') + ':' + (e.lineno || '')));
       });

@@ -6,6 +6,9 @@
 // el error, en vez de una página en blanco.
 (function () {
   var carga = window.__carga || { fase: function () {}, fallo: function () {} };
+  // index.html va a volver a cargar la página (Chrome para iOS, BACKLOG.md
+  // #52): no merece la pena arrancar la app para tirarla medio segundo después.
+  if (carga.enEspera) return;
   // La app va incrustada en #app (ver index.html, BACKLOG.md #52) en vez de a
   // página completa. Hay que pasarlo también a initializeEngine: con un
   // onEntrypointLoaded propio, el cargador no se lo pasa solo.
