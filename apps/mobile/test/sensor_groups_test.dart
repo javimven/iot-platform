@@ -37,6 +37,16 @@ void main() {
       expect(groups.map((g) => g.label), ['Tensiómetro', 'Sonda de suelo redonda', 'Ambiente']);
     });
 
+    test('los datos del propio equipo (ADR-0008) van al final y se llaman «Estación»', () {
+      final groups = groupReadingsBySensor([
+        _reading('ch-bat', 'battery_voltage', sensorId: 'st', externalId: '_device'),
+        _reading('ch-hum', 'humidity_soil', sensorId: 's1', externalId: 's1', label: 'Sonda'),
+      ]);
+      // '_' va antes que 's' al ordenar texto: el orden no puede depender de eso.
+      expect(groups.map((g) => g.externalIdentifier), ['s1', '_device']);
+      expect(groups.last.label, 'Estación');
+    });
+
     test('dentro de cada sensor, sus magnitudes ordenadas por nombre (orden y color estables)', () {
       final soil = groupReadingsBySensor(_stationReadings)[1];
       // Conductividad, Humedad de suelo, Temperatura de suelo.

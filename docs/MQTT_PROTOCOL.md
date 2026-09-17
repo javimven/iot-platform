@@ -20,6 +20,7 @@ Fijar, sin ambigüedad, qué publica un gateway (concentrador LoRa o estación N
 | Detección de offline | Doble mecanismo: LWT (inmediato, a nivel de conexión) + umbral por timeout (a nivel de dato) | Solo timeout (más lento); solo LWT (no cubre dispositivos LoRa detrás de un concentrador) |
 | Creación de canales | Automática en el primer mensaje válido que referencie un `channel_type` conocido para un sensor ya pre-registrado | Exigir pre-registro explícito de cada canal antes de aceptar datos |
 | Credencial de `ingestion` | Credencial MQTT propia, de solo-suscripción, distinta de las de cada gateway | Que `ingestion` reutilice alguna credencial de gateway |
+| Datos del propio equipo (batería, cobertura) | `sensor_id` reservado `_device`, creado solo en el primer mensaje y fuera del máximo de 4 sensores ([ADR-0008](ADR/0008-datos-del-propio-equipo-sensor-reservado.md)) | Darlo de alta como un sensor más; canales colgando del dispositivo |
 
 ## 3. Identificadores: por qué van dos IDs externos en el payload
 El payload identifica el dispositivo y el sensor por su `external_identifier` (el mismo que se registró en `devices`/`sensors`, Etapa 5), nunca por UUID interno — el hardware de campo no conoce ni debe conocer nuestros UUIDs.
@@ -62,7 +63,7 @@ Un mensaje = un sensor, en un instante, con las lecturas de todos sus canales en
 |---|---|---|
 | `schema_version` | Sí | Entero. `1` en el MVP (sección 12) |
 | `device_id` | Sí | `external_identifier` del dispositivo, único dentro del gateway |
-| `sensor_id` | Sí | `external_identifier` del sensor, único dentro del dispositivo |
+| `sensor_id` | Sí | `external_identifier` del sensor, único dentro del dispositivo. **`_device` está reservado** para los datos del propio equipo (batería, cobertura), sin sonda detrás: no hay que pre-registrarlo (sección 6, punto 4; ADR-0008) |
 | `ts` | Sí | ISO-8601 UTC, asignado por el dispositivo/estación (Etapa 1) |
 | `message_id` | No | Señal auxiliar de deduplicación, mejor esfuerzo (Etapa 5, sección 5) |
 | `readings[].channel` | Sí | Código de `channel_types` (Etapa 5) — no un UUID |
@@ -72,7 +73,7 @@ Un mensaje = un sensor, en un instante, con las lecturas de todos sus canales en
 1. Tamaño del mensaje ≤ **8 KB** — se rechaza sin parsear si lo excede (protección barata contra abuso, Etapa 1 "picos"/"valores inválidos").
 2. `schema_version` soportado (sección 12).
 3. `device_id` resuelve a un dispositivo pre-registrado **de ese gateway concreto** (Etapa 1, sección 7) — si no, se rechaza el mensaje completo y se registra como intento de dato no autorizado (Etapa 10).
-4. `sensor_id` resuelve a un sensor pre-registrado de ese `device_id` — si no, se rechaza el mensaje completo.
+4. `sensor_id` resuelve a un sensor pre-registrado de ese `device_id` — si no, se rechaza el mensaje completo. **Excepción**: el `sensor_id` reservado `_device` (datos del propio equipo) se crea en ese momento si no existe, como los canales en la sección 9; basta con que el dispositivo esté pre-registrado (punto 3). Si ese sensor estuviera borrado, se rechaza igual ([ADR-0008](ADR/0008-datos-del-propio-equipo-sensor-reservado.md)).
 5. `ts` dentro de un rango razonable: no más de 5 minutos en el futuro respecto a la recepción, ni más de 30 días en el pasado — fuera de rango, se rechaza el mensaje completo (reloj de dispositivo probablemente desincronizado; se registra como métrica de observabilidad, Etapa 10).
 6. `readings`: máximo **8 elementos** por mensaje (margen sobre la media de 2 canales/sensor asumida en Etapa 2; más que eso es probablemente un mensaje malformado). Cada lectura se valida **de forma independiente**: si `channel` no es un tipo conocido o `value` está fuera del rango físico válido de ese tipo, **esa lectura concreta** se descarta (Etapa 1, sección 9) sin invalidar las demás lecturas válidas del mismo mensaje.
 7. Lecturas que pasan validación → se resuelve/crea el `channel` (sección 9) y se encola el job idempotente (Arquitectura, sección 8).
@@ -152,3 +153,4 @@ Topic `.../cmd` reservado en el namespace (sección 4) y en la ACL, sin lógica 
 | 2026-07-27 | Detección de offline: LWT (conexión) + timeout 2,5× (dato) | Solo timeout; solo LWT |
 | 2026-07-27 | Creación automática de canales en el primer mensaje válido | Pre-registro explícito de cada canal |
 | 2026-07-27 | Credencial MQTT propia y de solo-suscripción para `ingestion` | Reutilizar una credencial de gateway para el proceso de ingesta |
+| 2026-09-17 | `sensor_id` reservado `_device` para los datos del propio equipo, creado en el primer mensaje (ADR-0008) | Alta manual como un sensor más (chocaba con el máximo de 4); canales colgando del dispositivo (migración) |

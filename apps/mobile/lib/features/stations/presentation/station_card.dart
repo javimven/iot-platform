@@ -117,7 +117,7 @@ class _SensorSection extends ConsumerWidget {
     final activeChannels = ref.watch(sensorActiveChannelsProvider(key));
     final range = ref.watch(sensorChartRangeProvider(key));
     final identifier = group.externalIdentifier;
-    final showIdentifier = identifier != null && identifier != group.label;
+    final showIdentifier = identifier != null && identifier != group.label && identifier != deviceStatusSensorId;
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),

@@ -83,7 +83,7 @@ void main() {
           tsOrigin: now.subtract(ago),
           tsReceived: now.subtract(ago),
           sensorId: sensor,
-          sensorExternalIdentifier: sensor == 'est' ? 'estacion' : 'A1',
+          sensorExternalIdentifier: sensor == 'est' ? '_device' : 'A1',
           sensorLabel: null,
         );
 
@@ -117,7 +117,7 @@ void main() {
       ];
       final groups = groupReadingsBySensor(readings);
       expect(groups.map(isStationHealthGroup), [false, true]);
-      expect(groups.map(sensorDisplayLabel), ['A1', 'Estación']);
+      expect(groups.map((g) => g.label), ['A1', 'Estación']);
       expect(primaryReadingsPerSensor(readings).map((p) => p.reading.channelId), ['t']);
     });
   });

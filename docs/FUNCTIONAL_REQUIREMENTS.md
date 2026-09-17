@@ -66,7 +66,7 @@ Este documento define **comportamiento**, no estructura de tablas ni de API — 
 ## 7. Dispositivos
 - Pre-registro obligatorio. Un dispositivo detrás de un **concentrador LoRa** no tiene credencial de red propia (llega por LoRa al gateway); su "pre-registro" significa que el sistema rechaza a nivel de aplicación cualquier dato que referencie un `device_id` no registrado para ese gateway (ver `ARCHITECTURE.md`, sección 6). Una **estación de conexión directa** es, a la vez, su propio gateway y su único dispositivo (ADR-0004) — el pre-registro es, de facto, un único paso desde la perspectiva del usuario, aunque cree dos registros internamente.
 - Un dispositivo (también llamado **estación** en el dominio agro/ambiental) se asocia a un gateway (canal de transmisión, que en el caso directo es la propia estación) y a una zona (ubicación lógica). **Regla de integridad**: la zona de un dispositivo debe pertenecer a la misma instalación que su gateway (detalle de constraint en Etapa 5).
-- Un dispositivo tiene **hasta 4 sensores** conectados (confirmado).
+- Un dispositivo tiene **hasta 4 sensores** conectados (confirmado). Los datos del propio equipo (su batería, su cobertura) no son un sensor y no cuentan: llegan con un identificador reservado y la plataforma los registra sola ([ADR-0008](ADR/0008-datos-del-propio-equipo-sensor-reservado.md), 2026-09-17).
 - Su estado online/offline se calcula de forma independiente al del gateway: un gateway puede estar online mientras un dispositivo concreto conectado a él ha dejado de reportar (p. ej. batería agotada). En una estación de conexión directa, ambos estados coincidirán casi siempre (es el mismo equipo físico) — redundancia menor aceptada, no se modela de forma especial.
 
 ## 8. Sensores y canales de medición

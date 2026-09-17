@@ -10,10 +10,17 @@ import { AuditLogService } from '../../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../../common/guards/jwt-auth.guard';
 import { resolveInstallationScope } from '../../../common/permissions/installation-scope';
 import { resolveOrgContext } from '../../../common/permissions/org-context';
+import { DEVICE_STATUS_SENSOR_ID } from '../../../common/directory/device-status-sensor';
 import { SensorCreateDto } from './dto/sensor.dto';
 
 /** FUNCTIONAL_REQUIREMENTS.md §7: un dispositivo tiene hasta 4 sensores (límite de negocio, no de BD). */
 const MAX_SENSORS_PER_DEVICE = 4;
+
+/**
+ * Solo las sondas conectadas: el "sensor" con los datos del propio equipo no
+ * cuenta para el límite, no se lista y no se puede borrar (ADR-0008).
+ */
+const CONNECTED_SENSORS = { externalIdentifier: { not: DEVICE_STATUS_SENSOR_ID } };
 
 /** `explicitOrganizationId` (ADR-0005, `BACKLOG.md` #18) — ver `InstallationsService`. */
 @Injectable()
@@ -29,11 +36,19 @@ export class SensorsService {
     dto: SensorCreateDto,
     explicitOrganizationId?: string,
   ): Promise<Sensor> {
+    if (dto.externalIdentifier === DEVICE_STATUS_SENSOR_ID) {
+      throw new BadRequestException(
+        `"${DEVICE_STATUS_SENSOR_ID}" is reserved for the device's own data and is created automatically (ADR-0008)`,
+      );
+    }
     const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const device = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.device.findFirst({
         where: { id: deviceId, deletedAt: null },
-        include: { zone: true, _count: { select: { sensors: { where: { deletedAt: null } } } } },
+        include: {
+          zone: true,
+          _count: { select: { sensors: { where: { deletedAt: null, ...CONNECTED_SENSORS } } } },
+        },
       }),
     );
     if (!device) {
@@ -82,7 +97,7 @@ export class SensorsService {
     }
     await this.assertInScope(user, device.zone.installationId);
     return this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.sensor.findMany({ where: { deviceId, deletedAt: null } }),
+      tx.sensor.findMany({ where: { deviceId, deletedAt: null, ...CONNECTED_SENSORS } }),
     );
   }
 
@@ -94,7 +109,7 @@ export class SensorsService {
     const { organizationId, tenantContext } = resolveOrgContext(user, explicitOrganizationId);
     const sensor = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.sensor.findFirst({
-        where: { id, organizationId, deletedAt: null },
+        where: { id, organizationId, deletedAt: null, ...CONNECTED_SENSORS },
         include: { device: { include: { zone: true } } },
       }),
     );

@@ -242,6 +242,8 @@ Restricción: `UNIQUE (gateway_id, external_identifier)` — no globalmente úni
 
 Restricción: `UNIQUE (device_id, external_identifier)`. Un dispositivo tiene como mucho 4 sensores (Etapa 2) — la restricción no fuerza ese límite numérico (se valida en la aplicación al pre-registrar, no vale la pena un trigger de conteo para un límite de negocio, no de integridad).
 
+La fila con `external_identifier = '_device'` no es una sonda: guarda los datos del propio equipo (batería, cobertura), la crea `ingestion` en el primer mensaje, no cuenta para ese límite y la API de sensores no la expone ([ADR-0008](ADR/0008-datos-del-propio-equipo-sensor-reservado.md)).
+
 Índices: el índice de la restricción única cubre el camino caliente de ingesta.
 
 ### `channel_types` (catálogo de plataforma)

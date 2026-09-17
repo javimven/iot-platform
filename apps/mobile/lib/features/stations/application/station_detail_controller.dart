@@ -27,17 +27,10 @@ const primaryChannelOrder = [
   'signal_strength',
 ];
 
-/// Canales que describen a la propia estación, no al campo.
-const stationHealthChannelTypes = {'battery', 'battery_voltage', 'signal_strength'};
-
-/// Un "sensor" formado solo por canales de estado de la estación (el que manda
-/// el puente con batería y cobertura): no sale en el resumen, no cuenta para
-/// saber si llegan datos de sensores y en la estación va en su pestaña, al final.
-bool isStationHealthGroup(SensorReadings group) =>
-    group.readings.isNotEmpty && group.readings.every((r) => stationHealthChannelTypes.contains(r.channelTypeCode));
-
-/// Nombre visible de un grupo: "Estación" para el de estado.
-String sensorDisplayLabel(SensorReadings group) => isStationHealthGroup(group) ? 'Estación' : group.label;
+/// Los datos del propio equipo (batería y cobertura, ADR-0008), no de una sonda:
+/// no salen en el resumen, no cuentan para saber si llegan datos de sensores y
+/// en la estación van en su pestaña, «Estación», al final.
+bool isStationHealthGroup(SensorReadings group) => group.externalIdentifier == deviceStatusSensorId;
 
 /// A partir de cuánto se da por atrasado un dato respecto a lo último que se
 /// sabe de la estación: la WSC2-N envía cada 5 minutos, así que 20 son cuatro

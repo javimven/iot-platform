@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma, Sensor } from '@prisma/client';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import mqtt, { MqttClient } from 'mqtt';
+import { DEVICE_STATUS_SENSOR_ID } from '../../common/directory/device-status-sensor';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   TELEMETRY_JOB_OPTIONS,
@@ -191,9 +193,13 @@ export class MqttIngestionService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`[${correlationId}] unregistered device ${message.device_id}, rejected`);
         return;
       }
-      const sensor = await tx.sensor.findFirst({
-        where: { deviceId: device.id, externalIdentifier: message.sensor_id, deletedAt: null },
-      });
+      const sensor =
+        (await tx.sensor.findFirst({
+          where: { deviceId: device.id, externalIdentifier: message.sensor_id, deletedAt: null },
+        })) ??
+        (message.sensor_id === DEVICE_STATUS_SENSOR_ID
+          ? await this.deviceStatusSensor(tx, organizationId, device.id)
+          : null);
       if (!sensor) {
         this.logger.warn(`[${correlationId}] unregistered sensor ${message.sensor_id}, rejected`);
         return;
@@ -245,5 +251,26 @@ export class MqttIngestionService implements OnModuleInit, OnModuleDestroy {
       };
       await this.queue?.add('telemetry-message', jobPayload, TELEMETRY_JOB_OPTIONS);
     });
+  }
+
+  /**
+   * Los datos del propio equipo no necesitan alta: basta con que el dispositivo
+   * esté pre-registrado, y su "sensor" se crea como los canales, en el primer
+   * mensaje (ADR-0008, MQTT_PROTOCOL.md §6 punto 4). Si estuviera borrado, se
+   * sigue rechazando.
+   */
+  private async deviceStatusSensor(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    deviceId: string,
+  ): Promise<Sensor | null> {
+    const sensor = await tx.sensor.upsert({
+      where: {
+        deviceId_externalIdentifier: { deviceId, externalIdentifier: DEVICE_STATUS_SENSOR_ID },
+      },
+      create: { organizationId, deviceId, externalIdentifier: DEVICE_STATUS_SENSOR_ID },
+      update: {},
+    });
+    return sensor.deletedAt ? null : sensor;
   }
 }

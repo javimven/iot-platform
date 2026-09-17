@@ -731,6 +731,10 @@ paths:
     post:
       tags: [sensors]
       summary: Registrar un sensor (máximo 4 por dispositivo, FUNCTIONAL_REQUIREMENTS.md sección 7)
+      description: >
+        `_device` está reservado para los datos del propio equipo (ADR-0008): la plataforma
+        lo crea sola, no cuenta para el máximo y no se puede registrar (400). Los listados
+        y las rutas de un sensor tampoco lo devuelven.
       parameters:
         - $ref: "#/components/parameters/PathId"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -1738,7 +1742,7 @@ components:
       type: object
       required: [externalIdentifier]
       properties:
-        externalIdentifier: { type: string }
+        externalIdentifier: { type: string, description: "Cualquiera salvo `_device`, reservado (ADR-0008)" }
         label: { type: string, nullable: true }
 
     Channel:

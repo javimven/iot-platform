@@ -125,7 +125,7 @@ class _StationDetail extends ConsumerWidget {
                       isScrollable: true,
                       tabAlignment: TabAlignment.start,
                       onTap: (index) => ref.read(detailSelectedSensorProvider(gateway.id).notifier).state = index,
-                      tabs: [for (final g in groups) Tab(text: sensorDisplayLabel(g))],
+                      tabs: [for (final g in groups) Tab(text: g.label)],
                     ),
             ),
             // Sin deslizar entre sensores: el arrastre horizontal es para leer
@@ -323,7 +323,7 @@ class _FullScreenChart extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${gateway.name}, ${sensorDisplayLabel(group)}', style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text('${gateway.name}, ${group.label}', style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                         Text(
                           magnitudes,
                           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
