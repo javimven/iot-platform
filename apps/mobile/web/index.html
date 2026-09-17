@@ -44,12 +44,15 @@
   -->
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #F7F8F5; }
-    /* Contenedor de la app (BACKLOG.md #52): fijo a los bordes de la zona visible.
-       Flutter lo mide con un ResizeObserver y se redimensiona cuando el navegador
-       del móvil muestra u oculta sus barras. */
-    #app { position: fixed; inset: 0; }
+    body { position: relative; }
+    /* Contenedor de la app (BACKLOG.md #52), del tamaño de la página; Flutter lo
+       mide con un ResizeObserver. Absoluto y no fijo: en Chrome de iOS, tras
+       recargar, el navegador dibujaba lo fijo unos 113 px más arriba de donde lo
+       medía la propia página (que daba todo en 0 y a su alto), con un hueco
+       debajo y los toques cayendo 113 px más abajo de lo que se veía. */
+    #app { position: absolute; inset: 0; }
     #carga {
-      position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column;
+      position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 18px;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       color: #4A5650; font-size: 15px; transition: opacity 0.2s ease;
@@ -89,11 +92,32 @@
     (function () {
       var arrancada = false;
       var fallida = false;
-      // Al recargar, el navegador devuelve la página a la posición de scroll que
-      // tenía (BACKLOG.md #52): el iPhone la dejaba desplazada hacia arriba al
-      // recargar, y no al volver a entrar por el enlace, que no restaura nada.
-      // La app no usa el scroll de la página, así que no hay nada que recordar.
+      // La app no usa el scroll de la página, así que al recargar no hay
+      // posición que restaurar (BACKLOG.md #52).
       try { history.scrollRestoration = 'manual'; } catch (e) {}
+
+      // Diagnóstico de posición en el móvil, con ?diag=1 en el enlace (y ?diag=0
+      // lo quita) (BACKLOG.md #52). Sigue activo en la pestaña al navegar por la
+      // app y al recargar, que cambian la URL. Ver más abajo el recuadro.
+      var conDiag = /[?&]diag=1/.test(window.location.search);
+      try {
+        if (conDiag) sessionStorage.setItem('diag', '1');
+        else if (/[?&]diag=0/.test(window.location.search)) sessionStorage.removeItem('diag');
+        else conDiag = sessionStorage.getItem('diag') === '1';
+      } catch (e) {}
+      // Últimos sucesos que mueven o miden la página, con segundos desde la carga.
+      var inicio = Date.now();
+      var sucesos = [];
+      function anotar(que) {
+        if (!conDiag) return;
+        var vv = window.visualViewport;
+        sucesos.push(((Date.now() - inicio) / 1000).toFixed(1) + ' ' + que +
+          ' y' + Math.round(window.scrollY) +
+          (vv ? ' off' + Math.round(vv.offsetTop) + ' h' + Math.round(vv.height) : '') +
+          ' ch' + document.documentElement.clientHeight);
+        if (sucesos.length > 8) sucesos.shift();
+      }
+
       function texto(t) {
         var el = document.getElementById('carga-texto');
         if (el) el.textContent = t;
@@ -124,94 +148,109 @@
       setTimeout(function () {
         if (!arrancada && !fallida) texto('Está tardando más de lo normal. Si la conexión es lenta, espera un poco más.');
       }, 25000);
-      // iOS (Safari y Chrome) puede dejar la zona visible desplazada o más alta
-      // que la página que mide (BACKLOG.md #52): tras cerrar el teclado, o al
-      // recargar pulsando «Ir» en la barra de direcciones con el teclado aún
-      // abierto. La app se veía cortada por arriba y con un hueco debajo de la
-      // barra inferior. Con `inset: 0` no basta, porque el navegador coloca lo
-      // fijo respecto a esa medida corta; así que, si no coinciden, #app se
-      // coloca a mano sobre la zona visible que da `visualViewport`. Mientras se
-      // escribe se deja al navegador (desplaza la página para enseñar el campo).
+
+      // Si la zona visible no coincide con la página (desplazada tras cerrar el
+      // teclado, o de otro alto), #app se coloca a mano encima de ella, en
+      // coordenadas de la página (#app es absoluto, ver el estilo). Mientras se
+      // escribe se deja al navegador, que desplaza la página para enseñar el campo.
       var ultimoAjuste = '';
+      function escribiendo() {
+        var activo = document.activeElement;
+        return !!activo && /^(INPUT|TEXTAREA)$/.test(activo.tagName);
+      }
       function ajustar() {
         var vv = window.visualViewport;
         var app = document.getElementById('app');
-        if (!vv || !app) return;
-        var activo = document.activeElement;
-        if (activo && /^(INPUT|TEXTAREA)$/.test(activo.tagName)) return;
+        if (!vv || !app || escribiendo()) return;
         if (Math.abs(vv.scale - 1) > 0.01) return;
-        if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
-        var arriba = Math.round(vv.offsetTop);
+        if (window.scrollY !== 0 || window.scrollX !== 0) {
+          window.scrollTo(0, 0);
+          setTimeout(ajustar, 50);
+          return;
+        }
+        var arriba = Math.round(vv.pageTop);
         var alto = Math.round(vv.height);
         var cuadra = arriba === 0 && Math.abs(alto - document.documentElement.clientHeight) <= 1;
         var clave = cuadra ? '' : arriba + ',' + alto;
         if (clave === ultimoAjuste) return;
         ultimoAjuste = clave;
+        anotar('ajuste ' + (clave || 'quitado'));
         app.style.top = cuadra ? '' : arriba + 'px';
         app.style.bottom = cuadra ? '' : 'auto';
         app.style.height = cuadra ? '' : alto + 'px';
       }
       function ajustarLuego(ms) { return function () { setTimeout(ajustar, ms); }; }
       if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', ajustarLuego(50));
-        window.visualViewport.addEventListener('scroll', ajustarLuego(50));
+        window.visualViewport.addEventListener('resize', function () { anotar('vv resize'); setTimeout(ajustar, 50); });
+        window.visualViewport.addEventListener('scroll', function () { anotar('vv scroll'); setTimeout(ajustar, 50); });
       }
-      window.addEventListener('resize', ajustarLuego(50));
+      window.addEventListener('resize', function () { anotar('resize'); setTimeout(ajustar, 50); });
+      window.addEventListener('scroll', function () { anotar('scroll'); });
       window.addEventListener('focusout', ajustarLuego(300));
       window.addEventListener('orientationchange', ajustarLuego(300));
-      window.addEventListener('pageshow', ajustarLuego(0));
-      window.addEventListener('flutter-first-frame', ajustarLuego(0));
-
-      // En iOS, la posición de scroll que ve la página (0) y la que aplica el
-      // navegador por debajo pueden quedar distintas tras recargar, y entonces
-      // ni `scrollY` ni `visualViewport` delatan el desplazamiento. Mover la
-      // página 1 px y devolverla obliga al navegador a aplicar de nuevo la
-      // posición 0. Solo al cargar; #app es fijo, así que no se ve.
-      var empujones = 0;
-      function empujar() {
-        var activo = document.activeElement;
-        if (activo && /^(INPUT|TEXTAREA)$/.test(activo.tagName)) return;
-        empujones++;
-        document.body.style.height = 'calc(100% + 1px)';
-        window.scrollTo(0, 1);
-        requestAnimationFrame(function () {
-          window.scrollTo(0, 0);
-          document.body.style.height = '';
-          ajustar();
-        });
-      }
-      function empujarLuego(ms) { return function () { setTimeout(empujar, ms); }; }
-      window.addEventListener('pageshow', empujarLuego(100));
-      window.addEventListener('load', empujarLuego(300));
-      window.addEventListener('flutter-first-frame', empujarLuego(100));
-      window.addEventListener('flutter-first-frame', empujarLuego(1500));
-      // Por si iOS cambia la zona visible sin avisar (al terminar de esconder el
-      // teclado tras la recarga no siempre llega el evento). Solo lee medidas y
-      // no toca nada si no han cambiado.
+      window.addEventListener('pageshow', function () { anotar('pageshow'); setTimeout(ajustar, 0); });
+      window.addEventListener('load', function () { anotar('load'); });
+      document.addEventListener('visibilitychange', function () { anotar('visible ' + document.visibilityState); });
+      window.addEventListener('flutter-first-frame', function () { anotar('primer fotograma'); setTimeout(ajustar, 0); });
+      // Por si iOS cambia la zona visible sin avisar. Solo lee medidas y no
+      // toca nada si no han cambiado.
       setInterval(ajustar, 1000);
 
-      // Diagnóstico de posición en el móvil, con ?diag=1 en el enlace (y ?diag=0
-      // lo quita) (BACKLOG.md #52): las medidas de cada capa encima de la app,
-      // para ver en una captura cuál se desplaza. No recibe toques. Sigue activo
-      // en la pestaña al navegar por la app y al recargar, que cambian la URL.
-      var conDiag = /[?&]diag=1/.test(window.location.search);
-      try {
-        if (conDiag) sessionStorage.setItem('diag', '1');
-        else if (/[?&]diag=0/.test(window.location.search)) sessionStorage.removeItem('diag');
-        else conDiag = sessionStorage.getItem('diag') === '1';
-      } catch (e) {}
+      // Recuadro del diagnóstico: medidas de cada capa, los últimos sucesos y
+      // botones para probar a mano con la app ya desplazada. El recuadro es fijo
+      // a propósito (#app no), para comparar en una captura las dos formas de
+      // colocar; un punto rojo marca dónde llega cada toque, en coordenadas de
+      // la página. Solo los botones reciben toques.
       if (conDiag) {
         var diag = document.createElement('div');
-        diag.style.cssText = 'position:fixed;left:4px;top:50%;z-index:9999;pointer-events:none;' +
-          'background:rgba(0,0,0,.75);color:#fff;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 8px;border-radius:6px;white-space:pre';
-        // Sondas invisibles con las tres alturas de viewport de CSS.
+        diag.style.cssText = 'position:fixed;left:4px;right:4px;top:30%;z-index:9999;pointer-events:none;' +
+          'background:rgba(0,0,0,.8);color:#fff;font:10px/1.35 ui-monospace,Menlo,monospace;padding:6px 8px;border-radius:6px';
+        var medidas = document.createElement('div');
+        medidas.style.whiteSpace = 'pre';
+        diag.appendChild(medidas);
+        var botones = document.createElement('div');
+        botones.style.cssText = 'display:flex;gap:6px;margin-top:6px;pointer-events:auto';
+        var boton = function (etiqueta, accion) {
+          var b = document.createElement('button');
+          b.textContent = etiqueta;
+          b.style.cssText = 'flex:1;min-height:40px;font:600 13px system-ui,sans-serif;border:0;border-radius:6px;background:#fff;color:#000';
+          b.addEventListener('click', function (e) { e.stopPropagation(); accion(b); });
+          botones.appendChild(b);
+        };
+        boton('App fija', function (b) {
+          var app = document.getElementById('app');
+          var fija = app.style.position === 'fixed';
+          app.style.position = fija ? '' : 'fixed';
+          b.textContent = fija ? 'App fija' : 'App absoluta';
+          anotar('app ' + (fija ? 'absoluta' : 'fija'));
+        });
+        boton('Empujar', function () {
+          anotar('empujón');
+          document.body.style.height = 'calc(100% + 80px)';
+          window.scrollTo(0, 80);
+          requestAnimationFrame(function () { window.scrollTo(0, 0); document.body.style.height = ''; });
+        });
+        boton('Recargar', function () { location.reload(); });
+        diag.appendChild(botones);
+        var punto = document.createElement('div');
+        punto.style.cssText = 'position:absolute;z-index:9998;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#e00;pointer-events:none;display:none';
+        var ultimoToque = '-';
+        window.addEventListener('pointerdown', function (e) {
+          punto.style.left = (e.clientX + window.scrollX) + 'px';
+          punto.style.top = (e.clientY + window.scrollY) + 'px';
+          punto.style.display = 'block';
+          ultimoToque = Math.round(e.clientX) + ',' + Math.round(e.clientY);
+        }, true);
+        // Sondas invisibles con las tres alturas de viewport de CSS; fijas, para
+        // que la más alta no haga desplazable la página.
         var sondas = ['svh', 'dvh', 'lvh'].map(function (u) {
           var s = document.createElement('div');
-          s.style.cssText = 'position:absolute;left:-10px;top:0;width:1px;visibility:hidden;height:100' + u;
+          s.style.cssText = 'position:fixed;left:-10px;top:0;width:1px;visibility:hidden;height:100' + u;
           return s;
         });
         document.addEventListener('DOMContentLoaded', function () {
           document.body.appendChild(diag);
+          document.body.appendChild(punto);
           sondas.forEach(function (s) { document.body.appendChild(s); });
         });
         var caja = function (el) {
@@ -228,20 +267,17 @@
         } catch (e) {}
         setInterval(function () {
           var vv = window.visualViewport;
+          var app = document.getElementById('app');
           if (vv) maxOff = Math.max(maxOff, Math.abs(vv.offsetTop));
           maxScroll = Math.max(maxScroll, Math.abs(window.scrollY));
-          diag.textContent =
-            'ventana   ' + window.innerWidth + 'x' + window.innerHeight + ' pant ' + screen.height + '\n' +
-            'visible   ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' off ' + Math.round(vv.offsetTop) : '-') + '\n' +
-            'scrollY   ' + Math.round(window.scrollY) + ' body ' + document.body.scrollTop + '\n' +
-            'max       off ' + Math.round(maxOff) + ' scroll ' + Math.round(maxScroll) + '\n' +
-            'html      ' + document.documentElement.clientHeight + ' ' + caja(document.documentElement) + '\n' +
-            'vh s/d/l  ' + sondas.map(function (s) { return Math.round(s.getBoundingClientRect().height); }).join('/') + '\n' +
-            '#app      ' + caja(document.getElementById('app')) + '\n' +
-            'flutter   ' + caja(document.querySelector('flutter-view')) + '\n' +
-            'foco      ' + (document.activeElement ? document.activeElement.tagName : '-') + '\n' +
-            'carga     ' + tipoCarga + ' restaura ' + (history.scrollRestoration || '-') + '\n' +
-            'ajuste    ' + (ultimoAjuste || 'no') + ' empujes ' + empujones;
+          medidas.textContent =
+            'ventana ' + window.innerWidth + 'x' + window.innerHeight + ' pant ' + screen.width + 'x' + screen.height + ' ext ' + window.outerHeight + '\n' +
+            'visible ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' off ' + Math.round(vv.offsetTop) + ' page ' + Math.round(vv.pageTop) : '-') + '\n' +
+            'scrollY ' + Math.round(window.scrollY) + ' max off ' + Math.round(maxOff) + ' scroll ' + Math.round(maxScroll) + '\n' +
+            'html ' + document.documentElement.clientHeight + ' ' + caja(document.documentElement) + '  vh s/d/l ' + sondas.map(function (s) { return Math.round(s.getBoundingClientRect().height); }).join('/') + '\n' +
+            '#app ' + (app ? getComputedStyle(app).position : '-') + ' ' + caja(app) + '  flutter ' + caja(document.querySelector('flutter-view')) + '\n' +
+            'carga ' + tipoCarga + ' ajuste ' + (ultimoAjuste || 'no') + ' toque ' + ultimoToque + '\n' +
+            '--\n' + sucesos.join('\n');
         }, 500);
       }
 

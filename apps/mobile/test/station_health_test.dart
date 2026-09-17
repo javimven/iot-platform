@@ -40,4 +40,21 @@ void main() {
     expect(none.battery, isNull);
     expect(none.signal, isNull);
   });
+
+  test('una lectura del equipo que ha dejado de llegar no se enseña', () {
+    final signal = _reading('signal_strength', -77, '_device');
+    final oldBattery = LatestReading(
+      channelId: 'bat',
+      channelTypeCode: 'battery_voltage',
+      value: 3.451,
+      tsOrigin: signal.tsOrigin.subtract(const Duration(hours: 2)),
+      tsReceived: signal.tsOrigin.subtract(const Duration(hours: 2)),
+      sensorId: '_device',
+      sensorExternalIdentifier: '_device',
+      sensorLabel: null,
+    );
+    final health = stationHealthOf([oldBattery, signal]);
+    expect(health.battery, isNull);
+    expect(health.signal?.value, -77);
+  });
 }
