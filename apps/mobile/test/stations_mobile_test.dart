@@ -39,7 +39,12 @@ final _readings = [
   _reading('ec', 'conductivity', 412, 's3', 'A3', 'Suelo plano'),
   _reading('hum', 'humidity_soil', 31.2, 's3', 'A3', 'Suelo plano'),
   _reading('temp', 'temperature_soil', 21.4, 's3', 'A3', 'Suelo plano'),
+  // Datos de la propia estación (ADR-0008): iconos, no sensor.
+  _reading('bat', 'battery_voltage', 3.451, 'st', '_device', ''),
+  _reading('sig', 'signal_strength', -77, 'st', '_device', ''),
 ];
+
+const _healthLabel = 'Cobertura buena (-77 dBm). Batería 3,45 V';
 
 List<HistoryPoint> _history() => [
       for (var h = 23; h >= 0; h--)
@@ -98,6 +103,10 @@ void main() {
     expect(find.text('Conductividad'), findsNothing);
     expect(find.textContaining('31,2'), findsNWidgets(2));
     expect(find.text('Ver gráficas'), findsNWidgets(2));
+    // Batería y cobertura, como iconos en cada tarjeta y fuera de las cifras.
+    // La tarjeta entera es un botón: su etiqueta reúne la de los iconos con el resto.
+    expect(find.bySemanticsLabel(RegExp(RegExp.escape(_healthLabel))), findsNWidgets(2));
+    expect(find.text('2 sensores, 4 magnitudes'), findsNWidgets(2));
   });
 
   testWidgets('C: tocar una estación abre su pantalla con la principal ya dibujada', (tester) async {
@@ -110,6 +119,9 @@ void main() {
     expect(find.widgetWithText(Tab, 'Tensiómetro'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Suelo plano'), findsOneWidget);
     expect(find.byType(LineChart), findsOneWidget); // tensión de suelo, sin tocar nada
+    // Batería y cobertura: iconos en la barra de arriba, sin pestaña propia.
+    expect(find.byType(Tab), findsNWidgets(2));
+    expect(find.bySemanticsLabel(_healthLabel), findsOneWidget);
   });
 
   testWidgets('D: cada magnitud activada añade su propia gráfica, y quitarla la quita', (tester) async {

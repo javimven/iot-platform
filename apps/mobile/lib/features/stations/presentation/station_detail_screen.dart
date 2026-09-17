@@ -16,6 +16,7 @@ import '../data/gateway_status_labels.dart';
 import 'accumulated_chart.dart';
 import 'series_style.dart';
 import 'stacked_channel_charts.dart';
+import 'station_health_icons.dart';
 import 'station_notices.dart';
 
 /// Pantalla de una estación (BACKLOG.md #49, mejora C), pensada para el móvil:
@@ -95,13 +96,26 @@ class _StationDetail extends ConsumerWidget {
         ),
       ),
       data: (items) {
-        final groups = groupReadingsBySensor(items);
+        // Batería y cobertura de la estación van como iconos en la barra de
+        // arriba, no como un sensor con su pestaña.
+        final groups = [
+          for (final g in groupReadingsBySensor(items))
+            if (!isStationHealthGroup(g)) g,
+        ];
+        final health = [StationHealthIcons(readings: items, showDetailOnTap: true), const SizedBox(width: 8)];
+        final dataState = stationDataState(gateway, items);
         if (groups.isEmpty) {
           return Scaffold(
-            appBar: AppBar(title: title()),
-            body: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Esta estación aún no ha enviado datos de sensores. Aparecerán aquí con su próximo envío.'),
+            appBar: AppBar(title: title(), actions: health),
+            body: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (dataState.state != StationDataState.ok) ...[
+                  StationDataNotice(state: dataState.state, since: dataState.since),
+                  const SizedBox(height: 12),
+                ],
+                const Text('Esta estación aún no ha enviado datos de sensores. Aparecerán aquí con su próximo envío.'),
+              ],
             ),
           );
         }
@@ -111,7 +125,6 @@ class _StationDetail extends ConsumerWidget {
           return _FullScreenChart(gateway: gateway, group: groups[selected]);
         }
 
-        final dataState = stationDataState(gateway, items);
         final aliveAt = stationAliveAt(gateway, items);
         return DefaultTabController(
           length: groups.length,
@@ -119,6 +132,7 @@ class _StationDetail extends ConsumerWidget {
           child: Scaffold(
             appBar: AppBar(
               title: title(),
+              actions: health,
               bottom: groups.length < 2
                   ? null
                   : TabBar(
@@ -214,7 +228,6 @@ class _SensorPage extends ConsumerWidget {
     final model = _SensorChartModel(ref, context, gateway, group);
     final theme = Theme.of(context);
     final soft = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final isHealth = isStationHealthGroup(group);
 
     void toggle(LatestReading reading) {
       ref.read(detailActiveChannelsProvider(model.key).notifier).state =
@@ -231,12 +244,7 @@ class _SensorPage extends ConsumerWidget {
             StationDataNotice(state: dataState.state, since: dataState.since),
             const SizedBox(height: 12),
           ],
-          if (isHealth)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Batería y cobertura de la propia estación, en cada envío.', style: soft),
-            )
-          else if (group.externalIdentifier != null && group.externalIdentifier != group.label)
+          if (group.externalIdentifier != null && group.externalIdentifier != group.label)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text('${group.label}, conectado en ${group.externalIdentifier}', style: soft),
@@ -257,7 +265,7 @@ class _SensorPage extends ConsumerWidget {
                       child: _MagnitudeToggle(
                         reading: r,
                         selected: model.active.contains(r.channelId),
-                        stale: !isHealth && isReadingStale(r, aliveAt),
+                        stale: isReadingStale(r, aliveAt),
                         color: model.styles[r.channelId]!.color,
                         dash: model.styles[r.channelId]!.dash,
                         onTap: () => toggle(r),

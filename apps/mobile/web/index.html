@@ -89,6 +89,11 @@
     (function () {
       var arrancada = false;
       var fallida = false;
+      // Al recargar, el navegador devuelve la página a la posición de scroll que
+      // tenía (BACKLOG.md #52): el iPhone la dejaba desplazada hacia arriba al
+      // recargar, y no al volver a entrar por el enlace, que no restaura nada.
+      // La app no usa el scroll de la página, así que no hay nada que recordar.
+      try { history.scrollRestoration = 'manual'; } catch (e) {}
       function texto(t) {
         var el = document.getElementById('carga-texto');
         if (el) el.textContent = t;
@@ -156,15 +161,46 @@
       window.addEventListener('orientationchange', ajustarLuego(300));
       window.addEventListener('pageshow', ajustarLuego(0));
       window.addEventListener('flutter-first-frame', ajustarLuego(0));
+
+      // En iOS, la posición de scroll que ve la página (0) y la que aplica el
+      // navegador por debajo pueden quedar distintas tras recargar, y entonces
+      // ni `scrollY` ni `visualViewport` delatan el desplazamiento. Mover la
+      // página 1 px y devolverla obliga al navegador a aplicar de nuevo la
+      // posición 0. Solo al cargar; #app es fijo, así que no se ve.
+      var empujones = 0;
+      function empujar() {
+        var activo = document.activeElement;
+        if (activo && /^(INPUT|TEXTAREA)$/.test(activo.tagName)) return;
+        empujones++;
+        document.body.style.height = 'calc(100% + 1px)';
+        window.scrollTo(0, 1);
+        requestAnimationFrame(function () {
+          window.scrollTo(0, 0);
+          document.body.style.height = '';
+          ajustar();
+        });
+      }
+      function empujarLuego(ms) { return function () { setTimeout(empujar, ms); }; }
+      window.addEventListener('pageshow', empujarLuego(100));
+      window.addEventListener('load', empujarLuego(300));
+      window.addEventListener('flutter-first-frame', empujarLuego(100));
+      window.addEventListener('flutter-first-frame', empujarLuego(1500));
       // Por si iOS cambia la zona visible sin avisar (al terminar de esconder el
       // teclado tras la recarga no siempre llega el evento). Solo lee medidas y
       // no toca nada si no han cambiado.
       setInterval(ajustar, 1000);
 
-      // Diagnóstico de posición en el móvil, solo con ?diag=1 en el enlace
-      // (BACKLOG.md #52): las medidas de cada capa encima de la app, para ver en
-      // una captura cuál se desplaza. No recibe toques.
-      if (/[?&]diag=1/.test(window.location.search)) {
+      // Diagnóstico de posición en el móvil, con ?diag=1 en el enlace (y ?diag=0
+      // lo quita) (BACKLOG.md #52): las medidas de cada capa encima de la app,
+      // para ver en una captura cuál se desplaza. No recibe toques. Sigue activo
+      // en la pestaña al navegar por la app y al recargar, que cambian la URL.
+      var conDiag = /[?&]diag=1/.test(window.location.search);
+      try {
+        if (conDiag) sessionStorage.setItem('diag', '1');
+        else if (/[?&]diag=0/.test(window.location.search)) sessionStorage.removeItem('diag');
+        else conDiag = sessionStorage.getItem('diag') === '1';
+      } catch (e) {}
+      if (conDiag) {
         var diag = document.createElement('div');
         diag.style.cssText = 'position:fixed;left:4px;top:50%;z-index:9999;pointer-events:none;' +
           'background:rgba(0,0,0,.75);color:#fff;font:11px/1.35 ui-monospace,Menlo,monospace;padding:6px 8px;border-radius:6px;white-space:pre';
@@ -185,6 +221,11 @@
         };
         var maxOff = 0;
         var maxScroll = 0;
+        var tipoCarga = '-';
+        try {
+          var nav = performance.getEntriesByType('navigation')[0];
+          if (nav) tipoCarga = nav.type;
+        } catch (e) {}
         setInterval(function () {
           var vv = window.visualViewport;
           if (vv) maxOff = Math.max(maxOff, Math.abs(vv.offsetTop));
@@ -198,7 +239,9 @@
             'vh s/d/l  ' + sondas.map(function (s) { return Math.round(s.getBoundingClientRect().height); }).join('/') + '\n' +
             '#app      ' + caja(document.getElementById('app')) + '\n' +
             'flutter   ' + caja(document.querySelector('flutter-view')) + '\n' +
-            'foco      ' + (document.activeElement ? document.activeElement.tagName : '-');
+            'foco      ' + (document.activeElement ? document.activeElement.tagName : '-') + '\n' +
+            'carga     ' + tipoCarga + ' restaura ' + (history.scrollRestoration || '-') + '\n' +
+            'ajuste    ' + (ultimoAjuste || 'no') + ' empujes ' + empujones;
         }, 500);
       }
 

@@ -10,10 +10,12 @@ import '../../directory/data/directory_models.dart';
 import '../../readings/application/channel_type_labels.dart';
 import '../../readings/application/reading_history_controller.dart';
 import '../application/sensor_groups.dart';
+import '../application/station_detail_controller.dart';
 import '../application/stations_controller.dart';
 import '../data/gateway_status_labels.dart';
 import 'accumulated_chart.dart';
 import 'combined_station_chart.dart';
+import 'station_health_icons.dart';
 
 /// Tarjeta de una Estación en la pantalla principal (BACKLOG.md #30):
 /// estado + último dato → selector de rango (común a la estación) → un
@@ -39,6 +41,8 @@ class StationCard extends ConsumerWidget {
               Expanded(
                 child: Text(gateway.name, style: Theme.of(context).textTheme.titleMedium),
               ),
+              StationHealthIcons(readings: latestReadings.valueOrNull ?? const [], showDetailOnTap: true),
+              const SizedBox(width: 8),
               StatusChip(label: statusLabel, tone: statusTone),
               IconButton(
                 icon: Icon(minimized ? Icons.expand_more : Icons.expand_less),
@@ -64,7 +68,12 @@ class StationCard extends ConsumerWidget {
           const SizedBox(height: 12),
           latestReadings.when(
             data: (readings) {
-              if (readings.isEmpty) {
+              // Batería y cobertura van como iconos en la cabecera, no como sensor.
+              final sensorGroups = [
+                for (final g in groupReadingsBySensor(readings))
+                  if (!isStationHealthGroup(g)) g,
+              ];
+              if (sensorGroups.isEmpty) {
                 return const Text(
                   'Esta estación aún no ha enviado datos de sensores. Aparecerán aquí con su próximo envío.',
                 );
@@ -72,7 +81,7 @@ class StationCard extends ConsumerWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final group in groupReadingsBySensor(readings))
+                  for (final group in sensorGroups)
                     _SensorSection(gatewayId: gateway.id, group: group, minimized: minimized),
                 ],
               );

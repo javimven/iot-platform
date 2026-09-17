@@ -15,6 +15,7 @@ import '../application/sensor_groups.dart';
 import '../application/station_detail_controller.dart';
 import '../application/stations_controller.dart';
 import '../data/gateway_status_labels.dart';
+import 'station_health_icons.dart';
 import 'station_notices.dart';
 
 /// Resumen de todas las estaciones, lo primero que se ve en el móvil
@@ -88,6 +89,8 @@ class StationSummaryCard extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(formatAgo(lastSeen), style: soft),
                   ],
+                  const SizedBox(height: 4),
+                  StationHealthIcons(readings: readings.valueOrNull ?? const []),
                 ],
               ),
             ],
