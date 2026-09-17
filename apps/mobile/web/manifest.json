@@ -6,7 +6,7 @@
     "background_color": "#F7F8F5",
     "theme_color": "#1F6F5C",
     "description": "Estaciones, sensores y alertas de tus fincas.",
-    "orientation": "portrait-primary",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
