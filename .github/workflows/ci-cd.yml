@@ -98,7 +98,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Historia completa: en un push de varios commits gitleaks revisa desde el
+      # padre del primero, que no está en un clon de profundidad 1 (fallaba con
+      # «Unexpected exit code [1]», un error de git, no un secreto).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       # --omit=dev: las vulnerabilidades de herramientas de build (@nestjs/cli
       # -> tmp/webpack/picomatch/inquirer) nunca se ejecutan en el servicio
       # desplegado, solo durante "nest build"/generación de código en local.
