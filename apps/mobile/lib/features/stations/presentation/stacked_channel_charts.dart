@@ -41,6 +41,7 @@ class StackedChannelCharts extends StatelessWidget {
     required this.crosshairMillis,
     required this.onCrosshair,
     this.chartHeight,
+    this.showReadout = true,
     super.key,
   });
 
@@ -52,6 +53,10 @@ class StackedChannelCharts extends StatelessWidget {
   /// Alto de cada gráfica; por defecto, más alto cuantas menos haya.
   final double? chartHeight;
 
+  /// La lectura del instante marcado, encima. En la pantalla de una estación
+  /// va aparte, fija arriba mientras se baja por la página (2026-09-18).
+  final bool showReadout;
+
   @override
   Widget build(BuildContext context) {
     if (series.isEmpty) return const SizedBox.shrink();
@@ -62,10 +67,12 @@ class StackedChannelCharts extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Readout(series: series, crosshairMillis: crosshairMillis, range: range),
-        const SizedBox(height: 8),
+        if (showReadout) ...[
+          ChannelReadout(series: series, crosshairMillis: crosshairMillis, range: range),
+          const SizedBox(height: 8),
+        ],
         for (var i = 0; i < series.length; i++) ...[
-          _ChartHeader(series: series[i]),
+          _ChartHeader(series: series[i], crosshairMillis: crosshairMillis),
           SizedBox(
             height: height,
             child: _SingleChannelChart(
@@ -86,12 +93,21 @@ class StackedChannelCharts extends StatelessWidget {
 
 /// Lectura del instante marcado: hora y valor de cada magnitud, cada uno en su
 /// color. Sin marca, una pista de cómo obtenerla.
-class _Readout extends StatelessWidget {
-  const _Readout({required this.series, required this.crosshairMillis, required this.range});
+class ChannelReadout extends StatelessWidget {
+  const ChannelReadout({
+    required this.series,
+    required this.crosshairMillis,
+    required this.range,
+    this.maxLines,
+    super.key,
+  });
 
   final List<StackedSeries> series;
   final double? crosshairMillis;
   final HistoryRange range;
+
+  /// Recortar a este número de líneas (la barra fija de la estación).
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +115,12 @@ class _Readout extends StatelessWidget {
     final soft = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     final millis = crosshairMillis;
     if (millis == null) {
-      return Text('Toca o arrastra sobre la gráfica para leer los valores.', style: soft);
+      return Text(
+        'Toca o arrastra sobre la gráfica para leer los valores.',
+        style: soft,
+        maxLines: maxLines,
+        overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      );
     }
 
     final instant = DateTime.fromMillisecondsSinceEpoch(millis.round());
@@ -113,6 +134,8 @@ class _Readout extends StatelessWidget {
             : DateFormat('dd/MM HH:mm').format(instant);
 
     return Text.rich(
+      maxLines: maxLines,
+      overflow: maxLines == null ? TextOverflow.clip : TextOverflow.ellipsis,
       TextSpan(
         style: theme.textTheme.bodyMedium?.copyWith(fontFeatures: tabularFigures),
         children: [
@@ -129,13 +152,18 @@ class _Readout extends StatelessWidget {
   }
 }
 
+/// Cabecera de una gráfica: su magnitud y, con el dedo puesto, su valor en ese
+/// instante, para que se lea también con la barra de arriba lejos o recortada.
 class _ChartHeader extends StatelessWidget {
-  const _ChartHeader({required this.series});
+  const _ChartHeader({required this.series, required this.crosshairMillis});
 
   final StackedSeries series;
+  final double? crosshairMillis;
 
   @override
   Widget build(BuildContext context) {
+    final millis = crosshairMillis;
+    final marked = millis == null ? null : nearestPoint(series.points, millis);
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -143,6 +171,16 @@ class _ChartHeader extends StatelessWidget {
           SeriesSwatch(color: series.color, dash: series.dash),
           const SizedBox(width: 8),
           Text('${series.label} (${series.unit})', style: Theme.of(context).textTheme.labelMedium),
+          if (marked != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              formatReading(marked.value),
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: series.color, fontWeight: FontWeight.w700, fontFeatures: tabularFigures),
+            ),
+          ],
         ],
       ),
     );

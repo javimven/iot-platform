@@ -236,10 +236,12 @@ class _SensorPage extends ConsumerWidget {
 
     return RefreshIndicator(
       onRefresh: () async => refreshStationData(ref),
-      child: ListView(
+      child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        children: [
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: SliverList.list(children: [
           if (dataState.state != StationDataState.ok) ...[
             StationDataNotice(state: dataState.state, since: dataState.since),
             const SizedBox(height: 12),
@@ -275,25 +277,33 @@ class _SensorPage extends ConsumerWidget {
               );
             },
           ),
-          const SizedBox(height: 16),
-          _RangeSelector(model: model),
-          const SizedBox(height: 16),
-          if (model.lineReadings.isNotEmpty) _LineCharts(model: model),
-          for (final r in model.sumReadings) ...[
-            const SizedBox(height: 16),
-            _AccumulatedFor(model: model, reading: r),
-          ],
-          if (MediaQuery.sizeOf(context).shortestSide < 600) ...[
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.screen_rotation, size: 16, color: theme.colorScheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Flexible(child: Text('Gira el móvil para verla a pantalla completa', style: soft)),
+              const SizedBox(height: 16),
+              _RangeSelector(model: model),
+              const SizedBox(height: 8),
+            ]),
+          ),
+          SliverPersistentHeader(pinned: true, delegate: _PinnedReadout(model: model)),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            sliver: SliverList.list(children: [
+              if (model.lineReadings.isNotEmpty) _LineCharts(model: model, showReadout: false),
+              for (final r in model.sumReadings) ...[
+                const SizedBox(height: 16),
+                _AccumulatedFor(model: model, reading: r),
               ],
-            ),
-          ],
+              if (MediaQuery.sizeOf(context).shortestSide < 600) ...[
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.screen_rotation, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Flexible(child: Text('Gira el móvil para verla a pantalla completa', style: soft)),
+                  ],
+                ),
+              ],
+            ]),
+          ),
         ],
       ),
     );
@@ -338,29 +348,38 @@ class _FullScreenChartState extends ConsumerState<_FullScreenChart> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 52, 8),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final count = model.lineReadings.length;
-                  // Lectura (~28) + cabecera de cada gráfica (~24) + separaciones.
-                  final overhead = 36 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
-                  final height = count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
-                  return SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (count > 0) _LineCharts(model: model, chartHeight: height),
-                        for (final r in model.sumReadings) ...[
-                          const SizedBox(height: 12),
-                          _AccumulatedFor(
-                            model: model,
-                            reading: r,
-                            height: count == 0 ? constraints.maxHeight - 12 : 200,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ReadoutBar(model: model),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final count = model.lineReadings.length;
+                        // Cabecera de cada gráfica (~24) + separaciones.
+                        final overhead = 8 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
+                        final height =
+                            count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
+                        return SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (count > 0) _LineCharts(model: model, chartHeight: height, showReadout: false),
+                              for (final r in model.sumReadings) ...[
+                                const SizedBox(height: 12),
+                                _AccumulatedFor(
+                                  model: model,
+                                  reading: r,
+                                  height: count == 0 ? constraints.maxHeight - 12 : 200,
+                                ),
+                              ],
+                            ],
                           ),
-                        ],
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             ),
             // El botón se queda siempre a la vista, en el hueco que le deja la
@@ -570,11 +589,79 @@ class _MagnitudeToggle extends StatelessWidget {
   }
 }
 
+/// Las series de las magnitudes activas, ya cargadas para el rango: las usan
+/// las gráficas y la barra de lectura, que van en sitios distintos de la
+/// pantalla pero leen lo mismo.
+List<StackedSeries> _seriesFor(WidgetRef ref, BuildContext context, _SensorChartModel model) {
+  final readings = model.lineReadings;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return [
+    for (final r in readings)
+      StackedSeries(
+        channelId: r.channelId,
+        label: ChannelTypeLabels.labelFor(r.channelTypeCode),
+        unit: ChannelTypeLabels.unitFor(r.channelTypeCode),
+        points: ref.watch(stationChannelHistoryProvider((model.organizationId, r.channelId, model.range))).valueOrNull ??
+            const [],
+        color: model.styles[r.channelId]?.color ?? seriesStyle(0, isDark: isDark).color,
+        dash: model.styles[r.channelId]?.dash,
+      ),
+  ];
+}
+
+/// Barra con la hora marcada y el valor de cada magnitud en ese instante. Va
+/// fija arriba: al bajar por la pantalla no se pierde de vista (2026-09-18,
+/// petición del usuario).
+class _ReadoutBar extends ConsumerWidget {
+  const _ReadoutBar({required this.model});
+
+  static const height = 44.0;
+
+  final _SensorChartModel model;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Container(
+      height: height,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(bottom: 6),
+      color: theme.colorScheme.surface,
+      child: ChannelReadout(
+        series: _seriesFor(ref, context, model),
+        crosshairMillis: ref.watch(chartCrosshairProvider(model.key)),
+        range: model.range,
+        maxLines: 2,
+      ),
+    );
+  }
+}
+
+/// La barra de lectura, clavada arriba mientras se baja por la pantalla.
+class _PinnedReadout extends SliverPersistentHeaderDelegate {
+  const _PinnedReadout({required this.model});
+
+  final _SensorChartModel model;
+
+  @override
+  double get minExtent => _ReadoutBar.height;
+
+  @override
+  double get maxExtent => _ReadoutBar.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => _ReadoutBar(model: model);
+
+  @override
+  bool shouldRebuild(_PinnedReadout oldDelegate) => true;
+}
+
 class _LineCharts extends ConsumerWidget {
-  const _LineCharts({required this.model, this.chartHeight});
+  const _LineCharts({required this.model, this.chartHeight, this.showReadout = true});
 
   final _SensorChartModel model;
   final double? chartHeight;
+  final bool showReadout;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -602,19 +689,10 @@ class _LineCharts extends ConsumerWidget {
     return StackedChannelCharts(
       range: model.range,
       chartHeight: chartHeight,
+      showReadout: showReadout,
       crosshairMillis: ref.watch(chartCrosshairProvider(model.key)),
       onCrosshair: (millis) => ref.read(chartCrosshairProvider(model.key).notifier).state = millis,
-      series: [
-        for (var i = 0; i < readings.length; i++)
-          StackedSeries(
-            channelId: readings[i].channelId,
-            label: ChannelTypeLabels.labelFor(readings[i].channelTypeCode),
-            unit: ChannelTypeLabels.unitFor(readings[i].channelTypeCode),
-            points: histories[i].valueOrNull ?? const [],
-            color: model.styles[readings[i].channelId]!.color,
-            dash: model.styles[readings[i].channelId]!.dash,
-          ),
-      ],
+      series: _seriesFor(ref, context, model),
     );
   }
 }

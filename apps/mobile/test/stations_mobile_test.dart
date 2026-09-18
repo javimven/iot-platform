@@ -134,15 +134,38 @@ void main() {
     expect(find.byType(LineChart), findsOneWidget); // humedad, la principal de la sonda
     expect(find.text('Humedad de suelo (%)'), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo')));
+    await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsNWidgets(2));
     expect(find.text('Temperatura de suelo (°C)'), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel(RegExp('^Humedad de suelo')));
+    await tester.tap(find.bySemanticsLabel(RegExp('^Humedad de suelo,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsOneWidget);
     expect(find.text('Humedad de suelo (%)'), findsNothing);
+  });
+
+  testWidgets('la barra de lectura se queda arriba al bajar por la pantalla', (tester) async {
+    await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')]);
+    const pista = 'Toca o arrastra sobre la gráfica para leer los valores.';
+
+    // Un sensor con tres gráficas abiertas: la pantalla ya no cabe de una vez.
+    await tester.tap(find.widgetWithText(Tab, 'Suelo plano'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel(RegExp('^Conductividad,')));
+    await tester.pumpAndSettle();
+    expect(find.byType(LineChart), findsNWidgets(3));
+
+    final antes = tester.getTopLeft(find.text(pista)).dy;
+    // Arrastre desde las cifras de arriba: sobre la gráfica, el dedo lee valores.
+    await tester.dragFrom(const Offset(195, 160), const Offset(0, -260));
+    await tester.pumpAndSettle();
+
+    expect(find.text(pista), findsOneWidget);
+    expect(tester.getTopLeft(find.text(pista)).dy, lessThan(antes));
+    expect(find.byType(LineChart), findsNWidgets(3));
   });
 
   testWidgets('B: con una sola estación, el móvil abre directamente su pantalla', (tester) async {
