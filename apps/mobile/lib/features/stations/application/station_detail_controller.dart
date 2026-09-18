@@ -9,18 +9,20 @@ import 'stations_controller.dart';
 
 /// Orden de "magnitud principal" de un sensor: la que sale en el resumen de
 /// estaciones y la que se dibuja al abrir la pantalla de la estación
-/// (BACKLOG.md #49, mejoras B y C). Primero lo que se mira para regar, luego
-/// el ambiente y lo demás; un tipo que no esté aquí va después, por nombre.
+/// (BACKLOG.md #49, mejoras B y C). Elegido por el usuario (2026-09-18): del
+/// tensiómetro, la succión (su única magnitud); de una sonda de suelo, la
+/// conductividad; del ambiente, la temperatura. Un tipo que no esté aquí va
+/// después, por nombre.
 const primaryChannelOrder = [
   // (Los de estado de la estación van al final: nunca son la principal de un
   // sensor de campo.)
   'tension_soil',
-  'humidity_soil',
+  'conductivity',
   'temperature_air',
   'precipitation',
+  'humidity_soil',
   'temperature_soil',
   'humidity_air',
-  'conductivity',
   'tank_level',
   'battery',
   'battery_voltage',
@@ -102,6 +104,32 @@ List<({SensorReadings sensor, LatestReading reading})> primaryReadingsPerSensor(
       for (final group in groupReadingsBySensor(readings))
         if (!isStationHealthGroup(group)) (sensor: group, reading: primaryReadingOf(group)),
     ];
+
+/// Las cifras que salen en la tarjeta del resumen, como mucho [max]: la
+/// magnitud principal de cada sensor y, si sobran huecos (una estación con
+/// pocos sensores), las siguientes de cada uno por orden de importancia. Con
+/// un solo sensor son todas las suyas (2026-09-18, elección del usuario).
+List<({SensorReadings sensor, LatestReading reading})> summaryReadings(
+  List<LatestReading> readings, {
+  int max = 4,
+}) {
+  final groups = [
+    for (final group in groupReadingsBySensor(readings))
+      if (!isStationHealthGroup(group)) group,
+  ];
+  final porSensor = [for (final group in groups) readingsByPriority(group)];
+  final salida = <({SensorReadings sensor, LatestReading reading})>[];
+  for (var vuelta = 0; salida.length < max; vuelta++) {
+    var alguna = false;
+    for (var i = 0; i < groups.length && salida.length < max; i++) {
+      if (porSensor[i].length <= vuelta) continue;
+      alguna = true;
+      salida.add((sensor: groups[i], reading: porSensor[i][vuelta]));
+    }
+    if (!alguna) break;
+  }
+  return salida;
+}
 
 /// El punto de una serie más cercano a un instante (el que marca el dedo en
 /// la gráfica). Null si la serie está vacía.

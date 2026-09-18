@@ -41,26 +41,42 @@ void main() {
   });
 
   group('magnitud principal', () {
-    test('en una sonda de suelo es la humedad, no la conductividad aunque vaya antes por nombre', () {
+    test('en una sonda de suelo es la conductividad (elección del usuario, 2026-09-18)', () {
       final soil = groupReadingsBySensor(_station)[1];
-      expect(soil.readings.first.channelId, 'a2-ec'); // orden por nombre, el de los colores
-      expect(primaryReadingOf(soil).channelId, 'a2-hum');
+      expect(primaryReadingOf(soil).channelId, 'a2-ec');
     });
 
     test('en la pantalla de estación la principal va primero y el resto por nombre', () {
       final soil = groupReadingsBySensor(_station)[1];
-      expect(readingsByPriority(soil).map((r) => r.channelId), ['a2-hum', 'a2-temp', 'a2-ec']);
+      expect(readingsByPriority(soil).map((r) => r.channelId), ['a2-ec', 'a2-hum', 'a2-temp']);
     });
 
     test('el resumen lleva una por sensor, en el orden de los sensores', () {
       final primary = primaryReadingsPerSensor(_station);
-      expect(primary.map((p) => p.reading.channelId), ['a1-tension', 'a2-hum', 'a4-temp']);
+      expect(primary.map((p) => p.reading.channelId), ['a1-tension', 'a2-ec', 'a4-temp']);
       expect(primary.map((p) => p.sensor.externalIdentifier), ['A1', 'A2', 'A4']);
+    });
+
+    test('con huecos libres, el resumen completa con las siguientes de cada sensor', () {
+      // Tres sensores y cuatro huecos: las tres principales y la siguiente del
+      // único que tiene más magnitudes, la sonda de suelo.
+      expect(
+        summaryReadings(_station).map((p) => p.reading.channelId),
+        ['a1-tension', 'a2-ec', 'a4-temp', 'a2-hum'],
+      );
+    });
+
+    test('con un solo sensor, el resumen enseña sus magnitudes', () {
+      final soloSonda = [
+        for (final r in _station)
+          if (r.sensorExternalIdentifier == 'A2') r,
+      ];
+      expect(summaryReadings(soloSonda).map((p) => p.reading.channelId), ['a2-ec', 'a2-hum', 'a2-temp']);
     });
 
     test('la pantalla de estación dibuja la principal mientras no se toque nada', () {
       final soil = groupReadingsBySensor(_station)[1];
-      expect(effectiveDetailChannels(soil, null), {'a2-hum'});
+      expect(effectiveDetailChannels(soil, null), {'a2-ec'});
       expect(effectiveDetailChannels(soil, {'a2-temp'}), {'a2-temp'});
       expect(effectiveDetailChannels(soil, const {}), isEmpty);
     });

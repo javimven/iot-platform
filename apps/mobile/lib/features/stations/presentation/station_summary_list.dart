@@ -15,7 +15,6 @@ import '../application/sensor_groups.dart';
 import '../application/station_detail_controller.dart';
 import '../application/stations_controller.dart';
 import '../data/gateway_status_labels.dart';
-import 'station_health_icons.dart';
 import 'station_notices.dart';
 
 /// Resumen de todas las estaciones, lo primero que se ve en el móvil
@@ -30,14 +29,44 @@ class StationSummaryList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListView.separated(
+    // Cuando la vista mezcla organizaciones (Admin de plataforma), cada una
+    // encabeza sus estaciones fuera de las tarjetas (2026-09-18, elección del
+    // usuario); dentro de la tarjeta queda la finca.
+    final porOrganizacion = <String, List<Gateway>>{};
+    for (final gateway in gateways) {
+      final organizacion = groupNames[gateway.installationId]?.organization ?? '';
+      (porOrganizacion[organizacion] ??= []).add(gateway);
+    }
+    final organizaciones = porOrganizacion.keys.toList()..sort();
+
+    return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: gateways.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final gateway = gateways[index];
-        return StationSummaryCard(gateway: gateway, groupName: groupNames[gateway.installationId]);
-      },
+      children: [
+        for (final organizacion in organizaciones) ...[
+          if (organizacion.isNotEmpty) _OrganizationHeader(name: organizacion),
+          for (final gateway in porOrganizacion[organizacion]!)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: StationSummaryCard(gateway: gateway, groupName: groupNames[gateway.installationId]),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Cabecera de las estaciones de una organización, fuera de las tarjetas.
+class _OrganizationHeader extends StatelessWidget {
+  const _OrganizationHeader({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      child: Text(name, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary)),
     );
   }
 }
@@ -48,7 +77,8 @@ class StationSummaryCard extends ConsumerWidget {
   final Gateway gateway;
   final StationGroupName? groupName;
 
-  /// Como mucho, cuatro cifras en el resumen; el resto, en la estación.
+  /// Como mucho, cuatro cifras en el resumen: la principal de cada sensor y,
+  /// si sobran huecos, las siguientes de cada uno. El resto, en la estación.
   static const maxTiles = 4;
 
   @override
@@ -58,10 +88,8 @@ class StationSummaryCard extends ConsumerWidget {
     final readings = ref.watch(gatewayLatestReadingsProvider(gateway.id));
     final (statusLabel, statusTone) = GatewayStatusLabels.forStatus(gateway.status);
     final lastSeen = gateway.lastSeenAt;
-    final place = [
-      if (groupName?.farm != null) groupName!.farm,
-      if (groupName?.organization != null) groupName!.organization!,
-    ];
+    // La organización va en la cabecera del grupo, fuera de la tarjeta.
+    final place = [if (groupName?.farm != null) groupName!.farm];
 
     return AppCard(
       onTap: () => context.go('/stations/${gateway.id}'),
@@ -89,8 +117,6 @@ class StationSummaryCard extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(formatAgo(lastSeen), style: soft),
                   ],
-                  const SizedBox(height: 4),
-                  StationHealthIcons(readings: readings.valueOrNull ?? const []),
                 ],
               ),
             ],
@@ -130,10 +156,9 @@ class StationSummaryCard extends ConsumerWidget {
                 );
               }
               final aliveAt = stationAliveAt(gateway, items);
-              final primary = primaryReadingsPerSensor(items);
               final sensorCount = sensorGroups.length;
               final magnitudeCount = sensorGroups.fold<int>(0, (sum, g) => sum + g.readings.length);
-              final shown = primary.take(maxTiles).toList();
+              final shown = summaryReadings(items, max: maxTiles);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

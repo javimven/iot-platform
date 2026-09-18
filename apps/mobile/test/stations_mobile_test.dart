@@ -51,7 +51,12 @@ List<HistoryPoint> _history() => [
         HistoryPoint(tsOrigin: DateTime.now().subtract(Duration(hours: h)), value: 20 + h % 5, min: null, max: null),
     ];
 
-Future<void> _pump(WidgetTester tester, {required List<Gateway> gateways, Size size = const Size(390, 844)}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required List<Gateway> gateways,
+  Size size = const Size(390, 844),
+  String? organization,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -77,7 +82,8 @@ Future<void> _pump(WidgetTester tester, {required List<Gateway> gateways, Size s
       overrides: [
         stationsAcrossOrganizationsProvider.overrideWithValue(false),
         allGatewaysProvider.overrideWith((ref) async => gateways),
-        stationGroupNamesProvider.overrideWith((ref) async => {'inst-1': (farm: 'Finca Norte', organization: null)}),
+        stationGroupNamesProvider
+            .overrideWith((ref) async => {'inst-1': (farm: 'Finca Norte', organization: organization)}),
         gatewayLatestReadingsProvider.overrideWith((ref, gatewayId) async => _readings),
         stationSparklineProvider.overrideWith((ref, key) async => _history()),
         stationChannelHistoryProvider.overrideWith((ref, key) async => _history()),
@@ -97,16 +103,28 @@ void main() {
     expect(find.byType(TextField), findsNothing); // sin buscador ni selección
     expect(find.text('Finca Norte'), findsNWidgets(2));
     expect(find.text('hace 3 min'), findsNWidgets(2));
-    // Principal de cada sensor: tensión del tensiómetro y humedad de la sonda.
+    // Principal de cada sensor (tensión del tensiómetro, conductividad de la
+    // sonda) y, como quedan huecos, las siguientes de la sonda.
     expect(find.text('Tensión de suelo'), findsNWidgets(2));
+    expect(find.text('Conductividad'), findsNWidgets(2));
     expect(find.text('Humedad de suelo'), findsNWidgets(2));
-    expect(find.text('Conductividad'), findsNothing);
     expect(find.textContaining('31,2'), findsNWidgets(2));
     expect(find.text('Ver gráficas'), findsNWidgets(2));
-    // Batería y cobertura, como iconos en cada tarjeta y fuera de las cifras.
-    // La tarjeta entera es un botón: su etiqueta reúne la de los iconos con el resto.
-    expect(find.bySemanticsLabel(RegExp(RegExp.escape(_healthLabel))), findsNWidgets(2));
+    // La cobertura y la batería se ven dentro de la estación, no en el resumen.
+    expect(find.bySemanticsLabel(RegExp(RegExp.escape(_healthLabel))), findsNothing);
     expect(find.text('2 sensores, 4 magnitudes'), findsNWidgets(2));
+  });
+
+  testWidgets('la organización encabeza sus estaciones, fuera de las tarjetas', (tester) async {
+    await _pump(
+      tester,
+      gateways: [_gateway('gw-1', 'Estación WSC2-N'), _gateway('gw-2', 'Estación Norte')],
+      organization: 'JMV Soluciones',
+    );
+
+    // Una sola vez para las dos estaciones, y la finca sigue en cada tarjeta.
+    expect(find.text('JMV Soluciones'), findsOneWidget);
+    expect(find.text('Finca Norte'), findsNWidgets(2));
   });
 
   testWidgets('C: tocar una estación abre su pantalla con la principal ya dibujada', (tester) async {
@@ -122,6 +140,8 @@ void main() {
     // Batería y cobertura: iconos en la barra de arriba, sin pestaña propia.
     expect(find.byType(Tab), findsNWidgets(2));
     expect(find.bySemanticsLabel(_healthLabel), findsOneWidget);
+    // La ranura del sensor (A1–A4) no se enseña con los datos.
+    expect(find.textContaining('conectado en'), findsNothing);
   });
 
   testWidgets('D: cada magnitud activada añade su propia gráfica, y quitarla la quita', (tester) async {
@@ -131,18 +151,18 @@ void main() {
 
     await tester.tap(find.widgetWithText(Tab, 'Suelo plano'));
     await tester.pumpAndSettle();
-    expect(find.byType(LineChart), findsOneWidget); // humedad, la principal de la sonda
-    expect(find.text('Humedad de suelo (%)'), findsOneWidget);
+    expect(find.byType(LineChart), findsOneWidget); // conductividad, la principal de la sonda
+    expect(find.text('Conductividad (µS/cm)'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsNWidgets(2));
     expect(find.text('Temperatura de suelo (°C)'), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel(RegExp('^Humedad de suelo,')));
+    await tester.tap(find.bySemanticsLabel(RegExp('^Conductividad,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsOneWidget);
-    expect(find.text('Humedad de suelo (%)'), findsNothing);
+    expect(find.text('Conductividad (µS/cm)'), findsNothing);
   });
 
   testWidgets('la barra de lectura se queda arriba al bajar por la pantalla', (tester) async {
@@ -154,7 +174,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
     await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel(RegExp('^Conductividad,')));
+    await tester.tap(find.bySemanticsLabel(RegExp('^Humedad de suelo,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsNWidgets(3));
 
@@ -214,7 +234,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Suelo plano'));
     await tester.pumpAndSettle();
-    expect(find.text('Humedad de suelo (%)'), findsOneWidget);
+    expect(find.text('Conductividad (µS/cm)'), findsOneWidget);
     expect(find.text('Tensión de suelo (cb)'), findsNothing);
   });
 
@@ -225,21 +245,17 @@ void main() {
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Suelo plano'));
     await tester.pumpAndSettle();
-    expect(find.byType(LineChart), findsOneWidget); // la principal, humedad
-
-    // La lista del panel se arrastra para llegar a la última magnitud.
-    await tester.drag(find.text('Magnitudes'), const Offset(0, -100));
-    await tester.pumpAndSettle();
+    expect(find.byType(LineChart), findsOneWidget); // la principal, conductividad
 
     await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsNWidgets(2));
     expect(find.text('Temperatura de suelo (°C)'), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel(RegExp('^Humedad de suelo,')));
+    await tester.tap(find.bySemanticsLabel(RegExp('^Conductividad,')));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsOneWidget);
-    expect(find.text('Humedad de suelo (%)'), findsNothing);
+    expect(find.text('Conductividad (µS/cm)'), findsNothing);
   });
 
   testWidgets('un móvil girado no pasa a la vista de escritorio del resumen', (tester) async {

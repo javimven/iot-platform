@@ -244,11 +244,6 @@ class _SensorPage extends ConsumerWidget {
             StationDataNotice(state: dataState.state, since: dataState.since),
             const SizedBox(height: 12),
           ],
-          if (group.externalIdentifier != null && group.externalIdentifier != group.label)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('${group.label}, conectado en ${group.externalIdentifier}', style: soft),
-            ),
           LayoutBuilder(
             builder: (context, constraints) {
               // Dos columnas como mucho: con tres en un móvil los nombres se cortan.
