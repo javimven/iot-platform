@@ -300,11 +300,13 @@ class _SensorPage extends ConsumerWidget {
   }
 }
 
-/// Teléfono girado: solo la gráfica del sensor que se estaba mirando, con su
-/// rango, sin menú ni cabecera (BACKLOG.md #49, mejora E). Arrastrar el dedo
-/// sigue leyendo valor y hora. Si la estación tiene varios sensores, se cambia
-/// de uno a otro sin volver a poner el móvil derecho (2026-09-18).
-class _FullScreenChart extends ConsumerWidget {
+/// Teléfono girado: la gráfica lo más grande posible, con su lectura al
+/// arrastrar el dedo, y nada más (BACKLOG.md #49, mejora E). Los ajustes
+/// —sensor, rango y magnitudes— van en un panel que se abre y se cierra con el
+/// botón de la esquina (2026-09-18, petición del usuario): antes ocupaban
+/// cabecera y columna fijas, y antes de eso ni siquiera se podían cambiar sin
+/// volver a poner el móvil derecho.
+class _FullScreenChart extends ConsumerStatefulWidget {
   const _FullScreenChart({
     required this.gateway,
     required this.groups,
@@ -318,121 +320,160 @@ class _FullScreenChart extends ConsumerWidget {
   final DateTime? aliveAt;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final group = groups[selected];
-    final model = _SensorChartModel(ref, context, gateway, group);
+  ConsumerState<_FullScreenChart> createState() => _FullScreenChartState();
+}
+
+class _FullScreenChartState extends ConsumerState<_FullScreenChart> {
+  bool _panelAbierto = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = widget.groups[widget.selected];
+    final model = _SensorChartModel(ref, context, widget.gateway, group);
     final theme = Theme.of(context);
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 52, 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final count = model.lineReadings.length;
+                  // Lectura (~28) + cabecera de cada gráfica (~24) + separaciones.
+                  final overhead = 36 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
+                  final height = count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
+                  return SingleChildScrollView(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          groups.length < 2 ? '${gateway.name}, ${group.label}' : gateway.name,
-                          style: theme.textTheme.titleSmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (groups.length > 1)
-                          SizedBox(
-                            height: 40,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              children: [
-                                for (var i = 0; i < groups.length; i++)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: ChoiceChip(
-                                      label: Text(groups[i].label),
-                                      selected: i == selected,
-                                      visualDensity: VisualDensity.compact,
-                                      onSelected: (_) =>
-                                          ref.read(detailSelectedSensorProvider(gateway.id).notifier).state = i,
-                                    ),
-                                  ),
-                              ],
-                            ),
+                        if (count > 0) _LineCharts(model: model, chartHeight: height),
+                        for (final r in model.sumReadings) ...[
+                          const SizedBox(height: 12),
+                          _AccumulatedFor(
+                            model: model,
+                            reading: r,
+                            height: count == 0 ? constraints.maxHeight - 12 : 200,
                           ),
+                        ],
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  _RangeSelector(model: model, compact: true),
-                ],
+                  );
+                },
               ),
-              const SizedBox(height: 8),
-              // Girado sobra ancho y falta alto: las magnitudes van en una
-              // columna estrecha a la izquierda y la gráfica se queda con todo
-              // el alto (2026-09-18; antes solo se podían elegir en vertical).
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 148,
-                      child: ListView(
-                        children: [
-                          for (final r in model.ordered)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: _MagnitudeToggle(
-                                reading: r,
-                                selected: model.active.contains(r.channelId),
-                                stale: isReadingStale(r, aliveAt),
-                                color: model.styles[r.channelId]!.color,
-                                dash: model.styles[r.channelId]!.dash,
-                                compact: true,
-                                onTap: () => ref.read(detailActiveChannelsProvider(model.key).notifier).state =
-                                    toggleDetailChannel(model.active, r.channelId),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final count = model.lineReadings.length;
-                          // Lectura (~28) + cabecera de cada gráfica (~24) + separaciones.
-                          final overhead = 36 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
-                          final height =
-                              count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
-                          return SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (count > 0) _LineCharts(model: model, chartHeight: height),
-                                for (final r in model.sumReadings) ...[
-                                  const SizedBox(height: 12),
-                                  _AccumulatedFor(
-                                    model: model,
-                                    reading: r,
-                                    height: count == 0 ? constraints.maxHeight - 12 : 200,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+            ),
+            // El botón se queda siempre a la vista, en el hueco que le deja la
+            // gráfica a la derecha; con el panel abierto, lo cierra.
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton.filledTonal(
+                icon: Icon(_panelAbierto ? Icons.close : Icons.tune),
+                tooltip: _panelAbierto ? 'Cerrar ajustes' : 'Sensor, rango y magnitudes',
+                onPressed: () => setState(() => _panelAbierto = !_panelAbierto),
+              ),
+            ),
+            if (_panelAbierto) ...[
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => setState(() => _panelAbierto = false),
+                  child: ColoredBox(color: theme.colorScheme.scrim.withValues(alpha: 0.35)),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: 0,
+                width: 280,
+                child: Material(
+                  elevation: 8,
+                  color: theme.colorScheme.surface,
+                  child: _ChartSettingsPanel(
+                    gateway: widget.gateway,
+                    groups: widget.groups,
+                    selected: widget.selected,
+                    aliveAt: widget.aliveAt,
+                    model: model,
+                  ),
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Ajustes de la gráfica con el móvil girado: qué sensor, qué rango y qué
+/// magnitudes. Mismos controles que en vertical, en versión estrecha.
+class _ChartSettingsPanel extends ConsumerWidget {
+  const _ChartSettingsPanel({
+    required this.gateway,
+    required this.groups,
+    required this.selected,
+    required this.aliveAt,
+    required this.model,
+  });
+
+  final Gateway gateway;
+  final List<SensorReadings> groups;
+  final int selected;
+  final DateTime? aliveAt;
+  final _SensorChartModel model;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final titulo = theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+      children: [
+        Text(gateway.name, style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (groups.length > 1) ...[
+          const SizedBox(height: 8),
+          Text('Sensor', style: titulo),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (var i = 0; i < groups.length; i++)
+                ChoiceChip(
+                  label: Text(groups[i].label),
+                  selected: i == selected,
+                  onSelected: (_) => ref.read(detailSelectedSensorProvider(gateway.id).notifier).state = i,
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text('Rango', style: titulo),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _RangeSelector(model: model, compact: true),
+        ),
+        const SizedBox(height: 8),
+        Text('Magnitudes', style: titulo),
+        const SizedBox(height: 6),
+        for (final r in model.ordered)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: _MagnitudeToggle(
+              reading: r,
+              selected: model.active.contains(r.channelId),
+              stale: isReadingStale(r, aliveAt),
+              color: model.styles[r.channelId]!.color,
+              dash: model.styles[r.channelId]!.dash,
+              compact: true,
+              onTap: () => ref.read(detailActiveChannelsProvider(model.key).notifier).state =
+                  toggleDetailChannel(model.active, r.channelId),
+            ),
+          ),
+      ],
     );
   }
 }

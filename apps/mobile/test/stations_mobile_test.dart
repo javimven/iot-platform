@@ -159,14 +159,33 @@ void main() {
     expect(find.byType(TabBar), findsNothing);
     expect(find.byType(LineChart), findsOneWidget);
     expect(find.textContaining('Gira el móvil'), findsNothing);
+    // Solo la gráfica: los ajustes están guardados detrás del botón.
+    expect(find.text('Estación WSC2-N'), findsNothing);
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.text('Magnitudes'), findsNothing);
+  });
+
+  testWidgets('E: girado, el panel abre con sensor, rango y magnitudes, y se cierra', (tester) async {
+    await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
+
+    await tester.tap(find.byTooltip('Sensor, rango y magnitudes'));
+    await tester.pumpAndSettle();
     expect(find.text('Estación WSC2-N'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Tensiómetro'), findsOneWidget);
+    expect(find.text('Rango'), findsOneWidget);
+    expect(find.text('Magnitudes'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Cerrar ajustes'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.byType(LineChart), findsOneWidget);
   });
 
   testWidgets('E: girado se cambia de sensor sin volver a poner el móvil derecho', (tester) async {
     await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
+    await tester.tap(find.byTooltip('Sensor, rango y magnitudes'));
+    await tester.pumpAndSettle();
 
-    // Los dos sensores, en fichas; se entra por el primero (tensiómetro).
-    expect(find.widgetWithText(ChoiceChip, 'Tensiómetro'), findsOneWidget);
     expect(find.text('Tensión de suelo (cb)'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Suelo plano'));
@@ -175,12 +194,18 @@ void main() {
     expect(find.text('Tensión de suelo (cb)'), findsNothing);
   });
 
-  testWidgets('E: girado también se eligen las magnitudes, en la columna de la izquierda', (tester) async {
+  testWidgets('E: girado también se eligen las magnitudes, en el mismo panel', (tester) async {
     await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
+    await tester.tap(find.byTooltip('Sensor, rango y magnitudes'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'Suelo plano'));
     await tester.pumpAndSettle();
     expect(find.byType(LineChart), findsOneWidget); // la principal, humedad
+
+    // La lista del panel se arrastra para llegar a la última magnitud.
+    await tester.drag(find.text('Magnitudes'), const Offset(0, -100));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
     await tester.pumpAndSettle();
