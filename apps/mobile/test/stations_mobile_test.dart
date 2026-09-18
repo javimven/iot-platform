@@ -175,6 +175,24 @@ void main() {
     expect(find.text('Tensión de suelo (cb)'), findsNothing);
   });
 
+  testWidgets('E: girado también se eligen las magnitudes, en la columna de la izquierda', (tester) async {
+    await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Suelo plano'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LineChart), findsOneWidget); // la principal, humedad
+
+    await tester.tap(find.bySemanticsLabel(RegExp('^Temperatura de suelo,')));
+    await tester.pumpAndSettle();
+    expect(find.byType(LineChart), findsNWidgets(2));
+    expect(find.text('Temperatura de suelo (°C)'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel(RegExp('^Humedad de suelo,')));
+    await tester.pumpAndSettle();
+    expect(find.byType(LineChart), findsOneWidget);
+    expect(find.text('Humedad de suelo (%)'), findsNothing);
+  });
+
   testWidgets('un móvil girado no pasa a la vista de escritorio del resumen', (tester) async {
     await _pump(
       tester,

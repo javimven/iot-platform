@@ -121,11 +121,11 @@ class _StationDetail extends ConsumerWidget {
         }
         final selected = ref.watch(detailSelectedSensorProvider(gateway.id)).clamp(0, groups.length - 1);
 
+        final aliveAt = stationAliveAt(gateway, items);
         if (isPhoneLandscape(MediaQuery.sizeOf(context))) {
-          return _FullScreenChart(gateway: gateway, groups: groups, selected: selected);
+          return _FullScreenChart(gateway: gateway, groups: groups, selected: selected, aliveAt: aliveAt);
         }
 
-        final aliveAt = stationAliveAt(gateway, items);
         return DefaultTabController(
           length: groups.length,
           initialIndex: selected,
@@ -305,11 +305,17 @@ class _SensorPage extends ConsumerWidget {
 /// sigue leyendo valor y hora. Si la estación tiene varios sensores, se cambia
 /// de uno a otro sin volver a poner el móvil derecho (2026-09-18).
 class _FullScreenChart extends ConsumerWidget {
-  const _FullScreenChart({required this.gateway, required this.groups, required this.selected});
+  const _FullScreenChart({
+    required this.gateway,
+    required this.groups,
+    required this.selected,
+    required this.aliveAt,
+  });
 
   final Gateway gateway;
   final List<SensorReadings> groups;
   final int selected;
+  final DateTime? aliveAt;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -364,26 +370,63 @@ class _FullScreenChart extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              // Girado sobra ancho y falta alto: las magnitudes van en una
+              // columna estrecha a la izquierda y la gráfica se queda con todo
+              // el alto (2026-09-18; antes solo se podían elegir en vertical).
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final count = model.lineReadings.length;
-                    // Lectura (~28) + cabecera de cada gráfica (~24) + separaciones.
-                    final overhead = 36 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
-                    final height = count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
-                    return SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 148,
+                      child: ListView(
                         children: [
-                          if (count > 0) _LineCharts(model: model, chartHeight: height),
-                          for (final r in model.sumReadings) ...[
-                            const SizedBox(height: 12),
-                            _AccumulatedFor(model: model, reading: r, height: count == 0 ? constraints.maxHeight - 12 : 200),
-                          ],
+                          for (final r in model.ordered)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: _MagnitudeToggle(
+                                reading: r,
+                                selected: model.active.contains(r.channelId),
+                                stale: isReadingStale(r, aliveAt),
+                                color: model.styles[r.channelId]!.color,
+                                dash: model.styles[r.channelId]!.dash,
+                                compact: true,
+                                onTap: () => ref.read(detailActiveChannelsProvider(model.key).notifier).state =
+                                    toggleDetailChannel(model.active, r.channelId),
+                              ),
+                            ),
                         ],
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final count = model.lineReadings.length;
+                          // Lectura (~28) + cabecera de cada gráfica (~24) + separaciones.
+                          final overhead = 36 + count * 24 + (count > 1 ? (count - 1) * 12 : 0);
+                          final height =
+                              count == 0 ? 0.0 : ((constraints.maxHeight - overhead) / count).clamp(110.0, 600.0);
+                          return SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (count > 0) _LineCharts(model: model, chartHeight: height),
+                                for (final r in model.sumReadings) ...[
+                                  const SizedBox(height: 12),
+                                  _AccumulatedFor(
+                                    model: model,
+                                    reading: r,
+                                    height: count == 0 ? constraints.maxHeight - 12 : 200,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -405,6 +448,7 @@ class _MagnitudeToggle extends StatelessWidget {
     required this.color,
     required this.dash,
     required this.onTap,
+    this.compact = false,
   });
 
   final LatestReading reading;
@@ -413,6 +457,10 @@ class _MagnitudeToggle extends StatelessWidget {
   final Color color;
   final List<int>? dash;
   final VoidCallback onTap;
+
+  /// Versión estrecha para la columna del móvil girado: la cifra más pequeña
+  /// y sin el aviso de dato atrasado, que ahí no cabe (va en vertical).
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -430,8 +478,8 @@ class _MagnitudeToggle extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 72),
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          constraints: BoxConstraints(minHeight: compact ? 48 : 72),
+          padding: compact ? const EdgeInsets.fromLTRB(8, 6, 8, 6) : const EdgeInsets.fromLTRB(12, 10, 12, 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: theme.colorScheme.surface,
@@ -446,20 +494,20 @@ class _MagnitudeToggle extends StatelessWidget {
                   Expanded(
                     child: Text(
                       label,
-                      maxLines: 2,
+                      maxLines: compact ? 1 : 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: compact ? 2 : 4),
               Text.rich(
                 TextSpan(
                   children: [
                     TextSpan(
                       text: formatReading(reading.value),
-                      style: theme.textTheme.headlineSmall?.copyWith(
+                      style: (compact ? theme.textTheme.titleMedium : theme.textTheme.headlineSmall)?.copyWith(
                         fontWeight: FontWeight.w600,
                         fontFeatures: tabularFigures,
                         color: stale ? theme.colorScheme.onSurfaceVariant : null,
@@ -472,7 +520,7 @@ class _MagnitudeToggle extends StatelessWidget {
                   ],
                 ),
               ),
-              if (stale) StaleReadingNote(since: reading.tsOrigin),
+              if (stale && !compact) StaleReadingNote(since: reading.tsOrigin),
             ],
           ),
         ),
