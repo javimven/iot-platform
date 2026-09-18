@@ -173,14 +173,17 @@ void main() {
     expect(find.text('Ver gráficas'), findsWidgets);
   });
 
-  testWidgets('en pantalla ancha sigue la lista para marcar estaciones (BACKLOG.md #30)', (tester) async {
+  testWidgets('en pantalla ancha, el mismo resumen que en el móvil', (tester) async {
+    // Decisión del usuario (2026-09-18): se quitaron la lista para marcar
+    // estaciones y la tarjeta de escritorio.
     await _pump(
       tester,
       gateways: [_gateway('gw-1', 'Estación WSC2-N'), _gateway('gw-2', 'Estación Norte')],
       size: const Size(1280, 900),
     );
 
-    expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('Marca una estación en la lista para ver sus datos.'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Ver gráficas'), findsNWidgets(2));
+    expect(find.text('Tensión de suelo'), findsNWidgets(2));
   });
 }

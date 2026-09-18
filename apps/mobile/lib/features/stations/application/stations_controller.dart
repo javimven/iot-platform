@@ -73,31 +73,11 @@ final gatewayLatestReadingsProvider = FutureProvider.autoDispose.family<List<Lat
       ),
 );
 
-/// Un único buscador para todo el listado (filtra por nombre en cliente,
-/// mismo criterio ya aceptado en `DirectoryApi.gatewaysForInstallation`).
-final stationSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
-
-/// Estaciones marcadas en el listado de selección — vacío por defecto
-/// ("Estaciones seleccionadas: 0", mockup original). Solo las marcadas
-/// muestran su tarjeta con datos.
-final selectedGatewayIdsProvider = StateProvider.autoDispose<Set<String>>((ref) => {});
-
-/// Rango de la gráfica de un sensor, por (estación, sensor): cada gráfica
-/// abierta lleva su propio selector encima, así que cambiar uno no mueve las
-/// demás.
+/// Rango de la gráfica de un sensor, por (estación, sensor): cada sensor
+/// lleva su propio selector encima de sus gráficas, así que cambiar uno no
+/// mueve los demás.
 final sensorChartRangeProvider =
     StateProvider.family<HistoryRange, (String gatewayId, String sensorKey)>((ref, key) => HistoryRange.day);
-
-/// Minimizado a mano por el usuario (botón en la cabecera de la tarjeta) —
-/// oculta las gráficas abiertas, las píldoras siguen visibles.
-final stationChartMinimizedProvider = StateProvider.family<bool, String>((ref, gatewayId) => false);
-
-/// Magnitudes activadas (píldoras pulsadas) en la gráfica de un sensor, por
-/// (estación, sensor). Vacío por defecto: la tarjeta abre con las píldoras y
-/// sus valores actuales, y un sensor solo muestra gráfica cuando se activa
-/// alguna de sus magnitudes.
-final sensorActiveChannelsProvider =
-    StateProvider.family<Set<String>, (String gatewayId, String sensorKey)>((ref, key) => const {});
 
 /// Histórico de un canal (agregación `average`) para el rango de SU
 /// tarjeta — reutiliza `ReadingsApi.history` ya existente

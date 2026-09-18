@@ -5,21 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/application/auth_state.dart';
 import '../../features/organization/application/organization_controller.dart';
-import '../theme/app_colors.dart';
 import '../theme/theme_preference.dart';
-
-/// Colapso manual del menú (botón "Contraer menú") — solo en pantallas
-/// anchas, donde se muestra el menú lateral.
-final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
-
-/// Por debajo de este ancho la navegación va en una barra inferior en vez del
-/// menú lateral (BACKLOG.md #49, mejora A).
-const compactShellBreakpoint = 840.0;
-
-/// Disposición de móvil: pantalla estrecha, o un teléfono aunque esté girado
-/// (un iPhone en horizontal mide 844 px de ancho y no debe pasar al menú
-/// lateral ni a la vista de escritorio).
-bool isCompactLayout(Size size) => size.width < compactShellBreakpoint || size.shortestSide < 600;
 
 /// Un teléfono girado: la pantalla de una estación pasa a enseñar solo la
 /// gráfica (BACKLOG.md #49, mejora E).
@@ -32,8 +18,8 @@ final _stationDetailPath = RegExp(r'^/stations/[^/]+$');
 /// Alertas y Gráficos. El resto se abre desde "Más".
 const bottomBarBranchCount = 3;
 
-class _SidebarEntry {
-  const _SidebarEntry({required this.icon, required this.label, this.shortLabel, this.featureCode});
+class _Section {
+  const _Section({required this.icon, required this.label, this.shortLabel, this.featureCode});
   final IconData icon;
   final String label;
 
@@ -52,65 +38,56 @@ int bottomBarIndexFor(int branchIndex) => branchIndex < bottomBarBranchCount ? b
 
 /// Contenedor de las secciones (Etapa 14 V2, BACKLOG.md #29) — envuelve el
 /// `StatefulNavigationShell` de `StatefulShellRoute.indexedStack` en
-/// `app_router.dart`. En pantallas anchas, menú lateral persistente (con
-/// etiquetas, contraíble a iconos). En el móvil, barra inferior con
-/// Estaciones, Alertas, Gráficos y "Más", que abre el resto (secciones,
-/// cuenta, apariencia y cerrar sesión) en una hoja inferior. Cada rama sigue
-/// trayendo su propio `Scaffold`/`AppBar`.
+/// `app_router.dart`. Barra inferior con Estaciones, Alertas, Gráficos y
+/// "Más", que abre el resto (secciones, cuenta, apariencia y cerrar sesión)
+/// en una hoja inferior. Cada rama sigue trayendo su propio
+/// `Scaffold`/`AppBar`.
+///
+/// La misma disposición en todos los tamaños, también en el ordenador
+/// (decisión del usuario, 2026-09-18): antes, a partir de 840 px de ancho
+/// había menú lateral y vista de escritorio, y prefiere la del móvil, con sus
+/// tarjetas y sus gráficas grandes, en una sola vista que mantener.
 class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   static const _entries = [
-    _SidebarEntry(icon: Icons.sensors_outlined, label: 'Estaciones'),
-    _SidebarEntry(icon: Icons.notifications_outlined, label: 'Alertas'),
-    _SidebarEntry(icon: Icons.show_chart, label: 'Gráficos personalizados', shortLabel: 'Gráficos'),
-    _SidebarEntry(icon: Icons.assignment_outlined, label: 'Informes', featureCode: 'reports_pdf'),
-    _SidebarEntry(icon: Icons.eco_outlined, label: 'Campañas', featureCode: 'campaigns'),
-    _SidebarEntry(icon: Icons.bug_report_outlined, label: 'Afecciones y patógenos', featureCode: 'disease_risk'),
-    _SidebarEntry(icon: Icons.satellite_alt_outlined, label: 'Satélite', featureCode: 'satellite_imagery'),
-    _SidebarEntry(icon: Icons.dashboard_outlined, label: 'Infraestructura'),
+    _Section(icon: Icons.sensors_outlined, label: 'Estaciones'),
+    _Section(icon: Icons.notifications_outlined, label: 'Alertas'),
+    _Section(icon: Icons.show_chart, label: 'Gráficos personalizados', shortLabel: 'Gráficos'),
+    _Section(icon: Icons.assignment_outlined, label: 'Informes', featureCode: 'reports_pdf'),
+    _Section(icon: Icons.eco_outlined, label: 'Campañas', featureCode: 'campaigns'),
+    _Section(icon: Icons.bug_report_outlined, label: 'Afecciones y patógenos', featureCode: 'disease_risk'),
+    _Section(icon: Icons.satellite_alt_outlined, label: 'Satélite', featureCode: 'satellite_imagery'),
+    _Section(icon: Icons.dashboard_outlined, label: 'Infraestructura'),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Con el teléfono girado en la pantalla de una estación, la gráfica ocupa
+    // todo: sin barra inferior. Vuelve al poner el móvil derecho.
     final size = MediaQuery.sizeOf(context);
-
-    if (isCompactLayout(size)) {
-      // Con el teléfono girado en la pantalla de una estación, la gráfica ocupa
-      // todo: sin barra inferior. Vuelve al poner el móvil derecho.
-      final fullScreenChart = isPhoneLandscape(size) && _stationDetailPath.hasMatch(GoRouterState.of(context).uri.path);
-      return Scaffold(
-        body: navigationShell,
-        bottomNavigationBar: fullScreenChart
-            ? null
-            : NavigationBar(
-                selectedIndex: bottomBarIndexFor(navigationShell.currentIndex),
-                onDestinationSelected: (index) {
-                  if (index == bottomBarBranchCount) {
-                    _showMoreSheet(context);
-                    return;
-                  }
-                  navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex);
-                },
-                destinations: [
-                  for (final entry in _entries.take(bottomBarBranchCount))
-                    NavigationDestination(icon: Icon(entry.icon), label: entry.shortLabel ?? entry.label),
-                  const NavigationDestination(icon: Icon(Icons.more_horiz), label: 'Más'),
-                ],
-              ),
-      );
-    }
-
-    final collapsed = ref.watch(sidebarCollapsedProvider);
+    final fullScreenChart = isPhoneLandscape(size) && _stationDetailPath.hasMatch(GoRouterState.of(context).uri.path);
     return Scaffold(
-      body: Row(
-        children: [
-          _Sidebar(collapsed: collapsed, navigationShell: navigationShell, entries: _entries),
-          Expanded(child: navigationShell),
-        ],
-      ),
+      body: navigationShell,
+      bottomNavigationBar: fullScreenChart
+          ? null
+          : NavigationBar(
+              selectedIndex: bottomBarIndexFor(navigationShell.currentIndex),
+              onDestinationSelected: (index) {
+                if (index == bottomBarBranchCount) {
+                  _showMoreSheet(context);
+                  return;
+                }
+                navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex);
+              },
+              destinations: [
+                for (final entry in _entries.take(bottomBarBranchCount))
+                  NavigationDestination(icon: Icon(entry.icon), label: entry.shortLabel ?? entry.label),
+                const NavigationDestination(icon: Icon(Icons.more_horiz), label: 'Más'),
+              ],
+            ),
     );
   }
 
@@ -153,8 +130,7 @@ bool Function(String? featureCode) _featureLock(WidgetRef ref) {
   };
 }
 
-/// Entradas de cuenta según el rol, compartidas por el menú de perfil del
-/// escritorio y la hoja "Más" del móvil.
+/// Entradas de cuenta según el rol, en la hoja "Más".
 List<({String route, String label})> _accountRoutes(AuthState authState) {
   final roleCode = authState.roleCode;
   return [
@@ -176,7 +152,7 @@ class _MoreSheet extends ConsumerWidget {
     required this.onOpenRoute,
   });
 
-  final List<_SidebarEntry> entries;
+  final List<_Section> entries;
   final int firstBranchIndex;
   final int currentBranchIndex;
   final void Function(int branchIndex) onOpenBranch;
@@ -239,232 +215,6 @@ class _MoreSheet extends ConsumerWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-class _Sidebar extends ConsumerWidget {
-  const _Sidebar({
-    required this.collapsed,
-    required this.navigationShell,
-    required this.entries,
-  });
-
-  final bool collapsed;
-  final StatefulNavigationShell navigationShell;
-  final List<_SidebarEntry> entries;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authControllerProvider);
-    final isLocked = _featureLock(ref);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      width: collapsed ? 72 : 240,
-      color: AppColors.sidebarBackground,
-      child: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView(
-                children: [
-                  for (var i = 0; i < entries.length; i++)
-                    _SidebarItem(
-                      entry: entries[i],
-                      collapsed: collapsed,
-                      selected: navigationShell.currentIndex == i,
-                      locked: isLocked(entries[i].featureCode),
-                      onTap: () => navigationShell.goBranch(i, initialLocation: i == navigationShell.currentIndex),
-                    ),
-                ],
-              ),
-            ),
-            const Divider(color: AppColors.sidebarLine, height: 1),
-            _SidebarActionItem(
-              icon: collapsed ? Icons.chevron_right : Icons.chevron_left,
-              label: collapsed ? 'Expandir' : 'Contraer menú',
-              collapsed: collapsed,
-              onTap: () => ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
-            ),
-            _SidebarActionItem(
-              icon: Icons.language,
-              label: 'Idioma',
-              collapsed: collapsed,
-              trailingLabel: 'Próximamente',
-              onTap: null,
-            ),
-            _SidebarActionItem(
-              icon: Icons.logout,
-              label: 'Cerrar sesión',
-              collapsed: collapsed,
-              onTap: () => ref.read(authControllerProvider.notifier).logout(),
-            ),
-            _ProfileMenuButton(collapsed: collapsed, authState: authState),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.entry,
-    required this.collapsed,
-    required this.selected,
-    required this.locked,
-    required this.onTap,
-  });
-
-  final _SidebarEntry entry;
-  final bool collapsed;
-  final bool selected;
-  final bool locked;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected ? AppColors.sidebarBrand : (locked ? AppColors.sidebarInkSoft : AppColors.sidebarInk);
-    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: foreground,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-        );
-
-    return Tooltip(
-      message: collapsed ? entry.label : '',
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.sidebarSurfaceRaised : null,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(entry.icon, color: foreground, size: 22),
-              if (!collapsed) ...[
-                const SizedBox(width: 12),
-                Expanded(child: Text(entry.label, style: textStyle)),
-                if (locked) const Icon(Icons.lock_outline, size: 14, color: AppColors.sidebarInkSoft),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SidebarActionItem extends StatelessWidget {
-  const _SidebarActionItem({
-    required this.icon,
-    required this.label,
-    required this.collapsed,
-    required this.onTap,
-    this.trailingLabel,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool collapsed;
-  final VoidCallback? onTap;
-  final String? trailingLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final foreground = enabled ? AppColors.sidebarInk : AppColors.sidebarInkSoft;
-
-    return Tooltip(
-      message: collapsed ? label : '',
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            children: [
-              Icon(icon, color: foreground, size: 20),
-              if (!collapsed) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: foreground)),
-                ),
-                if (trailingLabel != null)
-                  Text(
-                    trailingLabel!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.sidebarInkSoft),
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Icono de Perfil (abajo del todo, escritorio) — Miembros/Organización/
-/// Auditoría/Sesiones con la misma pista de UI por rol, el panel de
-/// plataforma si procede, y la apariencia.
-class _ProfileMenuButton extends StatelessWidget {
-  const _ProfileMenuButton({required this.collapsed, required this.authState});
-
-  static const _appearance = '#apariencia';
-
-  final bool collapsed;
-  final AuthState authState;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: 'Perfil',
-      onSelected: (value) {
-        if (value == _appearance) {
-          showDialog<void>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('Apariencia'),
-              content: const ThemePreferenceSelector(),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cerrar')),
-              ],
-            ),
-          );
-          return;
-        }
-        context.push(value);
-      },
-      itemBuilder: (context) => [
-        for (final item in _accountRoutes(authState)) PopupMenuItem(value: item.route, child: Text(item.label)),
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: _appearance, child: Text('Apariencia')),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            const CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.sidebarSurfaceRaised,
-              child: Icon(Icons.person_outline, color: AppColors.sidebarInk, size: 18),
-            ),
-            if (!collapsed) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Perfil',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.sidebarInk),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

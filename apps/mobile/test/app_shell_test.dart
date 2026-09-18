@@ -10,8 +10,8 @@ import 'package:iot_platform_app/features/auth/application/auth_controller.dart'
 import 'package:iot_platform_app/features/auth/application/auth_state.dart';
 import 'package:iot_platform_app/features/auth/data/auth_api.dart';
 
-/// Navegación (BACKLOG.md #49, mejora A): barra inferior en el móvil y menú
-/// lateral en pantallas anchas, con las mismas secciones.
+/// Navegación (BACKLOG.md #49, mejora A): barra inferior con Estaciones,
+/// Alertas, Gráficos y "Más", en cualquier tamaño de pantalla.
 class _SignedInAuthController extends AuthController {
   _SignedInAuthController() : super(AuthApi(ApiClient()), SecureTokenStorage()) {
     state = const AuthState(status: AuthStatus.authenticated, organizationId: 'org-1', roleCode: 'operator');
@@ -127,11 +127,15 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('en pantalla ancha: menú lateral, sin barra inferior', (tester) async {
+  testWidgets('en pantalla ancha, la misma barra inferior que en el móvil', (tester) async {
+    // Decisión del usuario (2026-09-18): la vista de móvil también en el
+    // ordenador; se quitó el menú lateral.
     await _pumpShell(tester, const Size(1280, 800));
 
-    expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('Gráficos personalizados'), findsOneWidget);
-    expect(find.text('Contraer menú'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.text('Contraer menú'), findsNothing);
+    for (final label in ['Estaciones', 'Alertas', 'Gráficos', 'Más']) {
+      expect(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)), findsOneWidget);
+    }
   });
 }

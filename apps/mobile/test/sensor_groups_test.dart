@@ -84,20 +84,7 @@ void main() {
       return c;
     }
 
-    test('la tarjeta abre sin ninguna gráfica desplegada', () {
-      final c = container();
-      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's2'))), isEmpty);
-      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's4'))), isEmpty);
-    });
-
-    test('elegir magnitudes en un sensor no cambia las de otro', () {
-      final c = container();
-      c.read(sensorActiveChannelsProvider(('gw-1', 's2')).notifier).state = {'ch-temp-soil', 'ch-hum-soil'};
-      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's2'))), {'ch-temp-soil', 'ch-hum-soil'});
-      expect(c.read(sensorActiveChannelsProvider(('gw-1', 's4'))), isEmpty);
-    });
-
-    test('cada gráfica tiene su propio rango: cambiar uno no mueve los demás', () {
+    test('cada sensor tiene su propio rango: cambiar uno no mueve los demás', () {
       final c = container();
       expect(c.read(sensorChartRangeProvider(('gw-1', 's2'))), HistoryRange.day);
       c.read(sensorChartRangeProvider(('gw-1', 's2')).notifier).state = HistoryRange.week;
