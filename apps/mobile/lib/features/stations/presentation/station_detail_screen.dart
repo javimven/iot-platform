@@ -452,13 +452,6 @@ class _ChartSettingsSheet extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 8),
-        Text('Rango', style: titulo),
-        const SizedBox(height: 6),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: _RangeSelector(model: model),
-        ),
-        const SizedBox(height: 8),
         Text('Magnitudes', style: titulo),
         const SizedBox(height: 6),
         Wrap(
@@ -480,6 +473,13 @@ class _ChartSettingsSheet extends ConsumerWidget {
                 ),
               ),
           ],
+        ),
+        const SizedBox(height: 8),
+        Text('Rango', style: titulo),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: _RangeSelector(model: model),
         ),
       ],
     );
