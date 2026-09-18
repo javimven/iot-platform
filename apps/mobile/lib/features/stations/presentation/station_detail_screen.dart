@@ -198,10 +198,9 @@ class _SensorChartModel {
 }
 
 class _RangeSelector extends ConsumerWidget {
-  const _RangeSelector({required this.model, this.compact = false});
+  const _RangeSelector({required this.model});
 
   final _SensorChartModel model;
-  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -209,7 +208,6 @@ class _RangeSelector extends ConsumerWidget {
       segments: [for (final r in HistoryRange.values) ButtonSegment(value: r, label: Text(r.shortLabel))],
       selected: {model.range},
       showSelectedIcon: false,
-      style: compact ? const ButtonStyle(visualDensity: VisualDensity.compact) : null,
       onSelectionChanged: (selection) => model.selectRange(ref, selection.first),
     );
   }
@@ -312,11 +310,11 @@ class _SensorPage extends ConsumerWidget {
 
 /// Teléfono girado: la gráfica lo más grande posible, con su lectura al
 /// arrastrar el dedo, y nada más (BACKLOG.md #49, mejora E). Los ajustes
-/// —sensor, rango y magnitudes— van en un panel que se abre y se cierra con el
-/// botón de la esquina (2026-09-18, petición del usuario): antes ocupaban
-/// cabecera y columna fijas, y antes de eso ni siquiera se podían cambiar sin
-/// volver a poner el móvil derecho.
-class _FullScreenChart extends ConsumerStatefulWidget {
+/// —sensor, rango y magnitudes— se abren en una hoja desde abajo con el botón
+/// de la esquina (2026-09-18, elección del usuario): antes ocupaban cabecera y
+/// columna fijas, y antes de eso ni se podían cambiar sin poner el móvil
+/// derecho.
+class _FullScreenChart extends ConsumerWidget {
   const _FullScreenChart({
     required this.gateway,
     required this.groups,
@@ -330,17 +328,8 @@ class _FullScreenChart extends ConsumerStatefulWidget {
   final DateTime? aliveAt;
 
   @override
-  ConsumerState<_FullScreenChart> createState() => _FullScreenChartState();
-}
-
-class _FullScreenChartState extends ConsumerState<_FullScreenChart> {
-  bool _panelAbierto = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final group = widget.groups[widget.selected];
-    final model = _SensorChartModel(ref, context, widget.gateway, group);
-    final theme = Theme.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final model = _SensorChartModel(ref, context, gateway, groups[selected]);
 
     return Scaffold(
       body: SafeArea(
@@ -382,53 +371,51 @@ class _FullScreenChartState extends ConsumerState<_FullScreenChart> {
                 ],
               ),
             ),
-            // El botón se queda siempre a la vista, en el hueco que le deja la
-            // gráfica a la derecha; con el panel abierto, lo cierra.
+            // El botón se queda a la vista en el hueco que le deja la gráfica.
             Positioned(
               top: 0,
               right: 0,
               child: IconButton.filledTonal(
-                icon: Icon(_panelAbierto ? Icons.close : Icons.tune),
-                tooltip: _panelAbierto ? 'Cerrar ajustes' : 'Sensor, rango y magnitudes',
-                onPressed: () => setState(() => _panelAbierto = !_panelAbierto),
+                icon: const Icon(Icons.tune),
+                tooltip: 'Sensor, rango y magnitudes',
+                onPressed: () => _abrirAjustes(context),
               ),
             ),
-            if (_panelAbierto) ...[
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: () => setState(() => _panelAbierto = false),
-                  child: ColoredBox(color: theme.colorScheme.scrim.withValues(alpha: 0.35)),
-                ),
-              ),
-              Positioned(
-                top: 0,
-                bottom: 0,
-                left: 0,
-                width: 280,
-                child: Material(
-                  elevation: 8,
-                  color: theme.colorScheme.surface,
-                  child: _ChartSettingsPanel(
-                    gateway: widget.gateway,
-                    groups: widget.groups,
-                    selected: widget.selected,
-                    aliveAt: widget.aliveAt,
-                    model: model,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
+
+  void _abrirAjustes(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Consumer(
+        builder: (context, ref, _) {
+          // Dentro de la hoja se sigue el sensor elegido: cambiarlo redibuja
+          // tanto la hoja como la gráfica de detrás.
+          final elegido = ref.watch(detailSelectedSensorProvider(gateway.id)).clamp(0, groups.length - 1);
+          return _ChartSettingsSheet(
+            gateway: gateway,
+            groups: groups,
+            selected: elegido,
+            aliveAt: aliveAt,
+            model: _SensorChartModel(ref, context, gateway, groups[elegido]),
+          );
+        },
+      ),
+    );
+  }
 }
 
-/// Ajustes de la gráfica con el móvil girado: qué sensor, qué rango y qué
-/// magnitudes. Mismos controles que en vertical, en versión estrecha.
-class _ChartSettingsPanel extends ConsumerWidget {
-  const _ChartSettingsPanel({
+/// Ajustes de la gráfica con el móvil girado, en una hoja desde abajo: qué
+/// sensor, qué rango y qué magnitudes. Los mismos controles que en vertical,
+/// repartidos a lo ancho, que es lo que sobra girado.
+class _ChartSettingsSheet extends ConsumerWidget {
+  const _ChartSettingsSheet({
     required this.gateway,
     required this.groups,
     required this.selected,
@@ -448,7 +435,8 @@ class _ChartSettingsPanel extends ConsumerWidget {
     final titulo = theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
         Text(gateway.name, style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (groups.length > 1) ...[
@@ -473,25 +461,31 @@ class _ChartSettingsPanel extends ConsumerWidget {
         const SizedBox(height: 6),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: _RangeSelector(model: model, compact: true),
+          child: _RangeSelector(model: model),
         ),
         const SizedBox(height: 8),
         Text('Magnitudes', style: titulo),
         const SizedBox(height: 6),
-        for (final r in model.ordered)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: _MagnitudeToggle(
-              reading: r,
-              selected: model.active.contains(r.channelId),
-              stale: isReadingStale(r, aliveAt),
-              color: model.styles[r.channelId]!.color,
-              dash: model.styles[r.channelId]!.dash,
-              compact: true,
-              onTap: () => ref.read(detailActiveChannelsProvider(model.key).notifier).state =
-                  toggleDetailChannel(model.active, r.channelId),
-            ),
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final r in model.ordered)
+              SizedBox(
+                width: 160,
+                child: _MagnitudeToggle(
+                  reading: r,
+                  selected: model.active.contains(r.channelId),
+                  stale: isReadingStale(r, aliveAt),
+                  color: model.styles[r.channelId]!.color,
+                  dash: model.styles[r.channelId]!.dash,
+                  compact: true,
+                  onTap: () => ref.read(detailActiveChannelsProvider(model.key).notifier).state =
+                      toggleDetailChannel(model.active, r.channelId),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }

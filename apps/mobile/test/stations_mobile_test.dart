@@ -188,7 +188,7 @@ void main() {
     expect(find.text('Magnitudes'), findsNothing);
   });
 
-  testWidgets('E: girado, el panel abre con sensor, rango y magnitudes, y se cierra', (tester) async {
+  testWidgets('E: girado, la hoja de ajustes abre con sensor, rango y magnitudes, y se cierra', (tester) async {
     await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
 
     await tester.tap(find.byTooltip('Sensor, rango y magnitudes'));
@@ -198,7 +198,8 @@ void main() {
     expect(find.text('Rango'), findsOneWidget);
     expect(find.text('Magnitudes'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Cerrar ajustes'));
+    // Se cierra tocando fuera de la hoja, arriba del todo.
+    await tester.tapAt(const Offset(422, 10));
     await tester.pumpAndSettle();
     expect(find.byType(ChoiceChip), findsNothing);
     expect(find.byType(LineChart), findsOneWidget);
