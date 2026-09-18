@@ -159,7 +159,20 @@ void main() {
     expect(find.byType(TabBar), findsNothing);
     expect(find.byType(LineChart), findsOneWidget);
     expect(find.textContaining('Gira el móvil'), findsNothing);
-    expect(find.text('Estación WSC2-N, Tensiómetro'), findsOneWidget);
+    expect(find.text('Estación WSC2-N'), findsOneWidget);
+  });
+
+  testWidgets('E: girado se cambia de sensor sin volver a poner el móvil derecho', (tester) async {
+    await _pump(tester, gateways: [_gateway('gw-1', 'Estación WSC2-N')], size: const Size(844, 390));
+
+    // Los dos sensores, en fichas; se entra por el primero (tensiómetro).
+    expect(find.widgetWithText(ChoiceChip, 'Tensiómetro'), findsOneWidget);
+    expect(find.text('Tensión de suelo (cb)'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Suelo plano'));
+    await tester.pumpAndSettle();
+    expect(find.text('Humedad de suelo (%)'), findsOneWidget);
+    expect(find.text('Tensión de suelo (cb)'), findsNothing);
   });
 
   testWidgets('un móvil girado no pasa a la vista de escritorio del resumen', (tester) async {

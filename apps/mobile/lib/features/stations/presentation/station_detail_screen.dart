@@ -122,7 +122,7 @@ class _StationDetail extends ConsumerWidget {
         final selected = ref.watch(detailSelectedSensorProvider(gateway.id)).clamp(0, groups.length - 1);
 
         if (isPhoneLandscape(MediaQuery.sizeOf(context))) {
-          return _FullScreenChart(gateway: gateway, group: groups[selected]);
+          return _FullScreenChart(gateway: gateway, groups: groups, selected: selected);
         }
 
         final aliveAt = stationAliveAt(gateway, items);
@@ -302,21 +302,20 @@ class _SensorPage extends ConsumerWidget {
 
 /// Teléfono girado: solo la gráfica del sensor que se estaba mirando, con su
 /// rango, sin menú ni cabecera (BACKLOG.md #49, mejora E). Arrastrar el dedo
-/// sigue leyendo valor y hora.
+/// sigue leyendo valor y hora. Si la estación tiene varios sensores, se cambia
+/// de uno a otro sin volver a poner el móvil derecho (2026-09-18).
 class _FullScreenChart extends ConsumerWidget {
-  const _FullScreenChart({required this.gateway, required this.group});
+  const _FullScreenChart({required this.gateway, required this.groups, required this.selected});
 
   final Gateway gateway;
-  final SensorReadings group;
+  final List<SensorReadings> groups;
+  final int selected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final group = groups[selected];
     final model = _SensorChartModel(ref, context, gateway, group);
     final theme = Theme.of(context);
-    final magnitudes = [
-      for (final r in model.ordered)
-        if (model.active.contains(r.channelId)) ChannelTypeLabels.labelFor(r.channelTypeCode),
-    ].join(', ');
 
     return Scaffold(
       body: SafeArea(
@@ -331,13 +330,32 @@ class _FullScreenChart extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${gateway.name}, ${group.label}', style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                         Text(
-                          magnitudes,
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          groups.length < 2 ? '${gateway.name}, ${group.label}' : gateway.name,
+                          style: theme.textTheme.titleSmall,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (groups.length > 1)
+                          SizedBox(
+                            height: 40,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                for (var i = 0; i < groups.length; i++)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ChoiceChip(
+                                      label: Text(groups[i].label),
+                                      selected: i == selected,
+                                      visualDensity: VisualDensity.compact,
+                                      onSelected: (_) =>
+                                          ref.read(detailSelectedSensorProvider(gateway.id).notifier).state = i,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),
