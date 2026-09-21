@@ -309,6 +309,7 @@ Tras terminar de aplicar el sistema de diseño a las pantallas ya existentes, el
 - **Lo que lo agravó**: con el disco lleno, Redis no podía persistir (`MISCONF ... unable to persist to disk`) y el worker escribió ese error **1,5 millones de veces**: 1,7 GB en un solo log, sin tope de tamaño.
 - **Arreglo inmediato**: `docker image prune -a` (30,7 GB liberados, del 100 % al 20 %), logs a cero, EMQX y el resto reiniciados, contenedores recreados. El puente volvió a conectarse al broker.
 - **Para que no se repita**: `deploy.sh` pasa a `docker image prune -af --filter "until=72h"`; el script del puente (`rs485-tool`) borra las suyas por etiqueta (`org.opencontainers.image.title=rs485-puente`, nueva en su Dockerfile); todos los servicios de `docker-compose.deploy.yml` llevan tope de log (20 MB × 3) y el demonio de Docker lo tiene por defecto en `/etc/docker/daemon.json` (20 MB × 3).
+- **De propina, un susto**: al recrear los contenedores a mano, Compose cogió el `IMAGE_TAG` viejo que había quedado en el `.env` del servidor y devolvió la API a una versión anterior; la app daba 404 en las rutas de plataforma hasta que el despliegue de CI puso la imagen al día. Ahora `deploy.sh` guarda en `.env` el tag que despliega.
 - **Pendiente**: un aviso cuando el disco pase del 80 % — hoy no había ninguno, y por eso pasaron tres días hasta que se notó por la falta de datos. Encaja en `OBSERVABILITY.md` (Grafana Cloud / UptimeRobot).
 
 ### 53. Una sola vista: la de móvil también en el ordenador

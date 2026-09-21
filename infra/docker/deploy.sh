@@ -118,6 +118,15 @@ $COMPOSE up -d --no-deps worker ingestion
 echo "==> Actualizando emqx/otel-collector/caddy si su imagen o configuración cambió"
 $COMPOSE up -d --no-deps emqx otel-collector caddy
 
+# El IMAGE_TAG de .env se queda con el que se acaba de desplegar: si no, un
+# `docker compose up -d` a mano en el servidor (p. ej. para recrear un
+# contenedor) vuelve al tag viejo que quedara ahí y devuelve la API a una
+# versión anterior — pasó el 2026-09-21 y dejó la app con 404 diez minutos.
+if [ -f .env ] && grep -q '^IMAGE_TAG=' .env; then
+  echo "==> Guardando IMAGE_TAG=${IMAGE_TAG} en .env"
+  sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
+fi
+
 # -a: sin él solo borra las que no tienen etiqueta, y las de cada despliegue
 # sí la llevan (el SHA del commit) — así se acumularon 82 imágenes y 33 GB
 # hasta llenar el disco y tirar la plataforma (BACKLOG.md #54, 2026-09-21).
