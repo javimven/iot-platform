@@ -90,6 +90,7 @@ Cada proceso (`api`/`ingestion`/`worker`) exporta a un **OTel Collector** local 
 | Presupuesto de infraestructura | 80% / 100% del umbral mensual (`DEPLOYMENT.md` sección 10) | Email/Slack |
 | Uptime externo (UptimeRobot) | 2 comprobaciones fallidas seguidas | Email/Slack/SMS |
 | Disco de la VPS (timer de systemd en el propio servidor, `infra/scripts/aviso-disco.sh`) | Por encima del 80 % de uso | Email por el SMTP de la plataforma (Brevo), como mucho uno cada 24 h |
+| Latido del mismo timer a Healthchecks.io («disco staging», periodo 1 h, margen 30 min) | Sin latido en la ventana, o latido de fallo con el disco por encima del 80 % | El aviso lo manda Healthchecks: no depende ni de nuestro correo ni de que la VPS siga viva |
 | % de gateways offline en una organización | > 30% simultáneamente (posible corte de red regional, no solo dispositivos sueltos) | Email/Slack |
 
 ## 10. Dashboards (Grafana)
