@@ -1778,7 +1778,8 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
-        alertType: { type: string, enum: [threshold, offline] }
+        alertType:
+          { type: string, enum: [threshold, offline, no_sensor_data], description: "`no_sensor_data`: la estación sigue enviando, pero ningún sensor de campo da datos desde hace más de una hora (BACKLOG.md #57)." }
         channelId: { type: string, format: uuid, nullable: true }
         deviceId: { type: string, format: uuid, nullable: true }
         gatewayId: { type: string, format: uuid, nullable: true }
@@ -1792,7 +1793,7 @@ components:
         installationName: { type: string, nullable: true }
         channelTypeCode: { type: string, nullable: true, description: "Solo presente si alertType=threshold." }
         deviceName: { type: string, nullable: true, description: "Solo presente si alertType=offline y la causa es un dispositivo." }
-        gatewayName: { type: string, nullable: true, description: "Solo presente si alertType=offline y la causa es un gateway." }
+        gatewayName: { type: string, nullable: true, description: "Presente si la causa es un gateway: alertType=offline o alertType=no_sensor_data." }
 
     AuditLogEntry:
       type: object
