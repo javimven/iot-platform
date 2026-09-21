@@ -13,6 +13,7 @@ import { resolveOrgContext } from '../../common/permissions/org-context';
 import { ParcelCreateDto, ParcelUpdateDto } from './dto/parcel.dto';
 import { ParcelGeometryService } from './parcel-geometry.service';
 import { ParcelaConGeometria, ParcelsRepository } from './parcels.repository';
+import { SatelliteQueueProducer } from '../../common/queues/satellite-queue.producer';
 
 /**
  * Parcelas (BACKLOG.md #36): el recinto real de cultivo del que el modulo de
@@ -31,6 +32,7 @@ export class ParcelsService {
     private readonly auditLog: AuditLogService,
     private readonly geometria: ParcelGeometryService,
     private readonly repositorio: ParcelsRepository,
+    private readonly colaSatelite: SatelliteQueueProducer,
   ) {}
 
   async create(
@@ -42,7 +44,7 @@ export class ParcelsService {
     await this.assertInstallationInScope(user, installationId);
     const geometry = this.geometria.normalizar(dto.geometry);
 
-    return this.prisma.runInTenantContext(tenantContext, async (tx) => {
+    const parcela = await this.prisma.runInTenantContext(tenantContext, async (tx) => {
       await this.assertInstallationExists(tx, installationId, organizationId);
       const parcela = await this.conNombreLibre(installationId, dto.name, () =>
         this.repositorio.crear(tx, {
@@ -65,6 +67,13 @@ export class ParcelsService {
       });
       return parcela;
     });
+
+    // Fuera de la transaccion y sin bloquear la respuesta: si el encolado
+    // falla, la parcela ya esta creada y el repaso diario la recogera igual.
+    // Sin esto, una parcela recien dibujada no tendria ni un dato hasta la
+    // manana siguiente.
+    await this.colaSatelite.encolarHistorico({ organizationId, parcelId: parcela.id });
+    return parcela;
   }
 
   async findAllForInstallation(

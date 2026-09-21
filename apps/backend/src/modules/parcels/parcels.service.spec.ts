@@ -6,6 +6,7 @@ import { ParcelsRepository } from './parcels.repository';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { AccessTokenClaims } from '../../common/guards/jwt-auth.guard';
+import { SatelliteQueueProducer } from '../../common/queues/satellite-queue.producer';
 
 /**
  * BACKLOG.md #36. Lo que no cubren ni la prueba de integración (que ejercita
@@ -76,8 +77,20 @@ describe('ParcelsService', () => {
       actualizarGeometria: jest.fn().mockResolvedValue({ ...parcela, geometryVersion: 2 }),
     } as unknown as ParcelsRepository;
 
-    const service = new ParcelsService(prisma, auditLog, new ParcelGeometryService(), repositorio);
-    return { service, tx, prisma, auditLog, repositorio };
+    // La cola de satélite es un efecto de borde, no parte del alta: se mockea
+    // para comprobar que se avisa, y que un fallo suyo no tumba la creación.
+    const colaSatelite = {
+      encolarHistorico: jest.fn().mockResolvedValue(undefined),
+    } as unknown as SatelliteQueueProducer;
+
+    const service = new ParcelsService(
+      prisma,
+      auditLog,
+      new ParcelGeometryService(),
+      repositorio,
+      colaSatelite,
+    );
+    return { service, tx, prisma, auditLog, repositorio, colaSatelite };
   }
 
   it('crea la parcela con la geometría ya normalizada y la audita sin volcar coordenadas', async () => {
@@ -178,6 +191,19 @@ describe('ParcelsService', () => {
         metadata: expect.objectContaining({ estacionesDesasignadas: 2 }),
       }),
     );
+  });
+
+  it('al crear una parcela se encola su historico de satelite', async () => {
+    // Sin esto, una parcela recien dibujada no tendria ni un dato hasta el
+    // repaso de la manana siguiente.
+    const { service, colaSatelite } = build();
+
+    await service.create(usuario, 'finca-1', { name: 'La Vega', geometry: geometriaEntrada });
+
+    expect(colaSatelite.encolarHistorico).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      parcelId: 'parcel-1',
+    });
   });
 
   it('una parcela de otra organización no existe para quien pregunta', async () => {
