@@ -61,10 +61,16 @@ if [ -z "${SMTP_HOST:-}" ] || [ -z "${EMAIL_FROM:-}" ] || [ -z "$destino" ]; the
   exit 1
 fi
 
+# Con cabeceras completas: un correo sin Date ni Message-ID lo manda a spam
+# cualquier filtro (comprobado con Gmail el 2026-09-21, BACKLOG.md #55).
 {
-  echo "From: ${EMAIL_FROM}"
+  echo "From: Plataforma IoT <${EMAIL_FROM}>"
   echo "To: ${destino}"
   echo "Subject: [iot-platform] Disco al ${uso}% en $(hostname)"
+  echo "Date: $(date -R)"
+  echo "Message-ID: <disco-$(date +%s)-$$@$(hostname -f 2>/dev/null || hostname)>"
+  echo "MIME-Version: 1.0"
+  echo "Auto-Submitted: auto-generated"
   echo "Content-Type: text/plain; charset=utf-8"
   echo
   echo "El disco de $(hostname) está al ${uso}% (aviso a partir del ${UMBRAL}%)."
