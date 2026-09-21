@@ -4,6 +4,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { IamModule } from './modules/iam/iam.module';
 import { DirectoryModule } from './modules/directory/directory.module';
+import { ParcelsModule } from './modules/parcels/parcels.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { HealthController } from './common/health/health.controller';
@@ -12,6 +13,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { Rfc7807ExceptionFilter } from './common/filters/rfc7807-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { FeatureGuard } from './common/guards/feature.guard';
 
 /**
  * Root module del proceso `api` (ARCHITECTURE.md §4-5): REST + WebSocket
@@ -42,6 +44,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     }),
     IamModule,
     DirectoryModule,
+    ParcelsModule,
     TelemetryModule,
     PlatformModule,
   ],
@@ -51,6 +54,9 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     { provide: APP_FILTER, useClass: Rfc7807ExceptionFilter },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    // Despues de PermissionsGuard a proposito: primero se resuelve si el rol
+    // puede hacerlo y luego si la organizacion lo tiene contratado.
+    { provide: APP_GUARD, useClass: FeatureGuard },
   ],
 })
 export class ApiModule implements NestModule {

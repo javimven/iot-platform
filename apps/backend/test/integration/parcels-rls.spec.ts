@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../src/common/prisma/prisma.service';
+import { ParcelGeometryService } from '../../src/modules/parcels/parcel-geometry.service';
+import { ParcelsRepository } from '../../src/modules/parcels/parcels.repository';
 
 /**
  * Parcelas contra un Postgres real con PostGIS (TESTING_STRATEGY.md §4,
@@ -188,5 +190,103 @@ describe('Parcelas: RLS, integridad y geometría (Postgres real)', () => {
 
   it('dos parcelas de la misma finca no pueden llamarse igual', async () => {
     await expect(crearParcela(orgAId, fincaAId, 'Parcela de A')).rejects.toThrow();
+  });
+
+  describe('ParcelsRepository contra la base real', () => {
+    // El repositorio es el único sitio con SQL escrito a mano (ADR-0009): una
+    // errata ahí no la ve ninguna prueba unitaria, porque todas mockean
+    // `PrismaService`. Estas sí ejecutan ese SQL de verdad.
+    const repositorio = new ParcelsRepository();
+    const geometria = new ParcelGeometryService();
+
+    it('crea, lee por id y lista por finca, siempre con el contorno en GeoJSON', async () => {
+      const creada = await prisma.runInTenantContext({ organizationId: orgAId }, (tx) =>
+        repositorio.crear(tx, {
+          organizationId: orgAId,
+          installationId: fincaAId,
+          name: 'Parcela del repositorio',
+          notes: 'con nota',
+          geometry: geometria.normalizar(poligono),
+        }),
+      );
+
+      expect(creada.geometry.type).toBe('MultiPolygon');
+      expect(creada.areaM2).toBeGreaterThan(8000);
+      expect(creada.bbox).toEqual([-0.5, 39.5, -0.499, 39.501]);
+      expect(creada.geometryVersion).toBe(1);
+      expect(creada.notes).toBe('con nota');
+
+      const porId = await prisma.runInTenantContext({ organizationId: orgAId }, (tx) =>
+        repositorio.porId(tx, creada.id, orgAId),
+      );
+      expect(porId?.name).toBe('Parcela del repositorio');
+
+      const listado = await prisma.runInTenantContext({ organizationId: orgAId }, (tx) =>
+        repositorio.porInstalacion(tx, fincaAId),
+      );
+      expect(listado.map((p) => p.name)).toContain('Parcela del repositorio');
+      expect(listado.every((p) => p.geometry.type === 'MultiPolygon')).toBe(true);
+    });
+
+    it('redibujar el contorno recalcula área y caja y sube la versión', async () => {
+      const creada = await prisma.runInTenantContext({ organizationId: orgAId }, (tx) =>
+        repositorio.crear(tx, {
+          organizationId: orgAId,
+          installationId: fincaAId,
+          name: 'Parcela a redibujar',
+          geometry: geometria.normalizar(poligono),
+        }),
+      );
+
+      // El doble de ancho: el área tiene que subir de verdad, no quedarse igual.
+      const masAncho = {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-0.5, 39.5],
+            [-0.498, 39.5],
+            [-0.498, 39.501],
+            [-0.5, 39.501],
+            [-0.5, 39.5],
+          ],
+        ],
+      };
+      const actualizada = await prisma.runInTenantContext({ organizationId: orgAId }, (tx) =>
+        repositorio.actualizarGeometria(tx, creada.id, geometria.normalizar(masAncho)),
+      );
+
+      expect(actualizada.geometryVersion).toBe(2);
+      expect(actualizada.areaM2).toBeGreaterThan(creada.areaM2 * 1.8);
+      expect(actualizada.bbox[2]).toBeCloseTo(-0.498, 6);
+    });
+
+    it('rechaza un recinto que se cruza a sí mismo, con el motivo de PostGIS', async () => {
+      // Un "lazo": los lados se cruzan. ST_IsValid lo detecta; sin esa
+      // comprobación entraría en la tabla y reventaría al pedirle el área o
+      // al mandarlo a Copernicus.
+      const lazo = {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-0.5, 39.5],
+            [-0.499, 39.501],
+            [-0.499, 39.5],
+            [-0.5, 39.501],
+            [-0.5, 39.5],
+          ],
+        ],
+      };
+
+      await expect(
+        prisma.runInTenantContext({ organizationId: orgAId }, (tx) =>
+          repositorio.crear(tx, {
+            organizationId: orgAId,
+            installationId: fincaAId,
+            name: 'Parcela imposible',
+            geometry: geometria.normalizar(lazo),
+          }),
+        ),
+      ).rejects.toThrow(/no es un recinto válido/);
+    });
   });
 });

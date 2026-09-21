@@ -22,6 +22,7 @@ tags:
   - name: members
   - name: installations
   - name: zones
+  - name: parcels
   - name: gateways
   - name: devices
   - name: sensors
@@ -516,6 +517,87 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Zone" }
+
+  /installations/{installationId}/parcels:
+    get:
+      tags: [parcels]
+      summary: Parcelas de una finca, con su contorno en GeoJSON
+      description: >
+        Requiere la funcion `satellite_imagery` contratada por la organizacion
+        (FeatureGuard): sin ella responde 403 aunque el rol tenga el permiso.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Parcel" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [parcels]
+      summary: Crea una parcela dibujada sobre el mapa
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ParcelCreate" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Parcel" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Ya hay una parcela con ese nombre en la finca
+
+  /parcels/{parcelId}:
+    get:
+      tags: [parcels]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Parcel" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [parcels]
+      summary: Renombra la parcela o redibuja su contorno
+      description: >
+        Enviar `geometry` sustituye el contorno y sube `geometryVersion`, que
+        es lo que marca como caduco lo calculado por satelite sobre el contorno
+        anterior.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ParcelUpdate" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Parcel" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "409":
+          description: Ya hay una parcela con ese nombre en la finca
+    delete:
+      tags: [parcels]
+      summary: Borrado logico; las estaciones asignadas se quedan sin parcela
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Sin contenido }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /installations/{installationId}/latest-readings:
     get:
@@ -1665,6 +1747,90 @@ components:
         locationText: { type: string, nullable: true }
         latitude: { type: number, nullable: true }
         longitude: { type: number, nullable: true }
+
+    Parcel:
+      type: object
+      description: >
+        Recinto de cultivo dibujado por el usuario (BACKLOG.md #36). La geometria
+        se guarda en PostGIS y se expone siempre como GeoJSON en EPSG:4326
+        (ADR-0009).
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        installationId: { type: string, format: uuid }
+        name: { type: string }
+        notes: { type: string, nullable: true }
+        geometry: { $ref: "#/components/schemas/GeoJsonMultiPolygon" }
+        areaM2:
+          { type: number, format: double, description: "Superficie en metros cuadrados, medida sobre el elipsoide." }
+        bbox:
+          type: array
+          description: "Caja envolvente [minLon, minLat, maxLon, maxLat] en EPSG:4326."
+          items: { type: number, format: double }
+          minItems: 4
+          maxItems: 4
+        geometryVersion:
+          { type: integer, description: "Sube cada vez que se redibuja el contorno." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ParcelCreate:
+      type: object
+      required: [name, geometry]
+      properties:
+        name: { type: string, maxLength: 120 }
+        geometry:
+          description: >
+            Polygon o MultiPolygon GeoJSON en EPSG:4326. Un Polygon se normaliza
+            a MultiPolygon al guardarlo, y el anillo se cierra solo si llega
+            abierto.
+          oneOf:
+            - { $ref: "#/components/schemas/GeoJsonPolygon" }
+            - { $ref: "#/components/schemas/GeoJsonMultiPolygon" }
+        notes: { type: string, maxLength: 2000, nullable: true }
+
+    ParcelUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        geometry:
+          oneOf:
+            - { $ref: "#/components/schemas/GeoJsonPolygon" }
+            - { $ref: "#/components/schemas/GeoJsonMultiPolygon" }
+        notes: { type: string, maxLength: 2000, nullable: true }
+
+    GeoJsonPolygon:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [Polygon] }
+        coordinates:
+          type: array
+          description: "Anillos; el primero es el contorno exterior. Cada posicion es [lon, lat]."
+          items:
+            type: array
+            items:
+              type: array
+              items: { type: number, format: double }
+              minItems: 2
+              maxItems: 2
+
+    GeoJsonMultiPolygon:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [MultiPolygon] }
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: array
+                items: { type: number, format: double }
+                minItems: 2
+                maxItems: 2
 
     Zone:
       type: object
