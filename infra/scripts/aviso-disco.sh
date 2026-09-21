@@ -11,7 +11,10 @@
 # del correo del admin de plataforma de ese mismo archivo — nunca va escrito
 # aquí, que esto sí está en git.
 #
-# Prueba manual (fuerza el envío):  UMBRAL=1 /usr/local/bin/aviso-disco.sh
+# Prueba manual del correo, sin tocar el check de Healthchecks:
+#   UMBRAL=1 SIN_LATIDO=1 /usr/local/bin/aviso-disco.sh
+# (sin SIN_LATIDO, forzar el umbral manda un latido de fallo y el check se
+# pone en «down», que es lo que pasó al probarlo el 2026-09-21).
 set -uo pipefail
 
 UMBRAL=${UMBRAL:-80}
@@ -34,6 +37,7 @@ uso=$(df --output=pcent "$PUNTO" | tr -dc '0-9')
 # (HEALTHCHECKS_DISCO_URL); sin ella, esta parte no hace nada.
 latido() {
   local destino="$1"
+  [ -z "${SIN_LATIDO:-}" ] || return 0
   [ -n "${HEALTHCHECKS_DISCO_URL:-}" ] || return 0
   curl -fsS -m 10 --retry 3 -o /dev/null "${HEALTHCHECKS_DISCO_URL}${destino}" ||
     logger -t aviso-disco "no se pudo mandar el latido a Healthchecks"
