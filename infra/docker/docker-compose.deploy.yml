@@ -17,6 +17,16 @@
 # su /health, y solo entonces tocar la otra (DEPLOYMENT.md sección 8) —
 # ver infra/docker/deploy.sh.
 
+# Tope al log de cada contenedor: el 2026-09-20, con el disco lleno, Redis no
+# podía persistir y el worker escribió su error 1,5 millones de veces — 1,7 GB
+# en un solo log (BACKLOG.md #54). En el servidor está además como valor por
+# defecto del demonio (/etc/docker/daemon.json), para lo que no pase por aquí.
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   api_1: &api
     image: ghcr.io/javimven/iot-platform:${IMAGE_TAG:?Falta IMAGE_TAG (SHA del commit a desplegar, nunca "latest")}
@@ -32,6 +42,7 @@ services:
       timeout: 5s
       retries: 5
     depends_on: [redis, otel-collector]
+    logging: *logs
 
   api_2:
     <<: *api
@@ -44,6 +55,7 @@ services:
       NODE_ENV: ${NODE_ENV:?}
     restart: unless-stopped
     depends_on: [redis, otel-collector]
+    logging: *logs
 
   ingestion:
     image: ghcr.io/javimven/iot-platform:${IMAGE_TAG:?}
@@ -53,6 +65,7 @@ services:
       NODE_ENV: ${NODE_ENV:?}
     restart: unless-stopped
     depends_on: [emqx, redis, otel-collector]
+    logging: *logs
 
   redis:
     image: redis:7-alpine
@@ -72,6 +85,7 @@ services:
   # opciones se automatiza todavía aquí — deliberado, ver infra/terraform/README.md
   # y DEPLOYMENT.md sección 17: no hay dominio real contra el que emitir un
   # certificado real todavía.
+    logging: *logs
   emqx:
     image: emqx/emqx:5.4
     environment:
@@ -83,6 +97,7 @@ services:
       - emqx_certs:/opt/emqx/etc/certs/custom:ro
     restart: unless-stopped
 
+    logging: *logs
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     env_file: [.env] # GRAFANA_CLOUD_OTLP_ENDPOINT / GRAFANA_CLOUD_OTLP_AUTH
@@ -91,6 +106,7 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     restart: unless-stopped
 
+    logging: *logs
   caddy:
     image: caddy:2-alpine
     ports:
@@ -107,6 +123,7 @@ services:
     restart: unless-stopped
     depends_on: [api_1, api_2]
 
+    logging: *logs
 volumes:
   redis_data:
   emqx_data:

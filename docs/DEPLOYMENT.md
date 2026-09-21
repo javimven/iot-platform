@@ -107,6 +107,14 @@ Ver [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) para la refe
 - Paso 11 usa el **environment protection rule** nativo de GitHub Actions sobre el entorno `production` (revisor humano obligatorio) — no es un paso de aprobación simulado.
 - Paso 13 (verificación posterior) comprueba `/health`, un endpoint autenticado de bajo riesgo, y que las métricas OTel siguen fluyendo (Etapa 10) — si falla, dispara el paso 14 automáticamente sin intervención manual.
 
+## 9 bis. Espacio en disco de la VPS (aprendido a golpes, 2026-09-21)
+Cada despliegue deja en la VPS la imagen anterior, etiquetada con el SHA del commit. `docker image prune -f` **no** las borra (solo las que no tienen etiqueta): hace falta `-a`. Sin eso se acumularon 33 GB, el disco llegó al 100 % y la plataforma dejó de recibir datos durante tres días (`BACKLOG.md` #54). Hoy:
+
+- `infra/docker/deploy.sh` termina con `docker image prune -af --filter "until=72h"`.
+- El script del puente (`rs485-tool/scripts/desplegar-puente-staging.sh`) borra las imágenes del puente por su etiqueta.
+- Todos los servicios de `docker-compose.deploy.yml` llevan `logging` con 20 MB × 3, y el demonio de Docker tiene el mismo tope por defecto en `/etc/docker/daemon.json` (creado a mano en la VPS; si se reinstala el servidor, hay que volver a ponerlo).
+- Comprobación rápida en la VPS: `df -h /` y `docker system df`.
+
 ## 10. Control de costes
 - Alertas de presupuesto configuradas en Hetzner y DigitalOcean (aviso al 80% y 100% de un umbral mensual acorde a Etapa 2).
 - Recursos etiquetados por entorno (`dev`/`staging`/`production`) para poder atribuir coste.

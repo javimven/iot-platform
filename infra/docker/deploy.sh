@@ -118,7 +118,10 @@ $COMPOSE up -d --no-deps worker ingestion
 echo "==> Actualizando emqx/otel-collector/caddy si su imagen o configuración cambió"
 $COMPOSE up -d --no-deps emqx otel-collector caddy
 
+# -a: sin él solo borra las que no tienen etiqueta, y las de cada despliegue
+# sí la llevan (el SHA del commit) — así se acumularon 82 imágenes y 33 GB
+# hasta llenar el disco y tirar la plataforma (BACKLOG.md #54, 2026-09-21).
 echo "==> Limpiando imágenes sin usar (más de 72h)"
-docker image prune -f --filter "until=72h" >/dev/null
+docker image prune -af --filter "until=72h" >/dev/null
 
 echo "==> Despliegue completo (${IMAGE_TAG})"
