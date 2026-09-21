@@ -27,20 +27,33 @@ MENSAJE=/dev/shm/aviso-disco.txt
 uso=$(df --output=pcent "$PUNTO" | tr -dc '0-9')
 [ -n "$uso" ] || exit 0
 
-if [ "$uso" -lt "$UMBRAL" ]; then
-  # Ya holgado: se olvida el aviso anterior para poder volver a avisar.
-  [ "$uso" -lt $((UMBRAL - 5)) ] && rm -f "$MARCA"
-  exit 0
-fi
-
-ahora=$(date +%s)
-anterior=$(cat "$MARCA" 2>/dev/null || echo 0)
-[ $((ahora - anterior)) -lt "$REPETIR" ] && exit 0
-
+# Segundo canal, independiente del correo y del propio servidor (BACKLOG.md
+# #55: cuando el correo de Brevo dejó de entregar, el aviso se quedó mudo).
+# Healthchecks.io avisa si NO recibe el latido —servidor caído, sin red, disco
+# lleno— y también si le mandamos un fallo a propósito. La URL va en el .env
+# (HEALTHCHECKS_DISCO_URL); sin ella, esta parte no hace nada.
+latido() {
+  local destino="$1"
+  [ -n "${HEALTHCHECKS_DISCO_URL:-}" ] || return 0
+  curl -fsS -m 10 --retry 3 -o /dev/null "${HEALTHCHECKS_DISCO_URL}${destino}" ||
+    logger -t aviso-disco "no se pudo mandar el latido a Healthchecks"
+}
 set -a
 # shellcheck disable=SC1090
 . "$ENTORNO" 2>/dev/null
 set +a
+
+if [ "$uso" -lt "$UMBRAL" ]; then
+  # Ya holgado: se olvida el aviso anterior para poder volver a avisar.
+  [ "$uso" -lt $((UMBRAL - 5)) ] && rm -f "$MARCA"
+  latido ""
+  exit 0
+fi
+latido "/fail"
+
+ahora=$(date +%s)
+anterior=$(cat "$MARCA" 2>/dev/null || echo 0)
+[ $((ahora - anterior)) -lt "$REPETIR" ] && exit 0
 
 destino=${AVISO_DISCO_EMAIL:-${PLATFORM_ADMIN_BOOTSTRAP_EMAIL:-}}
 if [ -z "${SMTP_HOST:-}" ] || [ -z "${EMAIL_FROM:-}" ] || [ -z "$destino" ]; then
