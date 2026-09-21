@@ -46,7 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # Con PostGIS: la migración 0008 crea la extensión (parcelas,
+        # BACKLOG.md #36) y sin ella `prisma migrate deploy` falla aquí
+        # aunque en staging funcione.
+        image: postgis/postgis:16-3.5-alpine
         env:
           POSTGRES_USER: iot_platform
           POSTGRES_PASSWORD: ci_only_password

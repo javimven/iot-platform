@@ -10,7 +10,13 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # PostGIS, no `postgres:16-alpine` a secas: la migración 0008 (parcelas,
+    # BACKLOG.md #36) crea la extensión y una columna `geometry`. La base
+    # gestionada de staging (DigitalOcean) trae PostGIS 3.5.7 disponible, así
+    # que en local se usa la misma línea 3.5 para que lo que pasa aquí valga
+    # allí. La imagen es la oficial de Postgres con la extensión añadida:
+    # mismo entrypoint y mismo `docker-entrypoint-initdb.d`.
+    image: postgis/postgis:16-3.5-alpine
     environment:
       POSTGRES_USER: iot_platform
       POSTGRES_PASSWORD: dev_only_password

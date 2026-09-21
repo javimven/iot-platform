@@ -83,4 +83,34 @@ describe('permission matrix (PERMISSIONS.md §4)', () => {
       expect(PERMISSION_ACTIONS as readonly string[]).toContain(action);
     }
   });
+
+  it('parcelas: crean y editan el Admin de organización y el Técnico; borrar, solo el Admin', () => {
+    // BACKLOG.md #36. Mismo criterio que las zonas —el Técnico monta el campo—
+    // salvo el borrado: una parcela borrada se lleva por delante su histórico
+    // de satélite, así que se reserva al Admin de organización.
+    for (const role of ['org_admin', 'technician'] as const) {
+      expect(roleHasPermission(role, 'parcels.create')).toBe(true);
+      expect(roleHasPermission(role, 'parcels.update')).toBe(true);
+    }
+    expect(roleHasPermission('org_admin', 'parcels.delete')).toBe(true);
+    expect(roleHasPermission('technician', 'parcels.delete')).toBe(false);
+
+    for (const role of ['operator', 'read_only'] as const) {
+      expect(roleHasPermission(role, 'parcels.read')).toBe(true);
+      expect(roleHasPermission(role, 'parcels.create')).toBe(false);
+      expect(roleHasPermission(role, 'parcels.update')).toBe(false);
+      expect(roleHasPermission(role, 'parcels.delete')).toBe(false);
+    }
+  });
+
+  it('satélite: todos los roles lo consultan, pero solo Admin y Técnico fuerzan una actualización', () => {
+    // `satellite.refresh` gasta cuota de Copernicus: no la tiene quien solo mira.
+    for (const role of ['org_admin', 'technician', 'operator', 'read_only'] as const) {
+      expect(roleHasPermission(role, 'satellite.read')).toBe(true);
+    }
+    expect(roleHasPermission('org_admin', 'satellite.refresh')).toBe(true);
+    expect(roleHasPermission('technician', 'satellite.refresh')).toBe(true);
+    expect(roleHasPermission('operator', 'satellite.refresh')).toBe(false);
+    expect(roleHasPermission('read_only', 'satellite.refresh')).toBe(false);
+  });
 });

@@ -176,10 +176,53 @@ model Installation {
   organization      Organization              @relation(fields: [organizationId], references: [id])
   zones             Zone[]
   gateways          Gateway[]
+  parcels           Parcel[]
   memberScopes      MemberInstallationScope[]
 
   @@index([organizationId])
   @@map("installations")
+}
+
+/// Recinto de cultivo dibujado por el usuario sobre un mapa, dentro de una
+/// finca (BACKLOG.md #36). Es la unidad del modulo de satelite: las
+/// observaciones de Sentinel-2 se calculan sobre su contorno real, no sobre el
+/// punto GPS de la finca.
+///
+/// La geometria la guarda PostGIS (`geometry(MultiPolygon, 4326)`). Prisma 5
+/// no modela tipos geometricos, asi que la columna va como `Unsupported`: eso
+/// significa que **`prisma.parcel.create()` no es utilizable** y que
+/// `findMany` no devuelve la geometria. Las dos operaciones que la necesitan
+/// (crear y leer el contorno) viven en `ParcelsRepository` con SQL crudo
+/// dentro de `runInTenantContext`; el resto de columnas se manejan con Prisma
+/// con normalidad. Se guarda MultiPolygon aunque la v1 solo deje dibujar un
+/// recinto: una parcela partida por un camino es corriente, y admitirlo hoy
+/// no cuesta nada.
+model Parcel {
+  id              String                              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String                              @map("organization_id") @db.Uuid
+  installationId  String                              @map("installation_id") @db.Uuid
+  name            String
+  geometry        Unsupported("geometry(MultiPolygon, 4326)")
+  areaM2          Float                               @map("area_m2")
+  bboxMinLon      Float                               @map("bbox_min_lon")
+  bboxMinLat      Float                               @map("bbox_min_lat")
+  bboxMaxLon      Float                               @map("bbox_max_lon")
+  bboxMaxLat      Float                               @map("bbox_max_lat")
+  /// Sube cada vez que cambia el contorno: invalida lo calculado antes sobre
+  /// la geometria anterior.
+  geometryVersion Int                                 @default(1) @map("geometry_version")
+  notes           String?
+  createdAt       DateTime                            @default(now()) @map("created_at")
+  updatedAt       DateTime                            @updatedAt @map("updated_at")
+  deletedAt       DateTime?                           @map("deleted_at")
+
+  installation Installation @relation(fields: [installationId], references: [id])
+  gateways     Gateway[]
+
+  @@index([organizationId])
+  @@index([installationId])
+  @@map("parcels")
+  // Indice espacial GiST sobre `geometry` -> migracion SQL manual (0008).
 }
 
 model Zone {
@@ -219,6 +262,12 @@ model Gateway {
   installationId           String           @map("installation_id") @db.Uuid
   externalIdentifier       String           @unique @map("external_identifier")
   name                     String
+  /// Parcela a la que riega/vigila esta estacion, si se le ha asignado una
+  /// (BACKLOG.md #36). Opcional a proposito: las estaciones existentes siguen
+  /// funcionando sin parcela, y una parcela puede no tener ninguna. Un trigger
+  /// (migracion 0008) exige que la parcela sea de la misma organizacion y la
+  /// misma instalacion que el gateway.
+  parcelId                 String?          @map("parcel_id") @db.Uuid
   connectivityType         ConnectivityType @map("connectivity_type")
   status                   GatewayStatus    @default(not_provisioned)
   lastSeenAt               DateTime?        @map("last_seen_at")
@@ -228,12 +277,14 @@ model Gateway {
   deletedAt                DateTime?        @map("deleted_at")
 
   installation Installation        @relation(fields: [installationId], references: [id])
+  parcel       Parcel?             @relation(fields: [parcelId], references: [id])
   credentials  GatewayCredential[]
   devices      Device[]
   alerts       Alert[]
 
   @@index([organizationId])
   @@index([installationId])
+  @@index([parcelId])
   @@map("gateways")
 }
 
