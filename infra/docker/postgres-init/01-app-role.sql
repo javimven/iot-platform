@@ -36,3 +36,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE iot_platform IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO iot_platform_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE iot_platform IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO iot_platform_app;
+
+-- Funciones del esquema: el worker llama a `crear_particiones_telemetry`
+-- (migración 0006, BACKLOG.md #45), que corre como su dueño porque el rol de
+-- la aplicación no puede crear tablas. Sin EXECUTE, ese trabajo falla en cada
+-- pasada y las particiones del mes siguiente no se crean.
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO iot_platform_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE iot_platform IN SCHEMA public
+  GRANT EXECUTE ON FUNCTIONS TO iot_platform_app;
+

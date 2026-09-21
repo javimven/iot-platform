@@ -6,11 +6,13 @@ import { MailerService } from './common/mailer/mailer.service';
 import { TelemetryProcessingService } from './modules/telemetry/telemetry-processing.service';
 import { TelemetryWorkerService } from './modules/worker-jobs/telemetry-worker.service';
 import { OfflineDetectionService } from './modules/worker-jobs/offline-detection.service';
+import { TelemetryPartitionsService } from './modules/worker-jobs/telemetry-partitions.service';
 import { NotificationDispatchService } from './modules/notifications/notification-dispatch.service';
 
 /**
  * Root module del proceso `worker` (ARCHITECTURE.md §5): consumidor de
- * BullMQ + sondeos periódicos (offline, notificaciones). Expone solo
+ * BullMQ + sondeos periódicos (offline, notificaciones, particiones de
+ * telemetría). Expone solo
  * `/health`.
  */
 @Module({
@@ -22,6 +24,7 @@ import { NotificationDispatchService } from './modules/notifications/notificatio
     TelemetryProcessingService,
     TelemetryWorkerService,
     OfflineDetectionService,
+    TelemetryPartitionsService,
     NotificationDispatchService,
   ],
 })
