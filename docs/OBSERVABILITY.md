@@ -89,6 +89,7 @@ Cada proceso (`api`/`ingestion`/`worker`) exporta a un **OTel Collector** local 
 | Backup sin confirmar (Healthchecks.io) | Sin ping en la ventana esperada (Etapa 12) | Email/Slack inmediato |
 | Presupuesto de infraestructura | 80% / 100% del umbral mensual (`DEPLOYMENT.md` sección 10) | Email/Slack |
 | Uptime externo (UptimeRobot) | 2 comprobaciones fallidas seguidas | Email/Slack/SMS |
+| Disco de la VPS (timer de systemd en el propio servidor, `infra/scripts/aviso-disco.sh`) | Por encima del 80 % de uso | Email por el SMTP de la plataforma (Brevo), como mucho uno cada 24 h |
 | % de gateways offline en una organización | > 30% simultáneamente (posible corte de red regional, no solo dispositivos sueltos) | Email/Slack |
 
 ## 10. Dashboards (Grafana)

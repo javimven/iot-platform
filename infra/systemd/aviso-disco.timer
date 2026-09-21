@@ -1,0 +1,10 @@
+[Unit]
+Description=Comprueba cada media hora el espacio libre del disco (BACKLOG.md #54)
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+Unit=aviso-disco.service
+
+[Install]
+WantedBy=timers.target
