@@ -15,12 +15,19 @@ describe('NoSensorDataService', () => {
     ultima: Date | null;
     abierta?: { id: string };
     reciente?: unknown;
+    /** Último envío de la estación; por defecto, recién llegado. */
+    lastSeenAt?: Date | null;
   }) {
     const tx = {
       gateway: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([{ id: 'gw-1', organizationId: 'org-1', deletedAt: null }]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'gw-1',
+            organizationId: 'org-1',
+            deletedAt: null,
+            lastSeenAt: params.lastSeenAt === undefined ? AHORA : params.lastSeenAt,
+          },
+        ]),
       },
       alert: {
         findFirst: jest
@@ -110,11 +117,46 @@ describe('NoSensorDataService', () => {
     });
   });
 
+  it('solo mira estaciones en línea o caídas, no las deshabilitadas', async () => {
+    const { prisma, tx } = buildPrisma({ ultima: AHORA });
+    await new NoSensorDataService(prisma).scan(AHORA);
+
+    expect(tx.gateway.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['online', 'offline'] } }),
+      }),
+    );
+  });
+
+  it('una estación parada hace días, que tampoco envía, deja de avisar', async () => {
+    // Visto en vivo el 2026-09-21: lo primero que avisó el servicio nuevo fue
+    // una estación de pruebas con cinco días sin datos. Eso ya se sabe.
+    const haceCincoDias = new Date(AHORA.getTime() - 5 * 24 * 60 * 60 * 1000);
+    const { prisma, tx } = buildPrisma({ ultima: haceCincoDias, lastSeenAt: haceCincoDias });
+    await new NoSensorDataService(prisma).scan(AHORA);
+
+    expect(tx.alert.create).not.toHaveBeenCalled();
+  });
+
+  it('pero si lleva días sin datos y sigue enviando, sí avisa: es el fallo de la WSC2-N', async () => {
+    const { prisma, tx } = buildPrisma({
+      ultima: new Date(AHORA.getTime() - 5 * 24 * 60 * 60 * 1000),
+      lastSeenAt: new Date(AHORA.getTime() - 10 * 60 * 1000),
+    });
+    await new NoSensorDataService(prisma).scan(AHORA);
+
+    expect(tx.alert.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ alertType: 'no_sensor_data' }),
+      }),
+    );
+  });
+
   it('un gateway que falla no interrumpe el repaso de los demás', async () => {
     const { prisma, tx } = buildPrisma({ ultima: AHORA });
     tx.gateway.findMany.mockResolvedValue([
-      { id: 'gw-roto', organizationId: 'org-1', deletedAt: null },
-      { id: 'gw-2', organizationId: 'org-1', deletedAt: null },
+      { id: 'gw-roto', organizationId: 'org-1', deletedAt: null, lastSeenAt: AHORA },
+      { id: 'gw-2', organizationId: 'org-1', deletedAt: null, lastSeenAt: AHORA },
     ]);
     tx.$queryRaw
       .mockRejectedValueOnce(new Error('conexión perdida'))

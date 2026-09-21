@@ -8,6 +8,15 @@ const SILENCIO_MS = 60 * 60 * 1000;
 /** Como mucho, un aviso por estación al día: el fallo dura hasta que alguien va. */
 const ESPERA_ENTRE_AVISOS_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Pasado este silencio, una estación que tampoco da señales de vida se da por
+ * abandonada y se deja de avisar: lo que interesa es enterarse de que algo se
+ * ha roto, no que a diario recuerden una estación que lleva días parada y ya
+ * se sabe (visto en vivo el 2026-09-21: al arrancar el servicio, lo primero
+ * que avisó fue una estación de pruebas con cinco días sin datos).
+ */
+const SILENCIO_DE_ABANDONO_MS = 24 * 60 * 60 * 1000;
+
 const INTERVALO_MS = 5 * 60 * 1000;
 
 /** Identificador reservado de los datos del propio equipo (ADR-0008): no son de campo. */
@@ -55,12 +64,16 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
     // `OfflineDetectionService` (el bypass de RLS va por `runInTenantContext`,
     // nunca con el cliente a pelo).
     const gateways = await this.prisma.runInTenantContext({ isPlatformAdmin: true }, (tx) =>
-      tx.gateway.findMany({ where: { deletedAt: null } }),
+      // Mismo filtro que `OfflineDetectionService`: una estación deshabilitada
+      // o aún sin aprovisionar no tiene de qué avisar.
+      tx.gateway.findMany({
+        where: { status: { in: ['online', 'offline'] }, deletedAt: null },
+      }),
     );
 
     for (const gateway of gateways) {
       try {
-        await this.revisarGateway(gateway.id, gateway.organizationId, ahora);
+        await this.revisarGateway(gateway, ahora);
       } catch (error) {
         this.logger.error(`Gateway ${gateway.id}: ${(error as Error).message}`);
       }
@@ -68,10 +81,10 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async revisarGateway(
-    gatewayId: string,
-    organizationId: string,
+    gateway: { id: string; organizationId: string; lastSeenAt: Date | null },
     ahora: Date,
   ): Promise<void> {
+    const { id: gatewayId, organizationId } = gateway;
     await this.prisma.runInTenantContext({ organizationId }, async (tx) => {
       const ultima = await this.ultimaLecturaDeCampo(tx, gatewayId);
 
@@ -97,6 +110,14 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (abierta) return;
+
+      // Una estación que lleva días sin datos y que además no envía nada se
+      // da por parada, no por recién rota. El caso que sí interesa aunque
+      // lleve días —la WSC2-N sin declarar sus sensores— sigue enviando
+      // batería y cobertura, así que su `lastSeenAt` está fresco y pasa.
+      const daSenalesDeVida =
+        gateway.lastSeenAt != null && ahora.getTime() - gateway.lastSeenAt.getTime() <= SILENCIO_MS;
+      if (!daSenalesDeVida && silencio > SILENCIO_DE_ABANDONO_MS) return;
 
       // Un aviso al día por estación: mientras nadie va a arreglarla, el
       // silencio sigue y no tiene sentido abrir una alerta (y su correo) en
