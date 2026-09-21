@@ -11,7 +11,11 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 describe('NoSensorDataService', () => {
   const AHORA = new Date('2026-09-21T18:00:00Z');
 
-  function buildPrisma(params: { ultima: Date | null; abierta?: { id: string }; reciente?: unknown }) {
+  function buildPrisma(params: {
+    ultima: Date | null;
+    abierta?: { id: string };
+    reciente?: unknown;
+  }) {
     const tx = {
       gateway: {
         findMany: jest

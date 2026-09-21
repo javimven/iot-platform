@@ -37,7 +37,9 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.timer = setInterval(() => {
-      this.scan().catch((error) => this.logger.error(`No sensor data scan failed: ${(error as Error).message}`));
+      this.scan().catch((error) =>
+        this.logger.error(`No sensor data scan failed: ${(error as Error).message}`),
+      );
     }, INTERVALO_MS);
   }
 
@@ -65,7 +67,11 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async revisarGateway(gatewayId: string, organizationId: string, ahora: Date): Promise<void> {
+  private async revisarGateway(
+    gatewayId: string,
+    organizationId: string,
+    ahora: Date,
+  ): Promise<void> {
     await this.prisma.runInTenantContext({ organizationId }, async (tx) => {
       const ultima = await this.ultimaLecturaDeCampo(tx, gatewayId);
 
@@ -112,10 +118,15 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
           gatewayId,
           status: 'open',
           openedAt: ahora,
-          details: { ultimaLectura: ultima.toISOString(), silencioMinutos: Math.round(silencio / 60000) },
+          details: {
+            ultimaLectura: ultima.toISOString(),
+            silencioMinutos: Math.round(silencio / 60000),
+          },
         },
       });
-      this.logger.warn(`Gateway ${gatewayId}: ${Math.round(silencio / 60000)} min sin datos de sensores, alerta abierta`);
+      this.logger.warn(
+        `Gateway ${gatewayId}: ${Math.round(silencio / 60000)} min sin datos de sensores, alerta abierta`,
+      );
     });
   }
 
@@ -124,7 +135,10 @@ export class NoSensorDataService implements OnModuleInit, OnModuleDestroy {
    * fuera los datos del propio equipo (batería y cobertura): precisamente el
    * fallo que se busca es que lleguen solo esos.
    */
-  private async ultimaLecturaDeCampo(tx: Prisma.TransactionClient, gatewayId: string): Promise<Date | null> {
+  private async ultimaLecturaDeCampo(
+    tx: Prisma.TransactionClient,
+    gatewayId: string,
+  ): Promise<Date | null> {
     const filas = await tx.$queryRaw<{ ultima: Date | null }[]>`
       SELECT max(lr.ts_origin) AS ultima
       FROM latest_readings lr
