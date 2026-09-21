@@ -1,0 +1,12 @@
+-- Tipo de alerta nuevo: la estación sigue enviando pero sus sensores no dan
+-- datos (BACKLOG.md #57).
+--
+-- El 2026-09-21 la WSC2-N perdió tres veces las declaraciones de sus sensores
+-- RS485: seguía en línea, mandando batería y cobertura, y la plataforma no
+-- guardaba ni una lectura. Con `offline` no se cubre —el gateway no está
+-- caído— y en pantalla solo salía un aviso que hay que ir a mirar.
+--
+-- `ALTER TYPE ... ADD VALUE` va en su propia migración a propósito: Postgres
+-- no deja usar un valor de enum en la misma transacción en la que se añade, y
+-- Prisma aplica cada migración en una transacción.
+ALTER TYPE "AlertType" ADD VALUE IF NOT EXISTS 'no_sensor_data';

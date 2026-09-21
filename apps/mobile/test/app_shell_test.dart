@@ -37,7 +37,12 @@ const _branches = [
   '/infrastructure',
 ];
 
-Future<void> _pumpShell(WidgetTester tester, Size size, {String location = '/stations'}) async {
+Future<void> _pumpShell(
+  WidgetTester tester,
+  Size size, {
+  String location = '/stations',
+  TargetPlatform platform = TargetPlatform.android,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -71,7 +76,7 @@ Future<void> _pumpShell(WidgetTester tester, Size size, {String location = '/sta
         authControllerProvider.overrideWith((ref) => _SignedInAuthController()),
         preferenceStoreProvider.overrideWithValue(_MemoryStore()),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(theme: ThemeData(platform: platform), routerConfig: router),
     ),
   );
   await tester.pumpAndSettle();
@@ -127,15 +132,82 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('en pantalla ancha, la misma barra inferior que en el móvil', (tester) async {
-    // Decisión del usuario (2026-09-18): la vista de móvil también en el
-    // ordenador; se quitó el menú lateral.
+  testWidgets('en el ordenador: menú lateral con todas las secciones y la cuenta, sin barra inferior', (tester) async {
+    // Decisión del usuario (2026-09-21): en el ordenador hay sitio para los
+    // menús, no tiene sentido esconderlos tras «Más» (BACKLOG.md #56).
     await _pumpShell(tester, const Size(1280, 800));
 
-    expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('Contraer menú'), findsNothing);
-    for (final label in ['Estaciones', 'Alertas', 'Gráficos', 'Más']) {
-      expect(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    for (final label in ['Estaciones', 'Alertas', 'Gráficos personalizados', 'Informes', 'Infraestructura']) {
+      expect(find.text(label), findsOneWidget);
     }
+    expect(find.text('Sesiones activas'), findsOneWidget);
+    expect(find.text('Apariencia'), findsOneWidget);
+    expect(find.text('Cerrar sesión'), findsOneWidget);
+
+    await tester.tap(find.text('Infraestructura'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pantalla /infrastructure'), findsOneWidget);
+  });
+
+  testWidgets('en el ordenador los datos ocupan todo el ancho que deja el menú', (tester) async {
+    // Decisión del usuario (2026-09-21): se quitó la columna centrada de 900
+    // px — «que la parte de datos se adapte al ancho de la pantalla siempre».
+    await _pumpShell(tester, const Size(1600, 900));
+
+    expect(tester.getSize(find.byType(StatefulNavigationShell)).width, 1600 - 240); // todo menos el menú
+  });
+
+  group('ordenador con la ventana pequeña', () {
+    testWidgets('sigue siendo escritorio, no un móvil tumbado', (tester) async {
+      // El fallo que corrige (2026-09-21): al encoger la ventana, la web de
+      // ordenador pasaba a barra inferior porque las medidas se parecían a las
+      // de un teléfono girado.
+      await _pumpShell(tester, const Size(900, 520), platform: TargetPlatform.windows);
+
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byIcon(Icons.sensors_outlined), findsOneWidget);
+    });
+
+    testWidgets('el menú se encoge a iconos y la cuenta cabe en uno solo', (tester) async {
+      await _pumpShell(tester, const Size(900, 520), platform: TargetPlatform.windows);
+
+      // Sin etiquetas: solo iconos con su aviso emergente.
+      expect(find.text('Estaciones'), findsNothing);
+      expect(find.text('Cerrar sesión'), findsNothing);
+      expect(tester.getSize(find.byType(StatefulNavigationShell)).width, 900 - anchoMenuIconos);
+
+      await tester.tap(find.byIcon(Icons.account_circle_outlined));
+      await tester.pumpAndSettle();
+      for (final label in ['Sesiones activas', 'Apariencia', 'Cerrar sesión']) {
+        expect(find.text(label), findsOneWidget);
+      }
+    });
+
+    testWidgets('con la ventana ancha vuelven las etiquetas', (tester) async {
+      await _pumpShell(tester, const Size(1400, 900), platform: TargetPlatform.windows);
+      expect(find.text('Estaciones'), findsOneWidget);
+      expect(find.text('Cerrar sesión'), findsOneWidget);
+    });
+
+    testWidgets('en la pantalla de una estación no se va a la gráfica a pantalla completa', (tester) async {
+      await _pumpShell(tester, const Size(900, 520), location: '/stations/gw-1', platform: TargetPlatform.windows);
+      expect(find.byIcon(Icons.sensors_outlined), findsOneWidget); // el menú sigue ahí
+    });
+  });
+
+  test('la disposición depende de la plataforma, no solo del tamaño', () {
+    const ventanaPequena = Size(900, 520);
+    const movilGirado = Size(844, 390);
+
+    expect(usaMenuLateral(ventanaPequena, platform: TargetPlatform.windows), isTrue);
+    expect(isPhoneLandscape(ventanaPequena, platform: TargetPlatform.windows), isFalse);
+    expect(menuLateralCompleto(ventanaPequena), isFalse);
+
+    expect(usaMenuLateral(movilGirado, platform: TargetPlatform.iOS), isFalse);
+    expect(isPhoneLandscape(movilGirado, platform: TargetPlatform.iOS), isTrue);
+
+    // Una tableta ancha se queda como estaba: menú lateral.
+    expect(usaMenuLateral(const Size(1024, 768), platform: TargetPlatform.iOS), isTrue);
   });
 }

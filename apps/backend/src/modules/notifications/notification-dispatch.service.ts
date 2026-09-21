@@ -94,7 +94,7 @@ export class NotificationDispatchService implements OnModuleInit, OnModuleDestro
 
     const result = await this.mailer.send({
       to: recipientEmail,
-      subject: `Alerta ${alert.alertType === 'offline' ? 'de desconexión' : 'de umbral'} abierta`,
+      subject: `Alerta ${this.asunto(alert)} abierta`,
       text: this.buildBody(alert),
     });
 
@@ -118,7 +118,24 @@ export class NotificationDispatchService implements OnModuleInit, OnModuleDestro
     }
   }
 
+  private asunto(alert: Alert): string {
+    if (alert.alertType === 'offline') return 'de desconexión';
+    if (alert.alertType === 'no_sensor_data') return 'de estación sin datos de sensores';
+    return 'de umbral';
+  }
+
   private buildBody(alert: Alert): string {
+    if (alert.alertType === 'no_sensor_data') {
+      const d = (alert.details ?? {}) as { ultimaLectura?: string };
+      return [
+        'Una estación sigue enviando, pero sus sensores no dan datos.',
+        d.ultimaLectura ? `Última lectura de sensores: ${d.ultimaLectura}.` : '',
+        'En la WSC2-N esto suele ser un reinicio: pierde las declaraciones de sus sensores y hay que volver a declararlas con el cable de consola.',
+        `(alerta ${alert.id}, abierta ${alert.openedAt.toISOString()})`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
     if (alert.alertType === 'offline') {
       return `Un gateway o dispositivo ha dejado de reportar datos (alerta ${alert.id}, abierta ${alert.openedAt.toISOString()}).`;
     }

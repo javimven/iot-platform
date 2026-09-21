@@ -445,6 +445,8 @@ model LatestReading {
 enum AlertType {
   threshold
   offline
+  /// La estacion envia pero sus sensores no dan datos (BACKLOG.md #57).
+  no_sensor_data
 }
 
 enum AlertStatus {

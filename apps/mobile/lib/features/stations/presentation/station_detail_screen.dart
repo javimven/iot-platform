@@ -122,7 +122,7 @@ class _StationDetail extends ConsumerWidget {
         final selected = ref.watch(detailSelectedSensorProvider(gateway.id)).clamp(0, groups.length - 1);
 
         final aliveAt = stationAliveAt(gateway, items);
-        if (isPhoneLandscape(MediaQuery.sizeOf(context))) {
+        if (isPhoneLandscape(MediaQuery.sizeOf(context), platform: Theme.of(context).platform)) {
           return _FullScreenChart(gateway: gateway, groups: groups, selected: selected, aliveAt: aliveAt);
         }
 

@@ -88,6 +88,15 @@ class _AlertTile extends ConsumerWidget {
       final value = alert.details?['value'];
       return value == null ? '$label fuera de rango' : '$label fuera de rango (valor: $value)';
     }
+    if (alert.alertType == 'no_sensor_data') {
+      // La estación sigue en línea: lo que falla son las lecturas. En la
+      // WSC2-N suele ser un reinicio que le borra las declaraciones de sus
+      // sensores RS485, y entonces hay que ir con el cable de consola.
+      final nombre = alert.gatewayName;
+      return nombre == null
+          ? 'Sin datos de sensores desde hace más de una hora'
+          : 'La estación "$nombre" lleva más de una hora sin datos de sus sensores';
+    }
     if (alert.gatewayName != null) {
       return 'Gateway "${alert.gatewayName}" sin conexión';
     }
@@ -95,6 +104,17 @@ class _AlertTile extends ConsumerWidget {
       return 'Dispositivo "${alert.deviceName}" sin conexión';
     }
     return 'Sin conexión';
+  }
+
+  IconData get _icono {
+    switch (alert.alertType) {
+      case 'threshold':
+        return Icons.warning_amber;
+      case 'no_sensor_data':
+        return Icons.sensors_off;
+      default:
+        return Icons.wifi_off;
+    }
   }
 
   ({String label, AppStatusTone tone}) get _statusChip {
@@ -133,7 +153,7 @@ class _AlertTile extends ConsumerWidget {
     final status = _statusChip;
 
     return ListTile(
-      leading: Icon(alert.alertType == 'threshold' ? Icons.warning_amber : Icons.wifi_off),
+      leading: Icon(_icono),
       title: Text(alert.installationName ?? 'Instalación desconocida'),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

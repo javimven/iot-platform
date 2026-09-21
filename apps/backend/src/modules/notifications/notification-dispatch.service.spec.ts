@@ -102,6 +102,32 @@ describe('NotificationDispatchService', () => {
     );
   });
 
+  it('el correo de «sin datos de sensores» dice qué pasa y desde cuándo', async () => {
+    // BACKLOG.md #57: el asunto tiene que distinguirse del de desconexión —
+    // la estación sigue en línea, lo que falta son las lecturas.
+    const ultimaLectura = '2026-09-21T16:00:00.000Z';
+    const { prisma, mailer } = buildDeps({
+      alerts: [
+        {
+          ...openAlert,
+          alertType: 'no_sensor_data',
+          details: { ultimaLectura },
+        } as unknown as typeof openAlert,
+      ],
+      members: [
+        { userId: 'user-admin', roleCode: 'org_admin', user: { email: 'admin@example.com' } },
+      ],
+    });
+    await new NotificationDispatchService(prisma, mailer).scan();
+
+    expect(mailer.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Alerta de estación sin datos de sensores abierta',
+        text: expect.stringContaining(ultimaLectura),
+      }),
+    );
+  });
+
   it('excluye alertas resueltas: solo procesa lo que devuelve la query ya filtrada', async () => {
     const { prisma, mailer } = buildDeps({ alerts: [] });
     const service = new NotificationDispatchService(prisma, mailer);

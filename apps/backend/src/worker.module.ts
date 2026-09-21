@@ -5,6 +5,7 @@ import { PrismaService } from './common/prisma/prisma.service';
 import { MailerService } from './common/mailer/mailer.service';
 import { TelemetryProcessingService } from './modules/telemetry/telemetry-processing.service';
 import { TelemetryWorkerService } from './modules/worker-jobs/telemetry-worker.service';
+import { NoSensorDataService } from './modules/worker-jobs/no-sensor-data.service';
 import { OfflineDetectionService } from './modules/worker-jobs/offline-detection.service';
 import { TelemetryPartitionsService } from './modules/worker-jobs/telemetry-partitions.service';
 import { NotificationDispatchService } from './modules/notifications/notification-dispatch.service';
@@ -24,6 +25,7 @@ import { NotificationDispatchService } from './modules/notifications/notificatio
     TelemetryProcessingService,
     TelemetryWorkerService,
     OfflineDetectionService,
+    NoSensorDataService,
     TelemetryPartitionsService,
     NotificationDispatchService,
   ],
