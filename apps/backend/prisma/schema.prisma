@@ -216,8 +216,9 @@ model Parcel {
   updatedAt       DateTime                            @updatedAt @map("updated_at")
   deletedAt       DateTime?                           @map("deleted_at")
 
-  installation Installation @relation(fields: [installationId], references: [id])
+  installation Installation           @relation(fields: [installationId], references: [id])
   gateways     Gateway[]
+  observations SatelliteObservation[]
 
   @@index([organizationId])
   @@index([installationId])
@@ -556,4 +557,136 @@ model NotificationLog {
 
   @@unique([alertId, recipientUserId]) // Evita reenviar la misma notificación dos veces (DATA_MODEL.md §5)
   @@map("notification_log")
+}
+
+// ---------------------------------------------------------------------------
+// Satelite (BACKLOG.md #36). Dominio propio, NO canales de telemetria: un
+// Channel cuelga de un Sensor, que es hardware, y una observacion de satelite
+// no tiene sensor detras. Mezclarlos habria obligado a inventar un sensor
+// falso por parcela.
+//
+// Las tablas se crean a mano en la migracion 0009 (RLS, CHECKs e indices
+// unicos parciales), igual que el resto del esquema.
+// ---------------------------------------------------------------------------
+
+enum SatelliteObservationStatus {
+  pending
+  processing
+  ready
+  /// Habia imagen, pero demasiado tapada para medir nada (ver qualityStatus).
+  rejected_quality
+  failed
+}
+
+enum SatelliteQualityStatus {
+  good
+  partial
+  rejected
+}
+
+/// Una pasada del satelite sobre una parcela, ya procesada.
+///
+/// La clave logica es (parcela, proveedor, coleccion, dia, version de
+/// procesado): una parcela a caballo de dos tiles produce varios items STAC de
+/// la MISMA pasada, y para nosotros es una sola observacion. Por eso
+/// `sourceItemIds` es una lista y no hay ningun `scene_id`.
+model SatelliteObservation {
+  id                   String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                     @map("organization_id") @db.Uuid
+  parcelId             String                     @map("parcel_id") @db.Uuid
+  /// `copernicus` hoy; texto y no enum para que anadir un proveedor no sea un ALTER TYPE.
+  provider             String
+  collection           String
+  /// Momento de la pasada, en UTC. Es la fecha de las graficas, nunca `processedAt`.
+  acquisitionTime      DateTime                   @map("acquisition_time")
+  /// El dia UTC de la pasada: la parte de la clave logica.
+  acquisitionDate      DateTime                   @map("acquisition_date") @db.Date
+  /// Items STAC que cubrieron el recinto en esa pasada.
+  sourceItemIds        Json                       @map("source_item_ids")
+  platform             String?
+  /// Version del algoritmo/evalscript (`ndvi-s2-v1`): permite reprocesar sin pisar.
+  processingVersion    String                     @map("processing_version")
+  /// Contorno sobre el que se calculo: si la parcela se redibuja, esto queda viejo.
+  parcelGeometryVersion Int                       @map("parcel_geometry_version")
+  /// 0..1. El numero que decide si la observacion sirve.
+  validPixelFraction   Float?                     @map("valid_pixel_fraction")
+  /// 0..1 dentro de la parcela. Null en la v1 (ver BACKLOG.md #36).
+  parcelCloudFraction  Float?                     @map("parcel_cloud_fraction")
+  /// 0..1 de la escena entera, informativo: no es la nubosidad de la parcela.
+  sceneCloudCover      Float?                     @map("scene_cloud_cover")
+  qualityStatus        SatelliteQualityStatus?    @map("quality_status")
+  status               SatelliteObservationStatus @default(pending)
+  /// Motivo del ultimo fallo, sin secretos: se ensena en la ficha de la parcela.
+  lastError            String?                    @map("last_error")
+  processedAt          DateTime?                  @map("processed_at")
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
+
+  parcel  Parcel             @relation(fields: [parcelId], references: [id])
+  metrics SatelliteMetric[]
+  assets  SatelliteAsset[]
+
+  /// La clave logica de una observacion. `name` para poder nombrarla asi desde
+  /// el cliente; `map` para que el indice de la base se llame como en la
+  /// migracion 0009.
+  @@unique([parcelId, provider, collection, acquisitionDate, processingVersion], name: "claveLogica", map: "satellite_observations_logica_uniq")
+  @@index([organizationId])
+  @@index([parcelId, acquisitionTime])
+  @@map("satellite_observations")
+}
+
+/// Estadisticas de un indice sobre los pixeles validos de la parcela. Una fila
+/// por indice: anadir NDRE o NDMI manana es una fila mas, no una columna mas.
+model SatelliteMetric {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  observationId  String   @map("observation_id") @db.Uuid
+  /// `ndvi` en la v1.
+  metricCode     String   @map("metric_code")
+  mean           Float
+  median         Float
+  min            Float
+  max            Float
+  stdDev         Float    @map("std_dev")
+  p10            Float
+  p90            Float
+  sampleCount    Int      @map("sample_count")
+  noDataCount    Int      @map("no_data_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  observation SatelliteObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  @@unique([observationId, metricCode])
+  @@index([organizationId])
+  @@map("satellite_metrics")
+}
+
+/// Archivo guardado en el almacenamiento de objetos. La fila dice donde esta;
+/// el objeto solo sale firmado y con caducidad (`StorageService`).
+model SatelliteAsset {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  observationId  String   @map("observation_id") @db.Uuid
+  /// `ndvi_raster` (GeoTIFF FLOAT32, el dato) o `ndvi_preview` (PNG, solo pintar).
+  assetType      String   @map("asset_type")
+  objectKey      String   @map("object_key")
+  mediaType      String   @map("media_type")
+  width          Int?
+  height         Int?
+  bboxMinLon     Float    @map("bbox_min_lon")
+  bboxMinLat     Float    @map("bbox_min_lat")
+  bboxMaxLon     Float    @map("bbox_max_lon")
+  bboxMaxLat     Float    @map("bbox_max_lat")
+  crs            String
+  /// Valor de "sin dato" del raster (NaN en FLOAT32); null en el PNG.
+  nodata         Float?
+  byteSize       Int      @map("byte_size")
+  checksum       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  observation SatelliteObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  @@unique([observationId, assetType])
+  @@index([organizationId])
+  @@map("satellite_assets")
 }
