@@ -33,6 +33,9 @@ import '../../features/stations/presentation/station_detail_screen.dart';
 import '../../features/stations/presentation/stations_screen.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/locked_feature_screen.dart';
+
+import '../../features/parcels/presentation/draw_parcel_screen.dart';
+import '../../features/satellite/presentation/satellite_screen.dart';
 import '../widgets/under_construction_screen.dart';
 
 /// Traduce los cambios de `AuthState` (Riverpod) en notificaciones que
@@ -189,8 +192,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/satellite',
-                builder: (context, state) =>
-                    const LockedFeatureScreen(featureCode: 'satellite_imagery', title: 'Satélite'),
+                builder: (context, state) => const SatelliteScreen(),
               ),
             ],
           ),
@@ -204,6 +206,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => InstallationDetailScreen(
           installationId: state.pathParameters['id']!,
         ),
+      ),
+      // Dibujo de una parcela: pantalla completa, fuera del shell, porque el
+      // mapa necesita todo el alto y las pestanas estorban.
+      GoRoute(
+        path: '/installations/:id/parcels/new',
+        builder: (context, state) =>
+            DrawParcelScreen(installationId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/members', builder: (context, state) => const MembersListScreen()),
       GoRoute(
