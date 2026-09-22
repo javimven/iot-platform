@@ -35,6 +35,9 @@ import '../widgets/app_shell.dart';
 import '../widgets/locked_feature_screen.dart';
 
 import '../../features/parcels/presentation/draw_parcel_screen.dart';
+import '../../features/campaigns/presentation/campaign_detail_screen.dart';
+import '../../features/campaigns/presentation/campaigns_screen.dart';
+import '../../features/campaigns/presentation/new_campaign_screen.dart';
 import '../../features/satellite/presentation/satellite_screen.dart';
 import '../widgets/under_construction_screen.dart';
 
@@ -172,8 +175,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/campaigns',
-                builder: (context, state) =>
-                    const LockedFeatureScreen(featureCode: 'campaigns', title: 'Campañas'),
+                builder: (context, state) => const CampaignsScreen(),
+                routes: [
+                  // 'new' antes que ':id': si no, 'new' se tomaría por un id.
+                  GoRoute(path: 'new', builder: (context, state) => const NewCampaignScreen()),
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) =>
+                        CampaignDetailScreen(campaignId: state.pathParameters['id']!),
+                  ),
+                ],
               ),
             ],
           ),
