@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { ActivitiesController } from './activities.controller';
+import { ActivitiesService } from './activities.service';
 import { CampaignAccess } from './campaign-access';
+import { CampaignSummaryService } from './campaign-summary';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { CropUnitsService } from './crop-units.service';
@@ -13,8 +16,16 @@ import { CropsController } from './crops.controller';
  * depender del módulo de satélite.
  */
 @Module({
-  controllers: [CampaignsController, CropsController],
-  providers: [PrismaService, AuditLogService, CampaignAccess, CampaignsService, CropUnitsService],
+  controllers: [CampaignsController, ActivitiesController, CropsController],
+  providers: [
+    PrismaService,
+    AuditLogService,
+    CampaignAccess,
+    CampaignsService,
+    CropUnitsService,
+    ActivitiesService,
+    CampaignSummaryService,
+  ],
   exports: [CampaignAccess, CampaignsService],
 })
 export class CampaignsModule {}

@@ -943,6 +943,113 @@ paths:
         "409":
           description: Es la última unidad, o tiene actividades registradas
 
+  /campaigns/{campaignId}/activities:
+    get:
+      tags: [campaigns]
+      summary: Línea de tiempo de la campaña, de lo más reciente hacia atrás (campaigns.read)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: type, in: query, schema: { type: string, enum: [irrigation, fertilization, phytosanitary, field_work, harvest, observation, sowing, other] } }
+        - { name: from, in: query, description: "Actividades que tocan el intervalo", schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CampaignActivity" }
+    post:
+      tags: [campaigns]
+      summary: Registra lo que se ha hecho (campaigns.record)
+      description: >
+        Un solo alta para todos los tipos, con el detalle del tipo (`irrigation`,
+        `fertilization`, `phytosanitary`, `harvest`, `fieldWork`). Nada de lo
+        del cuaderno completo es obligatorio para guardar (ADR-0013); se
+        rechaza lo incoherente: detalle de otro tipo, valor sin unidad,
+        parcela de fuera de la campaña, fechas anteriores a la campaña o que
+        todavía no han pasado.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignActivityCreate" }
+      responses:
+        "201":
+          description: Registrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignActivity" }
+        "400":
+          description: Incoherente (el mensaje dice qué)
+        "409":
+          description: La campaña está cerrada
+
+  /campaigns/{campaignId}/activities/{activityId}:
+    get:
+      tags: [campaigns]
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: activityId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignActivity" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [campaigns]
+      summary: Corrige una actividad (campaigns.record). Lo anterior queda en la auditoría.
+      description: El tipo no cambia; el detalle y los destinos, si vienen, sustituyen a los anteriores enteros.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: activityId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignActivityUpdate" }
+      responses:
+        "200":
+          description: Actividad corregida
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignActivity" }
+        "409":
+          description: La campaña está cerrada
+    delete:
+      tags: [campaigns]
+      summary: Borrado lógico, con motivo opcional (campaigns.record)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: activityId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: reason, in: query, schema: { type: string, maxLength: 1000 } }
+      responses:
+        "204": { description: Borrada }
+        "409":
+          description: La campaña está cerrada
+
+  /campaigns/{campaignId}/summary:
+    get:
+      tags: [campaigns]
+      summary: Resumen calculado de las actividades (campaigns.read)
+      description: >
+        Un apartado sin actividades es `null`, no un cero. Lo que no se pudo
+        calcular se cuenta aparte (`withoutVolume`, `withoutComposition`,
+        `withoutKg`). El rendimiento por unidad solo cuenta las cosechas
+        enteras de esa unidad.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignSummary" }
+
   /crops:
     get:
       tags: [campaigns]
@@ -2558,3 +2665,238 @@ components:
                         areaHa: { type: number, nullable: true, description: "Declarada; nula = la parcela entera" }
                         effectiveAreaHa: { type: number }
                         deleted: { type: boolean, description: "La parcela se borró después; sigue por su historia" }
+
+    ActivityTargetInput:
+      type: object
+      required: [parcelId]
+      properties:
+        parcelId: { type: string, format: uuid }
+        cropUnitId: { type: string, format: uuid, description: "Solo si la parcela está en más de una unidad de la campaña." }
+        areaHa: { type: number, minimum: 0.0001, description: "Omitido = todo lo que ocupa en la unidad." }
+
+    IrrigationDetail:
+      type: object
+      properties:
+        system: { type: string, enum: [surface, sprinkler_fixed, sprinkler_mobile, micro_sprinkler, fogging, drip, hydroponic_open, hydroponic_recirculating] }
+        amount: { type: number, minimum: 0 }
+        amountUnit: { type: string, enum: [m3, m3_ha, l] }
+        volumeM3: { type: number, readOnly: true, description: "Calculado: m³ totales." }
+        waterSource: { type: string }
+        meterNumber: { type: string }
+        nitrateMgL: { type: number }
+        p2o5MgL: { type: number }
+
+    FertilizationDetail:
+      type: object
+      properties:
+        fertilizationType: { type: string, enum: [base, top_dressing, amendment, other] }
+        materialType: { type: string, enum: [fertilizer_product, solid_manure, slurry, sewage_sludge, compost_digestate, other_waste, other] }
+        productName: { type: string }
+        dose: { type: number, minimum: 0 }
+        doseUnit: { type: string, enum: [kg_ha, l_ha, t_ha, m3_ha, kg, l, t, m3] }
+        applicationMethod: { type: string, enum: [broadcast, localized, fertigation, foliar, injection, other] }
+        nPct: { type: number, minimum: 0, maximum: 100 }
+        p2o5Pct: { type: number, minimum: 0, maximum: 100 }
+        k2oPct: { type: number, minimum: 0, maximum: 100 }
+        organicMatterPct: { type: number, minimum: 0, maximum: 100 }
+        nKgHa: { type: number, readOnly: true, nullable: true, description: "Calculado; nulo si la dosis no va en peso." }
+        p2o5KgHa: { type: number, readOnly: true, nullable: true }
+        k2oKgHa: { type: number, readOnly: true, nullable: true }
+        supplierName: { type: string }
+        supplierNif: { type: string }
+        supplierRega: { type: string }
+        supplierNima: { type: string }
+        applicatorCompany: { type: string }
+        regferCode: { type: string }
+        equipmentId: { type: string, format: uuid }
+
+    PhytosanitaryDetail:
+      type: object
+      required: [products]
+      properties:
+        problem: { type: string }
+        problemCategory: { type: string, enum: [weeds, diseases, arthropods, growth_regulators, other] }
+        justification: { type: string }
+        bbchCode: { type: string, pattern: "^[0-9]{2}$" }
+        phenologicalStageLabel: { type: string }
+        applicatorId: { type: string, format: uuid }
+        adviserId: { type: string, format: uuid }
+        equipmentId: { type: string, format: uuid }
+        manualApplication: { type: boolean }
+        efficacy: { type: string, enum: [good, fair, poor] }
+        products:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            required: [productName]
+            properties:
+              productName: { type: string }
+              registryNumber: { type: string }
+              activeSubstances: { type: string }
+              dose: { type: number }
+              doseUnit: { type: string, enum: [l_ha, kg_ha, l_hl, kg_hl] }
+              totalQuantity: { type: number }
+              totalQuantityUnit: { type: string, enum: [l, kg] }
+
+    HarvestDetail:
+      type: object
+      properties:
+        product: { type: string }
+        quantity: { type: number, minimum: 0 }
+        quantityUnit: { type: string, enum: [kg, t, units] }
+        quantityKg: { type: number, readOnly: true, nullable: true }
+        lotCode: { type: string }
+        deliveryNote: { type: string }
+        customerName: { type: string }
+        customerNif: { type: string }
+        customerAddress: { type: string }
+        customerRgseaa: { type: string }
+        destination: { type: string }
+        qualityGrade: { type: string }
+
+    FieldWorkDetail:
+      type: object
+      required: [workType]
+      properties:
+        workType: { type: string, enum: [soil_preparation, tillage, pruning, clearing, mowing, shredding, thinning, grafting, cover_management, mechanical_control, maintenance, other] }
+        pruningResiduesLeft: { type: boolean }
+        clearingResiduesLeft: { type: boolean }
+        hours: { type: number }
+        machinery: { type: string }
+
+    CampaignActivityCreate:
+      type: object
+      required: [type, startDate, targets]
+      properties:
+        type: { type: string, enum: [irrigation, fertilization, phytosanitary, field_work, harvest, observation, sowing, other] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date, description: "Omitido = el mismo día." }
+        startTime: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+        notes: { type: string, maxLength: 4000 }
+        repeatedFromId: { type: string, format: uuid, description: '"Repetir": de qué actividad se copió.' }
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ActivityTargetInput" }
+        irrigation: { $ref: "#/components/schemas/IrrigationDetail" }
+        fertilization: { $ref: "#/components/schemas/FertilizationDetail" }
+        phytosanitary: { $ref: "#/components/schemas/PhytosanitaryDetail" }
+        harvest: { $ref: "#/components/schemas/HarvestDetail" }
+        fieldWork: { $ref: "#/components/schemas/FieldWorkDetail" }
+
+    CampaignActivityUpdate:
+      type: object
+      description: Como el alta, todo opcional y sin `type`.
+      properties:
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        startTime: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ActivityTargetInput" }
+        irrigation: { $ref: "#/components/schemas/IrrigationDetail" }
+        fertilization: { $ref: "#/components/schemas/FertilizationDetail" }
+        phytosanitary: { $ref: "#/components/schemas/PhytosanitaryDetail" }
+        harvest: { $ref: "#/components/schemas/HarvestDetail" }
+        fieldWork: { $ref: "#/components/schemas/FieldWorkDetail" }
+
+    CampaignActivity:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        campaignId: { type: string, format: uuid }
+        type: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        startTime: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        origin: { type: string, enum: [manual, repeated, sensor_suggestion] }
+        repeatedFromId: { type: string, format: uuid, nullable: true }
+        areaHa: { type: number }
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              parcelId: { type: string, format: uuid }
+              parcelName: { type: string }
+              cropUnitId: { type: string, format: uuid }
+              cropName: { type: string, example: "Aguacate Hass" }
+              areaHa: { type: number, nullable: true }
+              effectiveAreaHa: { type: number }
+        irrigation: { allOf: [{ $ref: "#/components/schemas/IrrigationDetail" }], nullable: true }
+        fertilization: { allOf: [{ $ref: "#/components/schemas/FertilizationDetail" }], nullable: true }
+        phytosanitary:
+          nullable: true
+          description: "Con applicatorSnapshot, adviserSnapshot y equipmentSnapshot: copia de la ficha del catálogo tal como era al registrar."
+          allOf: [{ $ref: "#/components/schemas/PhytosanitaryDetail" }]
+        harvest: { allOf: [{ $ref: "#/components/schemas/HarvestDetail" }], nullable: true }
+        fieldWork: { allOf: [{ $ref: "#/components/schemas/FieldWorkDetail" }], nullable: true }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CampaignSummary:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        areaHa: { type: number }
+        activityCount: { type: integer }
+        lastActivity:
+          type: object
+          nullable: true
+          properties:
+            type: { type: string }
+            date: { type: string, format: date }
+        irrigation:
+          type: object
+          nullable: true
+          properties:
+            count: { type: integer }
+            volumeM3: { type: number }
+            volumeM3PerHa: { type: number, nullable: true }
+            withoutVolume: { type: integer }
+        fertilization:
+          type: object
+          nullable: true
+          properties:
+            count: { type: integer }
+            nKg: { type: number }
+            p2o5Kg: { type: number }
+            k2oKg: { type: number }
+            nKgHa: { type: number, nullable: true }
+            p2o5KgHa: { type: number, nullable: true }
+            k2oKgHa: { type: number, nullable: true }
+            withoutComposition: { type: integer }
+        phytosanitary:
+          type: object
+          nullable: true
+          properties:
+            count: { type: integer }
+            distinctProducts: { type: integer }
+        harvest:
+          type: object
+          nullable: true
+          properties:
+            count: { type: integer }
+            quantityKg: { type: number }
+            yieldKgHa: { type: number, nullable: true }
+            expectedYieldKgHa: { type: number, nullable: true }
+            withoutKg: { type: integer }
+        fieldWork: { type: object, nullable: true, properties: { count: { type: integer } } }
+        observations: { type: object, nullable: true, properties: { count: { type: integer } } }
+        cropUnits:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              cropName: { type: string }
+              areaHa: { type: number }
+              harvestKg: { type: number, nullable: true }
+              yieldKgHa: { type: number, nullable: true }
+              expectedYieldKgHa: { type: number, nullable: true }

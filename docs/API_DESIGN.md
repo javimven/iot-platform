@@ -156,6 +156,13 @@ Contrato completo en `OPENAPI.yaml`. Lo que conviene saber al leerlo:
 - **Toda acción sobre la campaña o sus unidades devuelve la ficha completa**: cambia la superficie, las parcelas y los cultivos, y la app se refresca de una vez.
 - **409 con el motivo en español** cuando la acción choca con el estado: campaña cerrada ("reábrela para modificarla"), última unidad de cultivo, parcela con actividades registradas (dice cuál).
 - **`GET /crops` devuelve el catálogo entero** (es pequeño) y la app filtra mientras se escribe, sin distinguir tildes.
+- **Actividades: un solo alta para todos los tipos** (`POST /campaigns/{id}/activities`), con el detalle del tipo en su propia clave (`irrigation`, `fertilization`, `phytosanitary`, `harvest`, `fieldWork`). Rutas separadas por tipo triplicarían la API sin validar mejor.
+- **Nada del cuaderno completo es obligatorio para guardar** ([ADR-0013](ADR/0013-campana-sencilla-y-cuaderno-completo.md)): quien está en el campo apunta un tratamiento en segundos y lo completa después. Se rechaza lo incoherente, con el motivo: detalle de otro tipo, un valor sin su unidad, una parcela de fuera de la campaña, una fecha anterior a la campaña o que todavía no ha pasado.
+- **Una actividad sobre varias parcelas es un registro con varios destinos.** Si una parcela está en una sola unidad de cultivo, no hace falta decir cuál; si está en dos, sí.
+- **Los valores normalizados los calcula el servidor y los devuelve**: `volumeM3` de un riego escrito en m³/ha, `nKgHa` de un abonado a partir de su dosis y riqueza (nulo si la dosis va en litros: haría falta la densidad), `quantityKg` de una cosecha en toneladas.
+- **Corregir sustituye entero** el detalle o los destinos que se manden, y lo anterior queda en la auditoría. **Borrar es lógico**, con motivo opcional en la consulta (`?reason=`): un cuerpo en un `DELETE` lo tiran algunos proxies.
+- **"Repetir" no tiene ruta propia**: la app rellena el formulario con la actividad anterior y, tras confirmar, la envía con `repeatedFromId`.
+- **El resumen (`/summary`) no enseña ceros que parezcan medidas**: un apartado sin actividades es `null`, y lo que no se pudo calcular se cuenta aparte (`withoutVolume`, `withoutKg`...).
 
 ## 18. Historial de decisiones de esta etapa
 

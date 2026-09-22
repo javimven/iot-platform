@@ -203,6 +203,20 @@ export class CampaignsService {
     }
 
     return this.enTransaccion(user, id, async (tx, organizationId) => {
+      if (dto.startDate) {
+        // La campaña no puede empezar después de lo que ya se ha hecho en ella.
+        const primera = await tx.campaignActivity.findFirst({
+          where: { campaignId: id, deletedAt: null },
+          orderBy: { startDate: 'asc' },
+          select: { startDate: true },
+        });
+        if (primera && primera.startDate < inicio) {
+          const [anyo, mes, dia] = escribirFecha(primera.startDate).split('-');
+          throw new ConflictException(
+            `Hay actividades registradas desde el ${dia}/${mes}/${anyo}: la campaña no puede empezar después.`,
+          );
+        }
+      }
       const campana = await tx.campaign.update({
         where: { id },
         data: {
