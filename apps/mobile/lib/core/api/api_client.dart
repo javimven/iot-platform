@@ -73,6 +73,17 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
+  /// Para las rutas que devuelven un objeto **o** `null` cuando todavía no hay
+  /// nada — la última observación de satélite de una parcela recién creada, por
+  /// ejemplo. `getJson` no sirve ahí: haría un cast de `null` y reventaría.
+  Future<Map<String, dynamic>?> getJsonOrNull(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final response = await _guard(() => _dio.get<dynamic>(path, queryParameters: query));
+    return response.data as Map<String, dynamic>?;
+  }
+
   Future<List<dynamic>> getJsonList(
     String path, {
     Map<String, dynamic>? query,
