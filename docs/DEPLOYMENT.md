@@ -171,6 +171,19 @@ Cada despliegue deja en la VPS la imagen anterior, etiquetada con el SHA del com
 - [ ] Revisión y validación por tu parte.
 - [ ] Cerrar etapa y pasar a Etapa 10 (Observabilidad).
 
+## 15 bis. Primer despliegue del módulo de satélite (BACKLOG.md #36)
+
+Comprobado contra el servidor el 2026-09-22: `S3_ENDPOINT` (`https://fsn1.your-objectstorage.com`), `S3_BUCKET` (`iot-platform-staging`), `S3_ACCESS_KEY` y `S3_SECRET_KEY` ya están en `/opt/iot-platform/.env`. Lo que falta, en este orden:
+
+1. **Credenciales de Copernicus.** Crear un cliente OAuth en el panel de CDSE (*User Settings → OAuth clients*); el secreto solo se puede copiar una vez. Añadir al `.env` del servidor `CDSE_CLIENT_ID` y `CDSE_CLIENT_SECRET`.
+2. **`S3_REGION=fsn1`** en el mismo `.env`. Sin ella el código firma con `us-east-1` y Hetzner rechaza cada subida. La región sale del módulo de Terraform (`object_storage`, `region` por defecto) y coincide con el endpoint.
+3. **Después de editar el `.env` por SSH, comprobar el dueño** (`github-runner`, permisos 600): la lección del BACKLOG.md #54, cuando un `.env` de `root` tumbó dos despliegues seguidos.
+4. **CORS del bucket**: `terraform apply` en `infra/terraform/environments/staging`. Añade una política de solo lectura (`GET`/`HEAD`) para `https://staging-app.<dominio>`; sin ella, la app web —compilada en WebAssembly— no puede pintar de forma fiable la imagen de NDVI dentro del mapa. En iOS y Android no hace falta. No abre el bucket: sin URL firmada no se descarga nada.
+5. **`git push`**. El CI aplica las migraciones 0008 (`CREATE EXTENSION postgis`, la primera vez que se hace contra la base gestionada) y 0009. Si la extensión fallase, `deploy.sh` se detiene en ese paso y los servicios siguen con la versión anterior.
+6. **Web**: compilar y copiar como siempre, y **reiniciar Caddy** (ver la tarea de 2026-09-21 más arriba).
+7. **Activar `satellite_imagery`** para la organización desde el panel de plataforma. Hasta entonces el repaso diario no mira ninguna parcela y no se gasta cuota.
+8. **Primera prueba real**: dibujar una parcela pequeña, esperar a que se procese su histórico (los registros del `worker` dicen cuántas pasadas encola y cuáles descarta por nubes) y comprobar que aparece el NDVI. Todo lo anterior está probado con `fetch` simulado: es la primera vez que se habla con Copernicus de verdad, y es donde saldrán las sorpresas.
+
 ## 16. Dependencias
 - Depende de Etapas 0-8.
 - Bloquea Etapa 10 (dónde vive el colector OTel), Etapa 12 (mecánica de backup sobre esta infraestructura), Etapa 13 (el pipeline despliega el código que ahí se construya).

@@ -25,3 +25,20 @@ resource "minio_s3_bucket" "this" {
   bucket = "iot-platform-${var.environment}"
   acl    = "private"
 }
+
+# CORS de solo lectura para la app web (BACKLOG.md #36). No abre el bucket:
+# sigue siendo privado, y sin una URL firmada por el backend no se descarga
+# nada. Lo que permite es que el navegador, con una URL firmada válida, pueda
+# pasarle la imagen al motor de Flutter web en vez de bloquearla por venir de
+# otro dominio. Solo GET/HEAD: la app nunca sube nada directamente al bucket.
+resource "minio_s3_bucket_cors" "this" {
+  count  = length(var.cors_allowed_origins) > 0 ? 1 : 0
+  bucket = minio_s3_bucket.this.id
+
+  cors_rule {
+    allowed_origins = var.cors_allowed_origins
+    allowed_methods = ["GET", "HEAD"]
+    allowed_headers = ["*"]
+    max_age_seconds = 3600
+  }
+}

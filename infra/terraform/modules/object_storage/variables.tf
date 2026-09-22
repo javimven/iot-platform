@@ -24,3 +24,16 @@ variable "secret_key" {
   type        = string
   sensitive   = true
 }
+
+variable "cors_allowed_origins" {
+  description = <<-EOT
+    Orígenes web que pueden descargar objetos del bucket desde el navegador
+    (las imágenes de NDVI del módulo de satélite, BACKLOG.md #36). La app web
+    se compila en WebAssembly, y ese motor lee las imágenes con `fetch`: sin
+    CORS en el bucket, una imagen de otro dominio no se puede pintar de forma
+    fiable dentro del mapa. Vacío = sin política CORS (el bucket sigue
+    privado igualmente: sin URL firmada no se descarga nada).
+  EOT
+  type        = list(string)
+  default     = []
+}

@@ -35,6 +35,9 @@ module "object_storage" {
   environment = local.environment
   access_key  = var.object_storage_access_key
   secret_key  = var.object_storage_secret_key
+
+  # La app web descarga del bucket las imagenes de NDVI (satelite, #36).
+  cors_allowed_origins = ["https://staging-app.${var.domain}"]
 }
 
 module "dns" {
