@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iot_platform_app/core/api/api_exception.dart';
 import 'package:iot_platform_app/features/installations/application/installations_controller.dart';
 import 'package:iot_platform_app/features/installations/data/installation_models.dart';
 import 'package:iot_platform_app/features/parcels/application/parcels_controller.dart';
@@ -185,6 +186,50 @@ void main() {
       find.textContaining('no hay suficientes observaciones'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('una organización sin el módulo contratado ve su plan, no un error', (tester) async {
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          installationsListProvider.overrideWith((ref) async => [finca]),
+          // Lo que responde el FeatureGuard del backend.
+          parcelasDeFincaProvider('finca-1').overrideWith(
+            (ref) async => throw const ApiException(
+              status: 403,
+              type: 'forbidden',
+              title: 'Feature not enabled for this organization: satellite_imagery',
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: SatelliteScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('El satélite no está incluido en tu plan'), findsOneWidget);
+    expect(find.textContaining('ApiException'), findsNothing);
+  });
+
+  test('un 403 por otra causa no se confunde con el plan', () {
+    const fueraDeAlcance = ApiException(
+      status: 403,
+      type: 'forbidden',
+      title: 'Installation is outside your assigned scope',
+    );
+    const sinPlan = ApiException(
+      status: 403,
+      type: 'forbidden',
+      title: 'Feature not enabled for this organization: satellite_imagery',
+    );
+
+    expect(esModuloNoContratado(fueraDeAlcance), isFalse);
+    expect(esModuloNoContratado(sinPlan), isTrue);
+    expect(esModuloNoContratado(Exception('otra cosa')), isFalse);
   });
 
   testWidgets('con una parcela pequeña avisa de que la media se mezcla con el borde',

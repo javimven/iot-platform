@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/status_chip.dart';
@@ -88,11 +89,21 @@ class _ContenidoSatelite extends ConsumerWidget {
         Expanded(
           child: parcelas.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => _Mensaje(
-              icono: Icons.cloud_off,
-              titulo: 'No se pudieron cargar las parcelas',
-              detalle: '$error',
-            ),
+            // La primera ruta del modulo es la de parcelas: si la organizacion
+            // no tiene el satelite contratado, el backend responde aqui 403
+            // (FeatureGuard) y se explica el plan en vez de ensenar el error.
+            error: (error, _) => esModuloNoContratado(error)
+                ? const _Mensaje(
+                    icono: Icons.lock_outline,
+                    titulo: 'El satélite no está incluido en tu plan',
+                    detalle:
+                        'Contacta con el administrador de tu organización para activar las imágenes por satélite.',
+                  )
+                : _Mensaje(
+                    icono: Icons.cloud_off,
+                    titulo: 'No se pudieron cargar las parcelas',
+                    detalle: '$error',
+                  ),
             data: (lista) => lista.isEmpty
                 ? _SinParcelas(installationId: seleccionada)
                 : _ParcelaElegida(installationId: seleccionada, parcelas: lista),
@@ -470,6 +481,15 @@ class _Mensaje extends StatelessWidget {
     );
   }
 }
+
+/// El backend protege el modulo con `FeatureGuard`: una organizacion sin
+/// `satellite_imagery` recibe 403 con ese titulo. Se distingue de otros 403
+/// (fuera de alcance, sin permiso) por el titulo, que es lo que expone el
+/// filtro RFC 7807.
+bool esModuloNoContratado(Object error) =>
+    error is ApiException &&
+    error.status == 403 &&
+    error.title.startsWith('Feature not enabled');
 
 /// Ruta del dibujo de una parcela nueva, fuera del shell (es pantalla completa).
 void abrirDibujoDeParcela(BuildContext context, String installationId) {
