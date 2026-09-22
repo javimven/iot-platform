@@ -132,6 +132,18 @@ Header opcional `Idempotency-Key` en `POST` con efectos secundarios (invitar mie
 - No usar `PUT` para actualizaciones parciales ni `PATCH` para reemplazos completos — rompe la convención de la sección 1 y confunde a quien consuma la API después.
 - No inventar un formato de error nuevo por endpoint — todos usan RFC 7807.
 
+## 17 bis. Rutas de parcelas y satélite (BACKLOG.md #36)
+
+Contrato completo en `OPENAPI.yaml`. Lo que conviene saber al leerlo:
+
+- **Las parcelas siguen el patrón de las zonas**: `/installations/{id}/parcels` para crear y listar, `/parcels/{id}` para el resto. Nada nuevo.
+- **La geometría entra y sale siempre como GeoJSON en EPSG:4326**, independientemente de cómo se guarde ([ADR-0009](ADR/0009-geometria-de-parcelas-en-postgis.md)). Se admite `Polygon` o `MultiPolygon` y se normaliza a `MultiPolygon`; el anillo se cierra solo si llega abierto, porque la app dibuja tocando puntos.
+- **La serie de NDVI usa `tsOrigin` y `value`**, los mismos nombres que el histórico de un canal de telemetría (`/channels/{id}/readings`). No es casualidad: así el cliente reutiliza sus gráficas sin traducir nada. Lo que se añade es la calidad, que en satélite no es un detalle.
+- **La calidad viaja siempre con el valor.** `validPixelPercent` va redondeado a entero desde el servidor: enseñar "92,348729 % de superficie válida" sería falsa precisión, y el número solo sirve para saber si fiarse del dato.
+- **`/satellite/latest` puede devolver `null`**, y eso no es un error: una parcela recién creada todavía no tiene observaciones. El cliente tiene que distinguir "no hay dato" de "el dato es cero".
+- **Los archivos no se sirven desde la API**: `/assets/{id}/url` devuelve una URL firmada con caducidad. El bucket es privado y sus credenciales no salen del backend.
+- **`POST /satellite/refresh` responde 429** si esa parcela ya se refrescó hace menos de una hora. No es un límite de tráfico genérico: es que cada llamada gasta cuota de Copernicus.
+
 ## 18. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |

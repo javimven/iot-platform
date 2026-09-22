@@ -214,6 +214,40 @@ Esto satisface directamente los requisitos de tolerancia de la Etapa 1: duplicad
 - No añadir Kubernetes, shared subscriptions, o mTLS "por si acaso": ya se ha justificado por qué no hace falta a esta escala (secciones 11-12); si la escala cambia (Etapa 2 revisada), se reabre la decisión con datos, no por intuición.
 - No mezclar el bus de eventos de tiempo real (Redis pub/sub, informativo, no crítico) con la cola de trabajo (BullMQ, sí crítica, con reintentos) — son mecanismos distintos con garantías distintas.
 
+## 19 bis. Módulo de satélite (BACKLOG.md #36)
+
+Primer módulo que habla con una **API externa de pago por uso**, y eso condiciona su diseño más que ninguna otra cosa.
+
+```
+Copernicus Data Space (OAuth2 + REST)
+        │
+   CopernicusProvider ──implementa──► SatelliteProvider
+        │                             (Planet/Airbus después, sin tocar el dominio)
+        ▼
+  cola satellite-processing (BullMQ)  ← SEPARADA de telemetry-processing
+        │
+   proceso worker
+        │  SatelliteSchedulerService: qué hay que procesar
+        │  SatelliteProcessingService: estadísticas → calidad → ráster → S3 → BD
+        ▼
+  PostgreSQL + PostGIS        Hetzner Object Storage (StorageService)
+        │                              │
+        └──────────┬───────────────────┘
+                   ▼
+        proceso api: SatelliteService / SatelliteController
+                   ▼
+        Flutter: sección Satélite (mapa + NDVI + evolución)
+```
+
+Cuatro decisiones que no conviene deshacer sin pensarlo:
+
+1. **Cola propia.** Procesar una imagen tarda segundos y depende de un tercero; no puede ponerse nunca por delante del mensaje de una estación. La consume el mismo proceso `worker`, de uno en uno.
+2. **El repaso diario usa el planificador de BullMQ, no `setInterval`** ([ADR-0010](ADR/0010-planificador-del-satelite-con-bullmq.md)), a diferencia de los otros cuatro trabajos periódicos. Con dos réplicas de `worker`, dos `setInterval` gastarían el doble de cuota de Copernicus.
+3. **El orden del pipeline ahorra dinero**: la estadística es barata y dice si la pasada sirve; el ráster es lo caro. Una parcela tapada de nubes se cierra sin pedir ni una imagen.
+4. **Nada toca el disco de la VPS**: el ráster va de Copernicus a memoria y de ahí a S3 (lección del BACKLOG.md #54, cuando el disco lleno dejó la plataforma tres días sin ingerir).
+
+El proceso `api` **no** conoce el proveedor: solo lee lo que el worker calculó y firma enlaces. Lo único que escribe es encolar un refresco.
+
 ## 20. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |

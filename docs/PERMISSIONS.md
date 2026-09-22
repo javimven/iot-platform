@@ -156,6 +156,30 @@ Mecanismo distinto del RBAC de roles (secciones 3-4): controla qué **módulos/p
 - **Comportamiento de UI** (detalle de Etapa 14, anotado aquí porque lo pidió el usuario explícitamente): si una función está desactivada, la pestaña correspondiente se muestra **bloqueada** (visible pero inactiva, p. ej. "contrata esto para activarlo"), no oculta — es una palanca comercial de upsell, no solo una restricción.
 - Esto no sustituye al RBAC de roles: un Operador dentro de una organización con "informes" activado sigue sin poder generarlos si su rol no lo permite (la matriz de la sección 4 se aplicaría igual sobre cada nueva función, cuando se diseñe en su etapa correspondiente).
 
+## 14 bis. Parcelas y satélite (BACKLOG.md #36)
+
+Acciones añadidas a la matriz de la sección 4:
+
+| Acción | org_admin | technician | operator | read_only |
+|---|:--:|:--:|:--:|:--:|
+| `parcels.read` | ✔ | ✔ | ✔ | ✔ |
+| `parcels.create` | ✔ | ✔ | | |
+| `parcels.update` | ✔ | ✔ | | |
+| `parcels.delete` | ✔ | | | |
+| `satellite.read` | ✔ | ✔ | ✔ | ✔ |
+| `satellite.refresh` | ✔ | ✔ | | |
+
+Dos criterios detrás de esas casillas:
+
+- **El Técnico crea y edita parcelas pero no las borra.** Borrar una parcela se lleva por delante todo su histórico de satélite (`ON DELETE CASCADE`), así que se reserva al Admin de organización.
+- **`satellite.refresh` no la tiene quien solo consulta.** Cada refresco puede acabar en varias peticiones a Copernicus, que tiene cuota. Además el backend solo admite uno por parcela y hora.
+
+### El feature flag ahora se comprueba en el backend
+
+Hasta 2026-09-21, `satellite_imagery` y el resto de funciones de la sección 14 solo se aplicaban en la interfaz: la app enseñaba una pantalla bloqueada y ya. Eso basta para una sección vacía, pero **no** para una que gasta cuota de una API externa: sin comprobación en el servidor, bastaba con llamar a la ruta a mano.
+
+`FeatureGuard` + `@RequireFeature('satellite_imagery')` resuelven eso con una anotación en la clase del controlador, que cubre todas sus rutas. Complementa al permiso, no lo sustituye: **el permiso dice que ese rol puede hacerlo; la función dice que esa organización lo tiene contratado**. Un Admin de plataforma sin organización activa no se bloquea (ADR-0005).
+
 ## 15. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |

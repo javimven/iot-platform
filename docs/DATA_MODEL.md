@@ -516,6 +516,41 @@ Restricción: `UNIQUE (alert_id, recipient_user_id)` — es el mecanismo concret
 - No confundir la ausencia de fila en `org_channel_thresholds` con un umbral de cero — significa "sin umbral configurado", no dispara alerta.
 - No añadir una segunda restricción única basada en `message_id` esperando que sustituya a la de `(channel_id, ts_origin)` — en una tabla particionada por `ts_origin`, no puede ofrecer la misma garantía (sección 5).
 
+## 16 bis. Parcelas y satélite (BACKLOG.md #36, migraciones 0008 y 0009)
+
+Añadido en 2026-09-21/22 para el módulo de teledetección. Es el primer dominio de la plataforma con geometría.
+
+### `parcels`
+
+Recinto de cultivo dibujado por el usuario, **dentro de una finca** (`installations`). Una finca tiene 0..N parcelas.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` | |
+| `organization_id` | `uuid` | para RLS: sin columna propia no hay política que escribir sin un JOIN |
+| `installation_id` | `uuid` | la finca a la que pertenece |
+| `name` | `text` | único por finca mientras no esté borrada (índice parcial) |
+| `geometry` | `geometry(MultiPolygon, 4326)` | **PostGIS** ([ADR-0009](ADR/0009-geometria-de-parcelas-en-postgis.md)) |
+| `area_m2`, `bbox_*` | `double precision` | desnormalizados: se calculan al guardar y se leen en cada listado sin tocar la geometría |
+| `geometry_version` | `integer` | sube al redibujar; marca como caduco lo calculado sobre el contorno anterior |
+| `deleted_at` | `timestamptz` | borrado lógico, como el resto del Directorio |
+
+Índice **GiST** sobre `geometry`: hoy no lo usa ninguna consulta, pero crearlo sobre una tabla vacía es gratis y sobre una con datos no.
+
+`gateways.parcel_id` es **opcional**: una estación puede no tener parcela (todas las actuales) y una parcela puede no tener estación. Un **trigger** (`gateway_parcel_matches_installation`) exige que la parcela sea de la misma organización y la misma finca — la integridad que una clave foránea no sabe expresar, igual que el trigger Zona↔Gateway de la migración 0002.
+
+### `satellite_observations`, `satellite_metrics`, `satellite_assets`
+
+Dominio propio, **no canales de telemetría**: un `channel` cuelga de un `sensor`, que es hardware, y detrás de una imagen de Sentinel no hay ninguna sonda. Mezclarlos habría obligado a inventar un sensor falso por parcela.
+
+- **`satellite_observations`**: una pasada del satélite sobre una parcela, ya procesada. Clave lógica única **(parcela, proveedor, colección, día UTC, versión de procesado)** — el **día** y no el instante, porque una parcela a caballo de dos tiles recibe varios items STAC de la misma pasada, con segundos de diferencia, y son una sola observación; sus identificadores quedan en `source_item_ids` (`jsonb`). La versión dentro de la clave permite reprocesar sin pisar lo anterior.
+- **`satellite_metrics`**: una fila por índice y observación (`ndvi` en la v1). Añadir NDRE o NDMI será una fila más, no una columna más.
+- **`satellite_assets`**: dónde está cada archivo en el almacenamiento de objetos. El objeto nunca se sirve directo: se firma una URL con caducidad.
+
+`provider`, `collection`, `metric_code` y `asset_type` son `text` con CHECK y **no enums**: añadir Planet o un índice nuevo no debe costar un `ALTER TYPE` en su propia migración (ver la restricción de Postgres documentada en la migración 0007). `status` y `quality_status` sí son enums: son conjuntos cerrados que controlamos.
+
+Las cuatro tablas llevan RLS con la misma política que el resto del Directorio IoT.
+
 ## 17. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |
