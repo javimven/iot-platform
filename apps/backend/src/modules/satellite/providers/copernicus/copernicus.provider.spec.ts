@@ -219,6 +219,32 @@ describe('CopernicusProvider', () => {
     expect(primera.sceneCloudCover).toBeCloseTo(0.05); // media de 4% y 6%, en 0..1
   });
 
+  it('pide al catálogo GeoJSON: con application/json responde 406', async () => {
+    // Primer fallo contra el servicio real (2026-09-22). Las pruebas no lo
+    // veían porque el `fetch` simulado contesta a cualquier cabecera.
+    fetchMock
+      .mockResolvedValueOnce(respuestaToken())
+      .mockResolvedValueOnce(respuestaJson({ features: [] }))
+      .mockResolvedValueOnce(
+        respuestaJson({
+          data: [
+            { outputs: { ndvi: { bands: { B0: { stats: { sampleCount: 1, noDataCount: 0 } } } } } },
+          ],
+        }),
+      );
+    const proveedor = new CopernicusProvider(config);
+
+    await proveedor.buscarAdquisiciones({ aoi, desde: new Date('2026-09-01'), hasta: new Date() });
+    await proveedor.estadisticas({ aoi, acquisitionDate: '2026-09-15', metricCode: 'ndvi' });
+
+    const accept = (llamada: number) => fetchMock.mock.calls[llamada][1].headers.Accept;
+    expect(fetchMock.mock.calls[1][0]).toContain(CDSE_URLS.catalogo);
+    expect(accept(1)).toBe('application/geo+json');
+    // Las estadísticas sí son JSON normal.
+    expect(fetchMock.mock.calls[2][0]).toContain(CDSE_URLS.estadisticas);
+    expect(accept(2)).toBe('application/json');
+  });
+
   it('descarta escenas más nubladas que el máximo pedido', async () => {
     fetchMock.mockResolvedValueOnce(respuestaToken()).mockResolvedValueOnce(
       respuestaJson({

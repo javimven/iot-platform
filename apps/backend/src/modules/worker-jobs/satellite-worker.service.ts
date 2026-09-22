@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Job, Queue, Worker } from 'bullmq';
+import { Job, Queue, UnrecoverableError, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import {
   HistoricoPayload,
@@ -16,6 +16,20 @@ import {
   TrabajoObservacion,
 } from '../../modules/satellite/processing/satellite-processing.service';
 import { SatelliteSchedulerService } from '../../modules/satellite/processing/satellite-scheduler.service';
+import { SatelliteProviderError } from '../../modules/satellite/providers/satellite.types';
+
+/**
+ * Lo que el proveedor marca como no reintentable llega a BullMQ como
+ * `UnrecoverableError`, y la cola no lo repite. Sin esto, un 406 de Copernicus
+ * (petición mal hecha) se intentó tres veces el 2026-09-22: cada intento, otra
+ * llamada contra la cuota, para obtener el mismo error.
+ */
+export function paraLaCola(error: unknown): unknown {
+  if (error instanceof SatelliteProviderError && !error.opciones.reintentable) {
+    return new UnrecoverableError(error.message);
+  }
+  return error;
+}
 
 /** Identificador del repaso programado. Fijo: no se acumulan planificaciones. */
 const PLANIFICACION_REPASO = 'satelite-repaso-diario';
@@ -118,12 +132,20 @@ export class SatelliteWorkerService implements OnModuleInit, OnModuleDestroy {
       throw new Error('La cola de satélite no está lista');
     }
 
+    try {
+      await this.despachar(job, this.cola);
+    } catch (error) {
+      throw paraLaCola(error);
+    }
+  }
+
+  private async despachar(job: Job<SatelliteJobPayload>, cola: Queue<SatelliteJobPayload>) {
     switch (job.name) {
       case TRABAJO_REPASO:
-        await this.planificador.repasar(this.cola);
+        await this.planificador.repasar(cola);
         return;
       case TRABAJO_HISTORICO:
-        await this.planificador.historico(this.cola, job.data as HistoricoPayload);
+        await this.planificador.historico(cola, job.data as HistoricoPayload);
         return;
       case TRABAJO_OBSERVACION:
         await this.procesado.procesar(job.data as TrabajoObservacion);

@@ -124,9 +124,14 @@ export class CopernicusProvider implements SatelliteProvider {
       },
     };
 
+    // El catálogo es STAC y solo sirve GeoJSON: con `Accept: application/json`
+    // responde 406 antes incluso de mirar el token. Fue lo primero que falló
+    // contra el servicio real (2026-09-22); estadísticas y ráster sí aceptan
+    // lo que se les pide (comprobado igual, sin credenciales).
     const respuesta = await this.peticionJson<{ features?: ItemStac[] }>(
       CDSE_URLS.catalogo,
       cuerpo,
+      'application/geo+json',
     );
     const items = respuesta.features ?? [];
 
@@ -325,8 +330,12 @@ export class CopernicusProvider implements SatelliteProvider {
   // HTTP
   // -------------------------------------------------------------------------
 
-  private async peticionJson<T>(ruta: string, cuerpo: unknown): Promise<T> {
-    const respuesta = await this.peticion(ruta, cuerpo, 'application/json');
+  private async peticionJson<T>(
+    ruta: string,
+    cuerpo: unknown,
+    accept = 'application/json',
+  ): Promise<T> {
+    const respuesta = await this.peticion(ruta, cuerpo, accept);
     return (await respuesta.json()) as T;
   }
 
