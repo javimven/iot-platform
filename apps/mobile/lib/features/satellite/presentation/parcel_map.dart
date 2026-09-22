@@ -53,10 +53,14 @@ const _zoomMinimo = 5.0;
 /// que le den. Así sirve igual para la ficha de una parcela y para el dibujo
 /// de una nueva.
 ///
-/// **El zoom va con botones, no con la rueda del ratón** (petición del
-/// usuario, 2026-09-22). En la ficha de la parcela el mapa está dentro de una
-/// página con scroll: con la rueda activa, bajar por la página acercaba el
-/// mapa en vez de moverse. En pantallas táctiles se sigue pudiendo pellizcar.
+/// **Zoom con la rueda y, además, con botones + y −** para ajustar de nivel en
+/// nivel. Hubo una versión intermedia sin rueda, y el usuario la pidió de
+/// vuelta (2026-09-22): los botones eran para afinar, no para sustituirla. En
+/// pantallas táctiles, pellizcar.
+///
+/// Consecuencia conocida: en la ficha de la parcela, con el ratón encima del
+/// mapa, la rueda acerca el mapa en vez de bajar la página. Para bajar hay que
+/// sacar el cursor del mapa.
 class ParcelMap extends StatefulWidget {
   const ParcelMap({
     super.key,
@@ -118,10 +122,8 @@ class _ParcelMapState extends State<ParcelMap> {
             initialZoom: _zoomParcela,
             minZoom: _zoomMinimo,
             maxZoom: MapaBase.zoomMaximo,
-            // Todo menos la rueda: ver la documentación de la clase.
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.scrollWheelZoom,
-            ),
+            // Rueda incluida: ver la documentación de la clase.
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
             onTap: widget.onTap == null ? null : (_, punto) => widget.onTap!(punto),
           ),
           children: [

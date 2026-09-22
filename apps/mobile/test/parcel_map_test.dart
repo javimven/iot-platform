@@ -54,15 +54,14 @@ void main() {
     expect(controlador.camera.zoom, MapaBase.zoomMaximo);
   });
 
-  testWidgets('la rueda del ratón no hace zoom: el mapa vive dentro de una página con scroll',
-      (tester) async {
+  testWidgets('la rueda, pellizcar y arrastrar funcionan además de los botones', (tester) async {
+    // El usuario quiso la rueda de vuelta: los botones son para afinar.
     await pump(tester);
 
     final mapa = tester.widget<FlutterMap>(find.byType(FlutterMap));
     final flags = mapa.options.interactionOptions.flags;
 
-    expect(flags & InteractiveFlag.scrollWheelZoom, 0);
-    // Pellizcar y arrastrar siguen funcionando en pantallas táctiles.
+    expect(flags & InteractiveFlag.scrollWheelZoom, isNot(0));
     expect(flags & InteractiveFlag.pinchZoom, isNot(0));
     expect(flags & InteractiveFlag.drag, isNot(0));
   });

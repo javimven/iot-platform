@@ -38,9 +38,9 @@ La primera versión salió con OpenStreetMap, que vale para desarrollo pero **no
 
 **Límite conocido: solo cubre España.** Hoy todos los clientes están aquí. Si entra uno de fuera, habrá que contratar un proveedor comercial para esa zona y elegirlo por organización; el cambio no toca más que `MapaBase`.
 
-### Zoom con botones, no con la rueda
+### Zoom con la rueda y con botones
 
-También a petición del usuario. No es solo gusto: en la ficha de la parcela el mapa está dentro de una página con scroll, y con la rueda activa, bajar por la página acercaba el mapa en vez de moverse. La rueda queda desactivada y el zoom va con dos botones (+ y −); en pantallas táctiles se sigue pudiendo pellizcar.
+Primero se quitó la rueda y se pusieron botones (+ y −), porque en la ficha de la parcela el mapa está dentro de una página con scroll y la rueda acercaba el mapa en vez de bajar. El usuario lo corrigió el mismo día: los botones eran para **afinar**, no para sustituir la rueda. Quedan los dos. El precio es el que se sabía: con el cursor encima del mapa de la ficha, la rueda hace zoom; para bajar por la página hay que sacarlo del mapa. En pantallas táctiles, pellizcar.
 
 ## Consecuencias
 

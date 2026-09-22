@@ -7,6 +7,8 @@ import {
   SATELLITE_JOB_OPTIONS,
   SATELLITE_QUEUE_NAME,
   TRABAJO_HISTORICO,
+  idTrabajoHistorico,
+  idTrabajoRefresco,
 } from './satellite-queue';
 
 /**
@@ -20,7 +22,9 @@ import {
  * al arrancar rompería el proceso por algo que casi nunca se usa.
  *
  * Nunca lanza: que el histórico no se encole no puede tumbar la creación de
- * la parcela. El repaso diario lo recogerá igualmente.
+ * la parcela. El repaso diario lo recoge igualmente: a una parcela sin ninguna
+ * observación le busca la ventana completa del histórico, no solo los últimos
+ * días (`SatelliteSchedulerService.desdeCuandoBuscar`).
  */
 @Injectable()
 export class SatelliteQueueProducer implements OnModuleDestroy {
@@ -37,7 +41,7 @@ export class SatelliteQueueProducer implements OnModuleDestroy {
         ...SATELLITE_JOB_OPTIONS,
         // Uno por parcela: si alguien crea y redibuja varias veces seguidas,
         // no se acumulan históricos idénticos.
-        jobId: `historico:${payload.parcelId}`,
+        jobId: idTrabajoHistorico(payload.parcelId),
       });
       this.logger.log(`Histórico de satélite encolado para la parcela ${payload.parcelId}`);
     } catch (error) {
@@ -57,8 +61,7 @@ export class SatelliteQueueProducer implements OnModuleDestroy {
    * sin necesidad de guardar en ninguna parte cuándo fue el último.
    */
   async encolarRefresco(payload: HistoricoPayload): Promise<boolean> {
-    const hora = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
-    const jobId = `refresco:${payload.parcelId}:${hora}`;
+    const jobId = idTrabajoRefresco(payload.parcelId);
     const cola = this.obtenerCola();
 
     if (await cola.getJob(jobId)) {

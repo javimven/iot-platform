@@ -109,8 +109,17 @@ export class SatelliteSchedulerService {
 
   /**
    * Desde cuándo buscar: si la parcela ya tiene observaciones, desde la última
-   * (con unos días de margen); si no tiene ninguna, no se hace el histórico
-   * aquí — eso es trabajo del job de histórico, que va aparte.
+   * (con unos días de margen).
+   *
+   * Si no tiene **ninguna**, la ventana completa del histórico. Normalmente eso
+   * ya lo ha hecho el trabajo de histórico que se encola al crear la parcela,
+   * pero si aquel falló, esto es lo que lo arregla. La primera versión miraba
+   * aquí solo los últimos días: el 2026-09-22 el histórico de la primera
+   * parcela real no se encoló (identificador con `:`, ver `idDeTrabajo`) y el
+   * repaso no la habría recuperado nunca.
+   *
+   * No se duplica el gasto: lo que el histórico ya procesó tiene observación,
+   * y entonces esta rama no se toma.
    */
   private async desdeCuandoBuscar(
     organizationId: string,
@@ -126,7 +135,7 @@ export class SatelliteSchedulerService {
     );
     const margen = DIAS_REPASO * 24 * 60 * 60 * 1000;
     if (!ultima) {
-      return new Date(ahora.getTime() - margen);
+      return new Date(ahora.getTime() - this.diasHistorico() * 24 * 60 * 60 * 1000);
     }
     return new Date(ultima.acquisitionTime.getTime() - margen);
   }

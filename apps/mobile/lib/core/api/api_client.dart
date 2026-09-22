@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'api_config.dart';
 import 'api_exception.dart';
@@ -73,15 +74,20 @@ class ApiClient {
     return response.data as Map<String, dynamic>;
   }
 
-  /// Para las rutas que devuelven un objeto **o** `null` cuando todavía no hay
-  /// nada — la última observación de satélite de una parcela recién creada, por
-  /// ejemplo. `getJson` no sirve ahí: haría un cast de `null` y reventaría.
+  /// Para las rutas que devuelven un objeto **o** nada cuando todavía no hay
+  /// dato — la última observación de satélite de una parcela recién creada, por
+  /// ejemplo. `getJson` no sirve ahí: haría un cast y reventaría.
+  ///
+  /// Ojo: NestJS no manda el JSON `null` cuando un controlador devuelve
+  /// `null`, manda un 200 **con el cuerpo vacío**, y dio lo entrega como `""`.
+  /// La primera versión solo contemplaba `null` y en la web compilada salía
+  /// "Runtime type check failed" (2026-09-22).
   Future<Map<String, dynamic>?> getJsonOrNull(
     String path, {
     Map<String, dynamic>? query,
   }) async {
     final response = await _guard(() => _dio.get<dynamic>(path, queryParameters: query));
-    return response.data as Map<String, dynamic>?;
+    return comoObjetoOVacio(response.data);
   }
 
   Future<List<dynamic>> getJsonList(
@@ -132,4 +138,16 @@ class ApiClient {
       );
     }
   }
+}
+
+/// Traduce la respuesta de una ruta que puede no tener dato: `null` o cuerpo
+/// vacío (lo que manda NestJS cuando el controlador devuelve `null`) son "no
+/// hay nada"; un objeto es el dato. Cualquier otra cosa es un contrato roto y
+/// se dice claro, en vez de un "Runtime type check failed" sin más.
+@visibleForTesting
+Map<String, dynamic>? comoObjetoOVacio(Object? data) {
+  if (data == null) return null;
+  if (data is String && data.trim().isEmpty) return null;
+  if (data is Map<String, dynamic>) return data;
+  throw const FormatException('Respuesta inesperada del servidor: se esperaba un objeto o nada');
 }

@@ -98,7 +98,7 @@ describe('SatelliteSchedulerService', () => {
     expect(cola.add).toHaveBeenCalledWith(
       'observacion',
       expect.objectContaining({ parcelId: 'parcela-1', acquisitionDate: '2026-09-20' }),
-      expect.objectContaining({ jobId: 'parcela-1:copernicus:sentinel-2-l2a:2026-09-20' }),
+      expect.objectContaining({ jobId: 'parcela-1__copernicus__sentinel-2-l2a__2026-09-20' }),
     );
   });
 
@@ -122,6 +122,18 @@ describe('SatelliteSchedulerService', () => {
     // catálogo, o si el repaso de ayer no corrió, se recupera igual.
     expect(desde.toISOString()).toBe('2026-09-10T10:42:19.000Z');
     expect(hasta).toBe(AHORA);
+  });
+
+  it('una parcela sin ninguna observacion recupera el historico completo en el repaso', async () => {
+    // Si el historico del alta no llego a encolarse (paso de verdad el
+    // 2026-09-22), el repaso diario es la red de seguridad: no puede mirar
+    // solo los ultimos dias.
+    const { service, cola, provider } = build({ ultimaObservacion: null });
+
+    await service.repasar(cola, AHORA);
+
+    const { desde } = (provider.buscarAdquisiciones as jest.Mock).mock.calls[0][0];
+    expect(Math.round((AHORA.getTime() - desde.getTime()) / 86_400_000)).toBe(90);
   });
 
   it('no vuelve a encolar una pasada ya procesada', async () => {
