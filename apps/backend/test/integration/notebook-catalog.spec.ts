@@ -72,9 +72,17 @@ describe('Cuaderno completo: catálogos y revisión (Postgres real)', () => {
     actividades = new ActivitiesService(prisma, auditLog, acceso);
     completitud = new NotebookCompletenessService(prisma, acceso);
 
+    // Catálogo y roles los siembra `seed.ts`, que el CI **no** ejecuta antes
+    // de estas pruebas: sin esto, el miembro con alcance por finca choca con
+    // la clave foránea a `roles` y el fallo solo se ve en el pipeline.
     if (!(await prisma.crop.findUnique({ where: { id: 'olivo' } }))) {
       await prisma.crop.create({ data: { id: 'olivo', name: 'Olivo', category: 'woody' } });
     }
+    await prisma.role.upsert({
+      where: { code: 'technician' },
+      update: {},
+      create: { code: 'technician', label: 'Técnico' },
+    });
 
     orgId = (
       await prisma.organization.create({
