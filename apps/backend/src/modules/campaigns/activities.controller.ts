@@ -16,6 +16,7 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { AccessTokenClaims } from '../../common/guards/jwt-auth.guard';
 import { ActivitiesService } from './activities.service';
 import { CampaignSummaryService } from './campaign-summary';
+import { NotebookCompletenessService } from './notebook-completeness';
 import {
   ActivityCreateDto,
   ActivityDeleteQueryDto,
@@ -37,6 +38,7 @@ export class ActivitiesController {
   constructor(
     private readonly activities: ActivitiesService,
     private readonly resumen: CampaignSummaryService,
+    private readonly completitud: NotebookCompletenessService,
   ) {}
 
   @RequirePermission('campaigns.read')
@@ -97,5 +99,12 @@ export class ActivitiesController {
   @Get('summary')
   summary(@CurrentUser() user: AccessTokenClaims, @Param('id', ParseUUIDPipe) id: string) {
     return this.resumen.summary(user, id);
+  }
+
+  /** Qué información falta en el cuaderno, con la fuente de cada regla. */
+  @RequirePermission('campaigns.read')
+  @Get('completeness')
+  completeness(@CurrentUser() user: AccessTokenClaims, @Param('id', ParseUUIDPipe) id: string) {
+    return this.completitud.completeness(user, id);
   }
 }

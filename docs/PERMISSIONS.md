@@ -200,6 +200,8 @@ Los criterios:
 - **`campaigns.record` va aparte de `campaigns.update`.** Quien trabaja en el campo apunta lo que hace (un riego, una cosecha, una foto) sin poder cambiar cómo está montada la campaña. Por eso el Operador lo tiene y no puede crear, editar ni cerrar campañas.
 - **Exportar es leer**: no tiene permiso propio. Quien ve un cuaderno puede sacarlo en PDF.
 - **Borrar, solo el Admin de organización**, como las parcelas: borrar una campaña se lleva su cuaderno. Además, una campaña cerrada no se borra: primero hay que reabrirla, y la reapertura queda auditada con su motivo.
+- **Los catálogos del cuaderno** (personas y equipos, `/notebook/...`) se **eligen con `campaigns.read`** y se **mantienen con `campaigns.update`**: el Operador tiene que poder decir quién hizo el tratamiento, pero dar de alta a un aplicador con su número de ROPO es configurar la explotación. Su alcance es el del miembro: ve las entradas de sus fincas y las comunes (`installationId` nulo), y no puede tocar las de una finca fuera de su alcance.
+- **La revisión del cuaderno (`/completeness`) es lectura**, como el resumen: dice qué información falta, no cambia nada.
 
 ## 15. Historial de decisiones de esta etapa
 

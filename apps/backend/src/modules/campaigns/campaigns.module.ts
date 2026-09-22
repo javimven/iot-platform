@@ -9,6 +9,9 @@ import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { CropUnitsService } from './crop-units.service';
 import { CropsController } from './crops.controller';
+import { NotebookCompletenessService } from './notebook-completeness';
+import { NotebookController } from './notebook.controller';
+import { NotebookCatalogService } from './notebook.service';
 
 /**
  * Campañas y cuaderno de campo (BACKLOG.md #60, ADR-0012/0013/0014). Módulo
@@ -16,7 +19,7 @@ import { CropsController } from './crops.controller';
  * depender del módulo de satélite.
  */
 @Module({
-  controllers: [CampaignsController, ActivitiesController, CropsController],
+  controllers: [CampaignsController, ActivitiesController, CropsController, NotebookController],
   providers: [
     PrismaService,
     AuditLogService,
@@ -25,6 +28,8 @@ import { CropsController } from './crops.controller';
     CropUnitsService,
     ActivitiesService,
     CampaignSummaryService,
+    NotebookCatalogService,
+    NotebookCompletenessService,
   ],
   exports: [CampaignAccess, CampaignsService],
 })

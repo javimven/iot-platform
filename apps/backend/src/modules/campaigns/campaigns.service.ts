@@ -37,6 +37,7 @@ import {
   CampaignUpgradeDto,
 } from './dto/campaign.dto';
 import { escribirFecha, escribirFechaONulo, leerFecha } from './fechas';
+import { revisar } from './notebook-completeness';
 import { perfilParaGuardar } from './notebook-profile';
 
 /** Versión del formato de la instantánea de cierre (`campaign_snapshots.content_version`). */
@@ -281,7 +282,10 @@ export class CampaignsService {
    * describe (titular, finca, parcelas). Si mañana cambian, el cuaderno
    * cerrado no (ADR-0012).
    *
-   * La revisión de lo pendiente del cuaderno completo llega con la fase 5.
+   * Cerrar **no exige tener el cuaderno completo** (ADR-0013): se revisa lo
+   * que falta, se devuelve con la respuesta para poder enseñarlo y queda
+   * contado en la auditoría, pero nada bloquea el cierre. Quien cierra sabe si
+   * le faltan datos mejor que la aplicación, y siempre puede reabrir.
    */
   async close(user: AccessTokenClaims, id: string, dto: CampaignCloseDto) {
     const actual = await this.acceso.cargar(user, id);
@@ -293,7 +297,14 @@ export class CampaignsService {
       throw new BadRequestException('La fecha de fin es anterior al inicio de la campaña.');
     }
 
-    return this.enTransaccion(user, id, async (tx, organizationId) => {
+    // Lo que falta el día del cierre, no lo que falte cuando alguien consulte
+    // el cuaderno dentro de dos años.
+    const revision = await this.prisma.runInTenantContext(
+      resolveOrgContext(user).tenantContext,
+      (tx) => revisar(tx, id),
+    );
+
+    const detalle = await this.enTransaccion(user, id, async (tx, organizationId) => {
       const campana = await tx.campaign.update({
         where: { id },
         data: {
@@ -327,10 +338,14 @@ export class CampaignsService {
           name: campana.name,
           endDate: dto.endDate,
           snapshotId: instantanea.id,
+          reglasDelCuaderno: revision.rules.id,
+          informacionPendiente: revision.missingCount,
+          avisos: revision.warningCount,
         },
       });
       return campana;
     });
+    return { ...detalle, completeness: revision };
   }
 
   /** Reabrir es corregir un cuaderno cerrado: con motivo, y auditado. */

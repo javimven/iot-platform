@@ -865,10 +865,17 @@ paths:
                 closingNotes: { type: string, maxLength: 4000 }
       responses:
         "200":
-          description: Campaña cerrada
+          description: >
+            Campaña cerrada. La ficha lleva además `completeness` con lo que
+            faltaba el día del cierre: se avisa, no se impide (ADR-0013).
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Campaign" }
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Campaign" }
+                  - type: object
+                    properties:
+                      completeness: { $ref: "#/components/schemas/NotebookCompleteness" }
         "409":
           description: Ya estaba cerrada
 
@@ -1050,6 +1057,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CampaignSummary" }
 
+  /campaigns/{campaignId}/completeness:
+    get:
+      tags: [campaigns]
+      summary: Qué información falta en el cuaderno completo (campaigns.read)
+      description: >
+        Solo aplica al modo `complete` (ADR-0013): en una campaña sencilla
+        `applicable` es `false` y no hay avisos. Nunca bloquea nada y nunca
+        dice que la campaña "cumple": lista lo pendiente (`missing`) y lo que
+        conviene revisar (`warning`), cada uno con la fuente de su regla. El
+        conjunto de reglas va versionado (`rules.id`).
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookCompleteness" }
+
   /crops:
     get:
       tags: [campaigns]
@@ -1068,6 +1093,125 @@ paths:
                     id: { type: string, example: aguacate }
                     name: { type: string, example: Aguacate }
                     category: { type: string, enum: [woody, herbaceous, horticultural, forage, other] }
+
+  /notebook/people:
+    get:
+      tags: [campaigns]
+      summary: Aplicadores y asesores guardados (campaigns.read)
+      description: >
+        Las de la finca pedida más las que valen para todas. Sin
+        `installationId`, las de las fincas del alcance del miembro y las
+        comunes.
+      parameters:
+        - { name: installationId, in: query, schema: { type: string, format: uuid } }
+        - { name: kind, in: query, schema: { type: string, enum: [own_staff, service_company, adviser] } }
+        - { name: includeDeleted, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/NotebookPerson" }
+    post:
+      tags: [campaigns]
+      summary: Da de alta una persona del cuaderno (campaigns.update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotebookPersonInput" }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookPerson" }
+        "400":
+          description: Sin nombre ni razón social
+
+  /notebook/people/{id}:
+    patch:
+      tags: [campaigns]
+      summary: Cambia una persona del cuaderno (campaigns.update)
+      description: >
+        Lo omitido se queda como está; una cadena vacía borra ese dato. Los
+        tratamientos ya registrados no cambian: guardan su propia copia.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotebookPersonInput" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookPerson" }
+    delete:
+      tags: [campaigns]
+      summary: Da de baja una persona del cuaderno (campaigns.update)
+      description: Baja lógica; sigue pudiéndose consultar con `includeDeleted`.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204":
+          description: Dada de baja
+
+  /notebook/equipment:
+    get:
+      tags: [campaigns]
+      summary: Equipos de aplicación del cuaderno (campaigns.read)
+      parameters:
+        - { name: installationId, in: query, schema: { type: string, format: uuid } }
+        - { name: includeDeleted, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/NotebookEquipment" }
+    post:
+      tags: [campaigns]
+      summary: Da de alta un equipo (campaigns.update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotebookEquipmentInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookEquipment" }
+
+  /notebook/equipment/{id}:
+    patch:
+      tags: [campaigns]
+      summary: Cambia un equipo (campaigns.update)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotebookEquipmentInput" }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookEquipment" }
+    delete:
+      tags: [campaigns]
+      summary: Da de baja un equipo (campaigns.update)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204":
+          description: Dado de baja
 
   /installations/{installationId}/latest-readings:
     get:
@@ -2066,6 +2210,110 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    NotebookPerson:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        installationId: { type: string, format: uuid, nullable: true, description: Nulo = vale para todas las fincas }
+        kind: { type: string, enum: [own_staff, service_company, adviser] }
+        firstName: { type: string, nullable: true }
+        surname1: { type: string, nullable: true }
+        surname2: { type: string, nullable: true }
+        companyName: { type: string, nullable: true }
+        displayName: { type: string, description: La persona, o la empresa si no hay persona }
+        nif: { type: string, nullable: true }
+        ropoNumber: { type: string, nullable: true }
+        ropoCardType: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        deleted: { type: boolean }
+
+    NotebookPersonInput:
+      type: object
+      properties:
+        installationId: { type: string, format: uuid, nullable: true }
+        kind: { type: string, enum: [own_staff, service_company, adviser] }
+        firstName: { type: string, maxLength: 120 }
+        surname1: { type: string, maxLength: 120 }
+        surname2: { type: string, maxLength: 120 }
+        companyName: { type: string, maxLength: 200 }
+        nif: { type: string, maxLength: 20 }
+        ropoNumber: { type: string, maxLength: 60 }
+        ropoCardType: { type: string, maxLength: 60 }
+        notes: { type: string, maxLength: 500 }
+
+    NotebookEquipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        installationId: { type: string, format: uuid, nullable: true }
+        description: { type: string }
+        displayName: { type: string }
+        brand: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        romaNumber: { type: string, nullable: true }
+        acquiredOn: { type: string, format: date, nullable: true }
+        lastInspectionOn: { type: string, format: date, nullable: true }
+        notes: { type: string, nullable: true }
+        deleted: { type: boolean }
+
+    NotebookEquipmentInput:
+      type: object
+      properties:
+        installationId: { type: string, format: uuid, nullable: true }
+        description: { type: string, maxLength: 200 }
+        brand: { type: string, maxLength: 120 }
+        model: { type: string, maxLength: 120 }
+        romaNumber: { type: string, maxLength: 60 }
+        acquiredOn: { type: string, format: date }
+        lastInspectionOn: { type: string, format: date }
+        notes: { type: string, maxLength: 500 }
+
+    NotebookCompletenessItem:
+      type: object
+      properties:
+        code: { type: string, example: phyto.registry_number, description: Código estable de la regla, con el identificador afectado como sufijo }
+        kind: { type: string, enum: [missing, warning] }
+        label: { type: string, example: El número de registro de Cobre 50 }
+        why: { type: string, description: Por qué se pide, en español }
+        source:
+          type: string
+          enum: [ue_2023_564, cue_unidad_de_cultivo, cue_tratamientos, cue_fertilizacion, cue_riego, cue_identificacion, rd_1051_2022, plataforma]
+        sourceLabel: { type: string, description: La fuente escrita, para poder contrastarla }
+
+    NotebookCompleteness:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        rules:
+          type: object
+          description: Conjunto de reglas con el que se revisó (ADR-0013)
+          properties:
+            id: { type: string, example: ES-2026.1 }
+            country: { type: string, example: ES }
+            region: { type: string, nullable: true }
+            effectiveFrom: { type: string, format: date }
+            effectiveTo: { type: string, format: date, nullable: true }
+        managementMode: { type: string, enum: [simple, complete] }
+        applicable: { type: boolean, description: false en una campaña sencilla }
+        missingCount: { type: integer }
+        warningCount: { type: integer }
+        activitiesWithPending: { type: integer }
+        reviewedActivities: { type: integer }
+        campaign:
+          type: array
+          items: { $ref: "#/components/schemas/NotebookCompletenessItem" }
+        activities:
+          type: array
+          items:
+            type: object
+            properties:
+              activityId: { type: string, format: uuid }
+              type: { type: string }
+              startDate: { type: string, format: date }
+              items:
+                type: array
+                items: { $ref: "#/components/schemas/NotebookCompletenessItem" }
+
     Error:
       type: object
       required: [type, title, status]
