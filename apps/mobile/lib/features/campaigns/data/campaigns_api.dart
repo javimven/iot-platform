@@ -1,6 +1,7 @@
 import '../../../core/api/api_client.dart';
 import 'activity_models.dart';
 import 'campaign_models.dart';
+import 'notebook_models.dart';
 
 /// Campañas y cuaderno de campo (BACKLOG.md #60). Contrato en OPENAPI.yaml
 /// y API_DESIGN.md §17 ter.
@@ -72,4 +73,51 @@ class CampaignsApi {
 
   Future<ResumenCampana> resumen(String campaignId) async =>
       ResumenCampana.fromJson(await _client.getJson('/campaigns/$campaignId/summary'));
+
+  /// Qué falta en el cuaderno. En una campaña sencilla, `aplica` es falso.
+  Future<RevisionDelCuaderno> revision(String campaignId) async =>
+      RevisionDelCuaderno.fromJson(await _client.getJson('/campaigns/$campaignId/completeness'));
+
+  /// Pasar a cuaderno completo con las respuestas del asistente. No copia ni
+  /// borra nada: lo ya registrado sirve de base (ADR-0013).
+  Future<Campana> completarCuaderno(String id, Map<String, bool> perfil) async =>
+      Campana.fromJson(await _client.postJson('/campaigns/$id/upgrade', body: {
+        'notebookProfile': perfil,
+      }));
+
+  /// Cambiar las respuestas de una campaña que ya es un cuaderno completo.
+  Future<Campana> guardarPerfil(String id, Map<String, bool> perfil) async =>
+      Campana.fromJson(await _client.patchJson('/campaigns/$id', body: {
+        'notebookProfile': perfil,
+      }));
+
+  Future<List<PersonaCuaderno>> personas({String? installationId}) async {
+    final lista = await _client.getJsonList('/notebook/people', query: {
+      if (installationId != null) 'installationId': installationId,
+    });
+    return lista.map((e) => PersonaCuaderno.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<PersonaCuaderno> crearPersona(Map<String, dynamic> cuerpo) async =>
+      PersonaCuaderno.fromJson(await _client.postJson('/notebook/people', body: cuerpo));
+
+  Future<PersonaCuaderno> cambiarPersona(String id, Map<String, dynamic> cuerpo) async =>
+      PersonaCuaderno.fromJson(await _client.patchJson('/notebook/people/$id', body: cuerpo));
+
+  Future<void> borrarPersona(String id) => _client.delete('/notebook/people/$id');
+
+  Future<List<EquipoCuaderno>> equipos({String? installationId}) async {
+    final lista = await _client.getJsonList('/notebook/equipment', query: {
+      if (installationId != null) 'installationId': installationId,
+    });
+    return lista.map((e) => EquipoCuaderno.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<EquipoCuaderno> crearEquipo(Map<String, dynamic> cuerpo) async =>
+      EquipoCuaderno.fromJson(await _client.postJson('/notebook/equipment', body: cuerpo));
+
+  Future<EquipoCuaderno> cambiarEquipo(String id, Map<String, dynamic> cuerpo) async =>
+      EquipoCuaderno.fromJson(await _client.patchJson('/notebook/equipment/$id', body: cuerpo));
+
+  Future<void> borrarEquipo(String id) => _client.delete('/notebook/equipment/$id');
 }

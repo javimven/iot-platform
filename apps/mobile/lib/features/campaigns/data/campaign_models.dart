@@ -236,6 +236,7 @@ class NuevaCampana {
     this.expectedEndDate,
     this.name,
     this.notes,
+    this.notebookProfile,
   });
 
   final String managementMode;
@@ -248,9 +249,15 @@ class NuevaCampana {
   final String? name;
   final String? notes;
 
+  /// Respuestas del asistente; solo en modo completo (el backend rechaza un
+  /// perfil en una campaña sencilla).
+  final Map<String, bool>? notebookProfile;
+
   Map<String, dynamic> toJson() => {
         'managementMode': managementMode,
         'startDate': escribirFecha(startDate),
+        if (managementMode == 'complete' && notebookProfile != null)
+          'notebookProfile': notebookProfile,
         if (expectedEndDate != null) 'expectedEndDate': escribirFecha(expectedEndDate!),
         if (name != null && name!.trim().isNotEmpty) 'name': name!.trim(),
         if (notes != null && notes!.trim().isNotEmpty) 'notes': notes!.trim(),

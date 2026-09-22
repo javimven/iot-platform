@@ -9,6 +9,7 @@ import '../data/activity_models.dart';
 import '../data/campaign_models.dart';
 import 'campaign_labels.dart';
 import 'campaigns_screen.dart' show MensajeDeCampanas;
+import 'notebook_pickers.dart';
 import 'selector_de_fecha.dart';
 
 enum ModoDeFormulario { nueva, repetir, editar }
@@ -633,6 +634,10 @@ class _MasDetalles extends StatelessWidget {
           estado._campoOpciones('fertilizationType', 'Tipo de abonado', tiposDeFertilizacion),
           estado._campoOpciones('materialType', 'Material', materialesFertilizantes),
           estado._campoOpciones('applicationMethod', 'Forma de aplicación', metodosDeAplicacion),
+          SelectorDeEquipo(
+            valor: estado._detalle['equipmentId'] as String?,
+            onCambio: (id) => estado.actualizar(() => estado._detalle['equipmentId'] = id),
+          ),
           estado._campoNumero('nPct', 'Riqueza en N', sufijo: '%'),
           estado._campoNumero('p2o5Pct', 'Riqueza en P₂O₅', sufijo: '%'),
           estado._campoNumero('k2oPct', 'Riqueza en K₂O', sufijo: '%'),
@@ -646,6 +651,22 @@ class _MasDetalles extends StatelessWidget {
           estado._campoOpciones('problemCategory', 'Tipo de problema', categoriasDeProblema),
           estado._campoTexto('justification', 'Justificación de la actuación'),
           _EstadoFenologico(estado: estado),
+          SelectorDePersona(
+            etiqueta: 'Quién lo aplicó',
+            valor: estado._detalle['applicatorId'] as String?,
+            tipos: const ['own_staff', 'service_company'],
+            onCambio: (id) => estado.actualizar(() => estado._detalle['applicatorId'] = id),
+          ),
+          SelectorDePersona(
+            etiqueta: 'Asesor',
+            valor: estado._detalle['adviserId'] as String?,
+            tipos: const ['adviser'],
+            onCambio: (id) => estado.actualizar(() => estado._detalle['adviserId'] = id),
+          ),
+          SelectorDeEquipo(
+            valor: estado._detalle['equipmentId'] as String?,
+            onCambio: (id) => estado.actualizar(() => estado._detalle['equipmentId'] = id),
+          ),
           estado._campoOpciones('efficacy', 'Eficacia', eficacias),
           estado._campoSiNo('manualApplication', 'Aplicación manual'),
         ];

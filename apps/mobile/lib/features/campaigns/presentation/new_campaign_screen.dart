@@ -10,6 +10,7 @@ import '../application/campaigns_controller.dart';
 import '../data/campaign_models.dart';
 import 'campaign_labels.dart';
 import 'campaigns_screen.dart' show MensajeDeCampanas;
+import 'notebook_wizard.dart';
 import 'selector_de_fecha.dart';
 
 /// Alta de una campaña (BACKLOG.md #60). Dos pasos: qué se quiere llevar
@@ -56,6 +57,16 @@ class _NewCampaignScreenState extends ConsumerState<NewCampaignScreen> {
       !_guardando;
 
   Future<void> _crear() async {
+    // En modo completo, el cuestionario va al final: primero la campaña (que
+    // es lo que el agricultor tiene en la cabeza) y después las preguntas de
+    // las que depende qué le pedirá el cuaderno. Si lo cancela, no se crea
+    // nada: así no queda una campaña a medias.
+    Map<String, bool>? perfil;
+    if (_modo == 'complete') {
+      perfil = await preguntarCuestionarioDelCuaderno(context, textoDelBoton: 'Crear cuaderno');
+      if (perfil == null || !mounted) return;
+    }
+
     setState(() {
       _guardando = true;
       _error = null;
@@ -73,6 +84,7 @@ class _NewCampaignScreenState extends ConsumerState<NewCampaignScreen> {
               variety: _variedad.text,
               name: _nombre.text,
               notes: _notas.text,
+              notebookProfile: perfil,
             ),
           );
       ref.invalidate(campanasProvider);

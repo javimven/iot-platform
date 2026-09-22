@@ -13,8 +13,11 @@ import 'campaign_labels.dart';
 import 'campaign_summary_view.dart';
 import 'campaigns_screen.dart' show MensajeDeCampanas;
 import 'cerrar_campana.dart';
+import 'completeness_view.dart';
+import 'notebook_catalog_screen.dart';
+import 'notebook_wizard.dart';
 
-enum _Vista { actividad, resumen }
+enum _Vista { actividad, resumen, revision }
 
 /// Ficha de una campaña: lo que se ha hecho y cómo va. El botón grande es
 /// "Registrar actividad": el agricultor trabaja con actividades, y el
@@ -49,28 +52,42 @@ class _CampaignDetailScreenState extends ConsumerState<CampaignDetailScreen> {
           titulo: 'No se pudo cargar la campaña',
           detalle: mensajeDeError(error),
         ),
-        data: (datos) => Column(
-          children: [
-            _Cabecera(campana: datos),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: SegmentedButton<_Vista>(
-                segments: const [
-                  ButtonSegment(value: _Vista.actividad, label: Text('Actividad')),
-                  ButtonSegment(value: _Vista.resumen, label: Text('Resumen')),
-                ],
-                selected: {_vista},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => setState(() => _vista = s.first),
+        data: (datos) {
+          // Si se está mirando la revisión de una campaña que ya no es un
+          // cuaderno completo, el botón de ese segmento no existe y
+          // SegmentedButton no admite un valor que no esté entre ellos.
+          if (_vista == _Vista.revision && !datos.resumen.esCompleta) {
+            _vista = _Vista.actividad;
+          }
+          return Column(
+            children: [
+              _Cabecera(campana: datos),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: SegmentedButton<_Vista>(
+                  segments: [
+                    const ButtonSegment(value: _Vista.actividad, label: Text('Actividad')),
+                    const ButtonSegment(value: _Vista.resumen, label: Text('Resumen')),
+                    // La revisión solo tiene sentido en un cuaderno completo
+                    // (ADR-0013): la campaña sencilla no prometió uno.
+                    if (datos.resumen.esCompleta)
+                      const ButtonSegment(value: _Vista.revision, label: Text('Revisión')),
+                  ],
+                  selected: {_vista},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) => setState(() => _vista = s.first),
+                ),
               ),
-            ),
-            Expanded(
-              child: _vista == _Vista.actividad
-                  ? _LineaDeTiempo(campana: datos)
-                  : CampaignSummaryView(campaignId: widget.campaignId),
-            ),
-          ],
-        ),
+              Expanded(
+                child: switch (_vista) {
+                  _Vista.actividad => _LineaDeTiempo(campana: datos),
+                  _Vista.resumen => CampaignSummaryView(campaignId: widget.campaignId),
+                  _Vista.revision => CompletenessView(campana: datos),
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -182,9 +199,22 @@ class _MenuDeCampana extends ConsumerWidget {
             await reabrirCampana(context, ref, campana);
           case 'borrar':
             await borrarCampana(context, ref, campana);
+          case 'cuaderno':
+            await pasarACuadernoCompleto(context, ref, campana);
+          case 'cuestionario':
+            await cambiarCuestionario(context, ref, campana);
+          case 'catalogos':
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotebookCatalogScreen()),
+            );
         }
       },
       itemBuilder: (context) => [
+        if (permisos.puedeCrear && !cerrada && !campana.resumen.esCompleta)
+          const PopupMenuItem(value: 'cuaderno', child: Text('Pasar a cuaderno completo')),
+        if (permisos.puedeCrear && !cerrada && campana.resumen.esCompleta)
+          const PopupMenuItem(value: 'cuestionario', child: Text('Cuestionario del cuaderno')),
+        const PopupMenuItem(value: 'catalogos', child: Text('Personas y equipos')),
         if (permisos.puedeCerrar && !cerrada)
           const PopupMenuItem(value: 'cerrar', child: Text('Cerrar campaña')),
         if (permisos.puedeCerrar && cerrada)

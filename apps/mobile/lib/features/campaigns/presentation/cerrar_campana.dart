@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_card.dart';
 import '../application/campaigns_controller.dart';
 import '../data/campaign_models.dart';
+import '../data/notebook_models.dart';
 import 'campaign_labels.dart';
+import 'completeness_view.dart' show textoDePendientes;
 import 'selector_de_fecha.dart';
 
 /// Cerrar una campaña: se pide la fecha de fin y, si se sabe, la producción.
@@ -14,6 +17,19 @@ Future<void> cerrarCampana(BuildContext context, WidgetRef ref, Campana campana)
   var fin = DateTime.now();
   final produccion = TextEditingController();
   final notas = TextEditingController();
+
+  // Lo que falta se avisa **antes** de cerrar, para poder volver atrás y
+  // apuntarlo. Nunca bloquea (ADR-0013), y si la revisión falla se cierra
+  // igual: no se deja a nadie sin poder cerrar su campaña por eso.
+  RevisionDelCuaderno? revision;
+  if (campana.resumen.esCompleta) {
+    try {
+      revision = await ref.read(campaignsApiProvider).revision(campana.id);
+    } catch (_) {
+      revision = null;
+    }
+  }
+  if (!context.mounted) return;
 
   final confirmado = await showDialog<bool>(
     context: context,
@@ -26,6 +42,27 @@ Future<void> cerrarCampana(BuildContext context, WidgetRef ref, Campana campana)
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Después no se podrán apuntar ni cambiar actividades sin reabrirla.'),
+              if (revision != null && !revision.sinPendientes) ...[
+                const SizedBox(height: 12),
+                AppCard(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'En el cuaderno quedan ${textoDePendientes(revision).toLowerCase()}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Puedes cerrarla igual y completarlo luego reabriéndola; o cancelar '
+                        'ahora y verlo en "Revisión".',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               SelectorDeFecha(
                 etiqueta: 'Fecha de fin',
