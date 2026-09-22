@@ -47,6 +47,28 @@ export class SatelliteQueueProducer implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Refresco pedido a mano desde la app. Devuelve `false` si esa parcela ya
+   * tuvo uno en la última hora.
+   *
+   * El cortafuegos va en el identificador del trabajo: lleva la hora, así que
+   * dos refrescos de la misma hora son el mismo trabajo para BullMQ. Eso evita
+   * que alguien se ponga a pulsar el botón y nos coma la cuota de Copernicus,
+   * sin necesidad de guardar en ninguna parte cuándo fue el último.
+   */
+  async encolarRefresco(payload: HistoricoPayload): Promise<boolean> {
+    const hora = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
+    const jobId = `refresco:${payload.parcelId}:${hora}`;
+    const cola = this.obtenerCola();
+
+    if (await cola.getJob(jobId)) {
+      return false;
+    }
+    await cola.add(TRABAJO_HISTORICO, payload, { ...SATELLITE_JOB_OPTIONS, jobId });
+    this.logger.log(`Refresco manual encolado para la parcela ${payload.parcelId}`);
+    return true;
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.cola?.close();
     this.conexion?.disconnect();

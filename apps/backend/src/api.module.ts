@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { IamModule } from './modules/iam/iam.module';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { ParcelsModule } from './modules/parcels/parcels.module';
+import { SatelliteModule } from './modules/satellite/satellite.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { HealthController } from './common/health/health.controller';
@@ -45,6 +46,7 @@ import { FeatureGuard } from './common/guards/feature.guard';
     IamModule,
     DirectoryModule,
     ParcelsModule,
+    SatelliteModule,
     TelemetryModule,
     PlatformModule,
   ],

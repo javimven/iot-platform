@@ -23,6 +23,7 @@ tags:
   - name: installations
   - name: zones
   - name: parcels
+  - name: satellite
   - name: gateways
   - name: devices
   - name: sensors
@@ -598,6 +599,144 @@ paths:
       responses:
         "204": { description: Sin contenido }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /parcels/{parcelId}/satellite/latest:
+    get:
+      tags: [satellite]
+      summary: Ultima observacion utilizable de la parcela
+      description: >
+        Devuelve `null` si la parcela todavia no tiene ninguna observacion
+        lista: acaba de crearse, o las pasadas disponibles estaban demasiado
+        tapadas. Requiere la funcion `satellite_imagery` contratada.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/SatelliteObservation" }
+                  - { type: "null" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /parcels/{parcelId}/satellite/observations:
+    get:
+      tags: [satellite]
+      summary: Historico de observaciones, de la mas reciente a la mas antigua
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+        - name: includeRejected
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: >
+            Incluye las descartadas por calidad. Sirven para explicar por que la
+            serie tiene un hueco ese dia.
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SatelliteObservation" }
+
+  /parcels/{parcelId}/satellite/timeseries:
+    get:
+      tags: [satellite]
+      summary: Serie temporal de NDVI para la grafica
+      description: >
+        Solo observaciones utilizables y en orden ascendente. Usa `tsOrigin` y
+        `value` como el historico de un canal de telemetria, para que el cliente
+        reutilice sus graficas; la calidad viene al lado porque en satelite no es
+        un detalle.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SatellitePoint" }
+
+  /parcels/{parcelId}/satellite/observations/{observationId}:
+    get:
+      tags: [satellite]
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SatelliteObservation" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /parcels/{parcelId}/satellite/observations/{observationId}/assets:
+    get:
+      tags: [satellite]
+      summary: Archivos de la observacion (sin URL; esa se pide aparte)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SatelliteAsset" }
+
+  /parcels/{parcelId}/satellite/observations/{observationId}/assets/{assetId}/url:
+    get:
+      tags: [satellite]
+      summary: Enlace temporal de descarga del archivo
+      description: >
+        El bucket es privado y sus credenciales no salen del backend: lo que se
+        entrega es una URL firmada que caduca (15 minutos).
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assetId: { type: string, format: uuid }
+                  assetType: { type: string, enum: [ndvi_raster, ndvi_preview] }
+                  mediaType: { type: string }
+                  url: { type: string, format: uri }
+                  expiresAt: { type: string, format: date-time }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /parcels/{parcelId}/satellite/refresh:
+    post:
+      tags: [satellite]
+      summary: Fuerza una busqueda de pasadas nuevas (satellite.refresh)
+      description: >
+        Encola un repaso corto de esa parcela. Gasta cuota de Copernicus, asi
+        que solo se admite **uno por parcela y hora**.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "201":
+          description: Encolado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  estado: { type: string, enum: [encolado] }
+                  dias: { type: integer }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429":
+          description: Ya se refresco esta parcela hace menos de una hora
 
   /installations/{installationId}/latest-readings:
     get:
@@ -1747,6 +1886,75 @@ components:
         locationText: { type: string, nullable: true }
         latitude: { type: number, nullable: true }
         longitude: { type: number, nullable: true }
+
+    SatelliteObservation:
+      type: object
+      description: >
+        Una pasada del satelite sobre la parcela, ya procesada (BACKLOG.md #36).
+        Una pasada que cae en dos tiles es UNA observacion.
+      properties:
+        observationId: { type: string, format: uuid }
+        acquisitionTime:
+          { type: string, format: date-time, description: "Momento de la pasada (UTC). Es la fecha de las graficas, nunca la de procesado." }
+        provider: { type: string, example: copernicus }
+        collection: { type: string, example: sentinel-2-l2a }
+        platform: { type: string, nullable: true, example: sentinel-2b }
+        processingVersion: { type: string, example: ndvi-s2-v1 }
+        parcelGeometryVersion:
+          { type: integer, description: "Contorno sobre el que se calculo: si la parcela se ha redibujado despues, este dato es de otro recinto." }
+        status: { type: string, enum: [pending, processing, ready, rejected_quality, failed] }
+        quality: { $ref: "#/components/schemas/SatelliteQuality" }
+        metrics:
+          type: object
+          description: "Estadisticas por indice. En la v1 solo `ndvi`."
+          additionalProperties: { $ref: "#/components/schemas/SatelliteMetric" }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/SatelliteAsset" }
+
+    SatelliteQuality:
+      type: object
+      properties:
+        status: { type: string, enum: [good, partial, rejected], nullable: true }
+        validPixelFraction:
+          { type: number, format: double, nullable: true, description: "0..1. Superficie de la parcela con dato utilizable tras la mascara de nubes." }
+        validPixelPercent:
+          { type: integer, nullable: true, description: "Lo mismo en porcentaje entero, para ensenar sin falsa precision." }
+        sceneCloudCover:
+          { type: number, format: double, nullable: true, description: "Nubes de la ESCENA, informativo. No es la nubosidad sobre la parcela." }
+
+    SatelliteMetric:
+      type: object
+      properties:
+        mean: { type: number, format: double }
+        median: { type: number, format: double }
+        min: { type: number, format: double }
+        max: { type: number, format: double }
+        stdDev: { type: number, format: double }
+        p10: { type: number, format: double }
+        p90: { type: number, format: double }
+
+    SatelliteAsset:
+      type: object
+      properties:
+        assetId: { type: string, format: uuid }
+        assetType:
+          { type: string, enum: [ndvi_raster, ndvi_preview], description: "`ndvi_raster`: GeoTIFF FLOAT32, el dato. `ndvi_preview`: PNG, solo para pintar." }
+        mediaType: { type: string }
+        width: { type: integer, nullable: true }
+        height: { type: integer, nullable: true }
+        byteSize: { type: integer }
+
+    SatellitePoint:
+      type: object
+      description: "Punto de la serie de NDVI. Mismos nombres que el historico de telemetria."
+      properties:
+        tsOrigin: { type: string, format: date-time }
+        value: { type: number, format: double, description: "NDVI medio de los pixeles validos." }
+        median: { type: number, format: double }
+        observationId: { type: string, format: uuid }
+        qualityStatus: { type: string, enum: [good, partial], nullable: true }
+        validPixelFraction: { type: number, format: double, nullable: true }
 
     Parcel:
       type: object
