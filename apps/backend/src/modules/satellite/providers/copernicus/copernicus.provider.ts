@@ -194,6 +194,10 @@ export class CopernicusProvider implements SatelliteProvider {
       aggregation: {
         timeRange: this.ventanaDelDia(params.acquisitionDate),
         aggregationInterval: { of: 'P1D' },
+        // La ventana ya es un día exacto; esto es por si deja de serlo. Por
+        // defecto (`SKIP`) la API tira el último intervalo incompleto, y con
+        // un solo intervalo eso es quedarse sin estadísticas.
+        lastIntervalBehavior: 'SHORTEN',
         evalscript: EVALSCRIPT_NDVI_ESTADISTICAS,
         resx,
         resy,
@@ -205,15 +209,30 @@ export class CopernicusProvider implements SatelliteProvider {
       CDSE_URLS.estadisticas,
       cuerpo,
     );
-    const stats = respuesta.data?.[0]?.outputs?.ndvi?.bands?.B0?.stats;
+    const salidas = respuesta.data?.[0]?.outputs;
+    const stats = salidas?.ndvi?.bands?.B0?.stats;
+    const recinto = salidas?.recinto?.bands?.B0?.stats;
     if (!stats) {
       throw new SatelliteProviderError(
         `Sin estadísticas para ${params.acquisitionDate}: la pasada no cubre el recinto o no hay dato`,
         { reintentable: false, provider: this.code },
       );
     }
+    if (!recinto) {
+      // Sin ella no se sabe cuántos píxeles tiene la parcela, y la fracción
+      // válida saldría contra la caja envolvente (ver el evalscript). Mejor
+      // un fallo claro que una calidad inventada.
+      throw new SatelliteProviderError(
+        `Estadísticas de ${params.acquisitionDate} sin la salida "recinto": no se puede calcular la calidad`,
+        { reintentable: false, provider: this.code },
+      );
+    }
 
-    const validos = Math.max(stats.sampleCount - stats.noDataCount, 0);
+    // Las dos salidas comparten caja: `sampleCount - noDataCount` es, en cada
+    // una, lo que su máscara deja pasar. En `recinto`, todos los píxeles de la
+    // parcela; en `ndvi`, solo los válidos.
+    const pixelesRecinto = Math.max(recinto.sampleCount - recinto.noDataCount, 0);
+    const validos = Math.min(Math.max(stats.sampleCount - stats.noDataCount, 0), pixelesRecinto);
     return {
       metricCode: params.metricCode,
       mean: stats.mean,
@@ -223,9 +242,10 @@ export class CopernicusProvider implements SatelliteProvider {
       stdDev: stats.stDev,
       p10: stats.percentiles?.['10.0'] ?? stats.percentiles?.['10'] ?? stats.min,
       p90: stats.percentiles?.['90.0'] ?? stats.percentiles?.['90'] ?? stats.max,
-      sampleCount: stats.sampleCount,
-      noDataCount: stats.noDataCount,
-      validPixelFraction: stats.sampleCount === 0 ? 0 : validos / stats.sampleCount,
+      // Contados sobre la parcela, no sobre la caja: es lo que promete el tipo.
+      sampleCount: pixelesRecinto,
+      noDataCount: pixelesRecinto - validos,
+      validPixelFraction: pixelesRecinto === 0 ? 0 : validos / pixelesRecinto,
     };
   }
 
@@ -318,12 +338,18 @@ export class CopernicusProvider implements SatelliteProvider {
     };
   }
 
-  /** Un día entero en UTC: la pasada concreta cae dentro. */
+  /**
+   * Un día entero en UTC, **exacto**: de las 00:00 a las 00:00 del siguiente.
+   * La primera versión acababa a las 23:59:59, un segundo menos que el
+   * intervalo `P1D` de las estadísticas, y la API descarta por defecto el
+   * intervalo incompleto: ni una estadística. Visto en la documentación antes
+   * del primer procesado real (2026-09-22). Las pasadas sobre España son hacia
+   * las 10:40 UTC, así que el borde no se toca.
+   */
   private ventanaDelDia(acquisitionDate: string): { from: string; to: string } {
-    return {
-      from: `${acquisitionDate}T00:00:00Z`,
-      to: `${acquisitionDate}T23:59:59Z`,
-    };
+    const inicio = new Date(`${acquisitionDate}T00:00:00Z`);
+    const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+    return { from: inicio.toISOString(), to: fin.toISOString() };
   }
 
   // -------------------------------------------------------------------------

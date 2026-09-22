@@ -225,13 +225,7 @@ describe('CopernicusProvider', () => {
     fetchMock
       .mockResolvedValueOnce(respuestaToken())
       .mockResolvedValueOnce(respuestaJson({ features: [] }))
-      .mockResolvedValueOnce(
-        respuestaJson({
-          data: [
-            { outputs: { ndvi: { bands: { B0: { stats: { sampleCount: 1, noDataCount: 0 } } } } } },
-          ],
-        }),
-      );
+      .mockResolvedValueOnce(respuestaEstadisticas());
     const proveedor = new CopernicusProvider(config);
 
     await proveedor.buscarAdquisiciones({ aoi, desde: new Date('2026-09-01'), hasta: new Date() });
@@ -271,33 +265,46 @@ describe('CopernicusProvider', () => {
     expect(adquisiciones.map((a) => a.itemIds[0])).toEqual(['despejada']);
   });
 
-  it('traduce las estadísticas y calcula la fracción de píxeles válidos', async () => {
-    fetchMock.mockResolvedValueOnce(respuestaToken()).mockResolvedValueOnce(
-      respuestaJson({
-        data: [
-          {
-            interval: { from: '2026-09-15T00:00:00Z', to: '2026-09-15T23:59:59Z' },
-            outputs: {
-              ndvi: {
-                bands: {
-                  B0: {
-                    stats: {
-                      min: 0.12,
-                      max: 0.84,
-                      mean: 0.63,
-                      stDev: 0.09,
-                      sampleCount: 1000,
-                      noDataCount: 80,
-                      percentiles: { '10.0': 0.4, '50.0': 0.66, '90.0': 0.8 },
-                    },
+  /**
+   * Como responde la API: `sampleCount` es la caja envolvente entera y
+   * `noDataCount` incluye lo que queda fuera del contorno. Aquí, una caja de
+   * 1000 píxeles con 600 dentro de la parcela, de los que 552 son válidos.
+   */
+  function respuestaEstadisticas(salidas: { recinto?: boolean } = {}) {
+    const conRecinto = salidas.recinto ?? true;
+    return respuestaJson({
+      data: [
+        {
+          interval: { from: '2026-09-15T00:00:00Z', to: '2026-09-16T00:00:00Z' },
+          outputs: {
+            ndvi: {
+              bands: {
+                B0: {
+                  stats: {
+                    min: 0.12,
+                    max: 0.84,
+                    mean: 0.63,
+                    stDev: 0.09,
+                    sampleCount: 1000,
+                    noDataCount: 448,
+                    percentiles: { '10.0': 0.4, '50.0': 0.66, '90.0': 0.8 },
                   },
                 },
               },
             },
+            ...(conRecinto
+              ? { recinto: { bands: { B0: { stats: { sampleCount: 1000, noDataCount: 400 } } } } }
+              : {}),
           },
-        ],
-      }),
-    );
+        },
+      ],
+    });
+  }
+
+  it('traduce las estadísticas y calcula la fracción válida sobre la parcela, no sobre la caja', async () => {
+    fetchMock
+      .mockResolvedValueOnce(respuestaToken())
+      .mockResolvedValueOnce(respuestaEstadisticas());
 
     const stats = await new CopernicusProvider(config).estadisticas({
       aoi,
@@ -307,8 +314,49 @@ describe('CopernicusProvider', () => {
 
     expect(stats.median).toBe(0.66); // la mediana sale del percentil 50
     expect(stats.p10).toBe(0.4);
+    // 552 de 600, no 552 de 1000: una parcela que no es un rectángulo no
+    // puede salir "nublada" por su forma.
     expect(stats.validPixelFraction).toBeCloseTo(0.92);
+    expect(stats.sampleCount).toBe(600);
+    expect(stats.noDataCount).toBe(48);
     expect(stats.metricCode).toBe('ndvi');
+  });
+
+  it('pide el día exacto y la máscara por salida: sin eso, ni una estadística o una calidad falsa', async () => {
+    fetchMock
+      .mockResolvedValueOnce(respuestaToken())
+      .mockResolvedValueOnce(respuestaEstadisticas());
+
+    await new CopernicusProvider(config).estadisticas({
+      aoi,
+      acquisitionDate: '2026-09-15',
+      metricCode: 'ndvi',
+    });
+
+    const cuerpo = JSON.parse(fetchMock.mock.calls[1][1].body);
+    // Exactamente P1D: con 23:59:59 la API tiraba el único intervalo.
+    expect(cuerpo.aggregation.timeRange).toEqual({
+      from: '2026-09-15T00:00:00.000Z',
+      to: '2026-09-16T00:00:00.000Z',
+    });
+    expect(cuerpo.aggregation.lastIntervalBehavior).toBe('SHORTEN');
+    expect(cuerpo.aggregation.evalscript).toContain(
+      '{ id: "dataMask", bands: ["ndvi", "recinto"] }',
+    );
+  });
+
+  it('sin la salida del recinto no se inventa una calidad', async () => {
+    fetchMock
+      .mockResolvedValueOnce(respuestaToken())
+      .mockResolvedValueOnce(respuestaEstadisticas({ recinto: false }));
+
+    await expect(
+      new CopernicusProvider(config).estadisticas({
+        aoi,
+        acquisitionDate: '2026-09-15',
+        metricCode: 'ndvi',
+      }),
+    ).rejects.toMatchObject({ opciones: { reintentable: false } });
   });
 
   it('una pasada sin estadísticas no es un fallo temporal: no se reintenta', async () => {

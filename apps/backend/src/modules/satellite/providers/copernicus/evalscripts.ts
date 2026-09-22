@@ -57,9 +57,19 @@ const MASCARA = `
 `;
 
 /**
- * Para la Statistical API: NDVI en FLOAT32 más el `dataMask` que decide qué
- * píxeles entran. La API exige ese output — sin él contaría también los
- * píxeles nublados.
+ * Para la Statistical API. Dos salidas, **cada una con su propia máscara**
+ * (el `dataMask` con una banda por salida, como en la documentación oficial):
+ *
+ * - `ndvi`: el índice, contando solo los píxeles válidos (`esValido`).
+ * - `recinto`: un 1 en cada píxel, sin más máscara que el contorno. Sirve para
+ *   saber cuántos píxeles tiene la parcela.
+ *
+ * Hace falta la segunda porque la API cuenta en `sampleCount` los píxeles de
+ * la **caja** que envuelve el recinto, y mete en `noDataCount` los que quedan
+ * fuera del contorno. Con una sola salida, una parcela triangular no pasaría
+ * nunca del 50 % "válido" aunque el día estuviera despejado. Visto en la
+ * documentación antes del primer procesado real (2026-09-22), así que nada
+ * calculado con `ndvi-s2-v1` usó la cuenta vieja.
  */
 export const EVALSCRIPT_NDVI_ESTADISTICAS = `//VERSION=3
 function setup() {
@@ -67,14 +77,15 @@ function setup() {
     input: [{ bands: ["B04", "B08", "SCL", "dataMask"] }],
     output: [
       { id: "ndvi", bands: 1, sampleType: "FLOAT32" },
-      { id: "dataMask", bands: 1 }
+      { id: "recinto", bands: 1, sampleType: "UINT8" },
+      { id: "dataMask", bands: ["ndvi", "recinto"] }
     ]
   };
 }
 ${MASCARA}
 function evaluatePixel(muestra) {
   var ndvi = (muestra.B08 - muestra.B04) / (muestra.B08 + muestra.B04);
-  return { ndvi: [ndvi], dataMask: [esValido(muestra)] };
+  return { ndvi: [ndvi], recinto: [1], dataMask: [esValido(muestra), 1] };
 }
 `;
 
