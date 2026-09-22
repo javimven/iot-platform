@@ -343,6 +343,12 @@ describe('CopernicusProvider', () => {
     expect(cuerpo.aggregation.evalscript).toContain(
       '{ id: "dataMask", bands: ["ndvi", "recinto"] }',
     );
+    // El recinto lleva el dataMask de entrada, que es lo que marca el
+    // contorno. Con un 1 fijo se contaba la caja entera (ndvi-s2-v1: 67 %
+    // válido todos los días en la primera parcela real).
+    expect(cuerpo.aggregation.evalscript).toContain(
+      'dataMask: [esValido(muestra), muestra.dataMask]',
+    );
   });
 
   it('sin la salida del recinto no se inventa una calidad', async () => {

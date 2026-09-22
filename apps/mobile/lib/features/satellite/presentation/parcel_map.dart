@@ -243,6 +243,11 @@ class _ParcelMapState extends ConsumerState<ParcelMap> {
                     OverlayImage(
                       bounds: widget.imagen!.bounds,
                       imageProvider: NetworkImage(widget.imagen!.url),
+                      // Píxeles nítidos, sin suavizar. La imagen trae uno por
+                      // cada 10 m, y difuminada parecía tener más detalle del
+                      // que tiene y ensuciaba los bordes: no se veía qué
+                      // píxeles quedaban fuera de la parcela (2026-09-22).
+                      filterQuality: FilterQuality.none,
                     ),
                   ],
                 ),

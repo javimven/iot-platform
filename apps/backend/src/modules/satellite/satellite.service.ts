@@ -7,6 +7,7 @@ import { AccessTokenClaims } from '../../common/guards/jwt-auth.guard';
 import { resolveOrgContext } from '../../common/permissions/org-context';
 import { ParcelsService } from '../parcels/parcels.service';
 import { diasDeHistorico } from './processing/satellite-scheduler.service';
+import { PROCESSING_VERSION } from './providers/copernicus/evalscripts';
 
 /** Días que se vuelven a mirar en un refresco manual. */
 const DIAS_REFRESCO = 15;
@@ -45,7 +46,9 @@ export class SatelliteService {
 
     const observacion = await this.prisma.runInTenantContext(tenantContext, (tx) =>
       tx.satelliteObservation.findFirst({
-        where: { parcelId, status: 'ready' },
+        // Solo la versión de procesado vigente: al reprocesar conviven
+        // varias, y la pantalla no debe mezclarlas.
+        where: { parcelId, status: 'ready', processingVersion: PROCESSING_VERSION },
         orderBy: { acquisitionTime: 'desc' },
         include: { metrics: true, assets: true },
       }),
@@ -69,6 +72,7 @@ export class SatelliteService {
       tx.satelliteObservation.findMany({
         where: {
           parcelId,
+          processingVersion: PROCESSING_VERSION,
           status: filtros.incluirDescartadas ? { in: ['ready', 'rejected_quality'] } : 'ready',
           acquisitionTime: this.ventana(filtros.from, filtros.to),
         },
@@ -96,6 +100,7 @@ export class SatelliteService {
         where: {
           parcelId,
           status: 'ready',
+          processingVersion: PROCESSING_VERSION,
           acquisitionTime: this.ventana(filtros.from, filtros.to),
         },
         orderBy: { acquisitionTime: 'asc' }, // ascendente: es una gráfica
@@ -179,13 +184,18 @@ export class SatelliteService {
    * histórico entero. Si se miraran solo los últimos días, el repaso diario
    * buscaría a partir de ellos y lo anterior no se rellenaría nunca. Se vio
    * con la primera parcela real (2026-09-22), antes de que nadie lo pulsara.
+   * Cuenta solo la versión de procesado vigente: tras subirla, la parcela
+   * vuelve a estar vacía para esa versión y se reprocesa entera.
    */
   async refrescar(user: AccessTokenClaims, parcelId: string) {
     await this.parcels.findOne(user, parcelId);
     const { organizationId, tenantContext } = resolveOrgContext(user);
 
     const tieneAlguna = await this.prisma.runInTenantContext(tenantContext, (tx) =>
-      tx.satelliteObservation.findFirst({ where: { parcelId }, select: { id: true } }),
+      tx.satelliteObservation.findFirst({
+        where: { parcelId, processingVersion: PROCESSING_VERSION },
+        select: { id: true },
+      }),
     );
     const dias = tieneAlguna ? DIAS_REFRESCO : diasDeHistorico(this.config);
 

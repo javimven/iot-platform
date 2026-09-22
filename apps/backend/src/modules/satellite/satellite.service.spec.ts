@@ -1,5 +1,6 @@
 import { ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PROCESSING_VERSION } from './providers/copernicus/evalscripts';
 import { SatelliteService } from './satellite.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
@@ -128,7 +129,11 @@ describe('SatelliteService', () => {
     const ultima = await service.ultima(usuario, 'parcela-1');
 
     expect(tx.satelliteObservation.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ include: { metrics: true, assets: true } }),
+      expect.objectContaining({
+        // Y solo de la versión vigente: al reprocesar conviven varias.
+        where: expect.objectContaining({ processingVersion: PROCESSING_VERSION }),
+        include: { metrics: true, assets: true },
+      }),
     );
     expect(ultima?.assets?.map((a) => a.assetId)).toEqual(['asset-1']);
   });

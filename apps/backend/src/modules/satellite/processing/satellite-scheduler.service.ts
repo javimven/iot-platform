@@ -11,6 +11,7 @@ import {
 import { ParcelsRepository } from '../../parcels/parcels.repository';
 import { SATELLITE_PROVIDER, SatelliteProvider } from '../providers/satellite-provider.interface';
 import { TrabajoObservacion } from './satellite-processing.service';
+import { PROCESSING_VERSION } from '../providers/copernicus/evalscripts';
 
 /** Ventana del histórico al dar de alta una parcela. */
 const DIAS_HISTORICO_POR_DEFECTO = 90;
@@ -138,7 +139,9 @@ export class SatelliteSchedulerService {
   ): Promise<Date> {
     const ultima = await this.prisma.runInTenantContext({ organizationId }, (tx) =>
       tx.satelliteObservation.findFirst({
-        where: { parcelId },
+        // De la versión vigente: al subirla, se busca otra vez la ventana
+        // entera y el histórico se reprocesa solo.
+        where: { parcelId, processingVersion: PROCESSING_VERSION },
         orderBy: { acquisitionTime: 'desc' },
         select: { acquisitionTime: true },
       }),
@@ -183,6 +186,7 @@ export class SatelliteSchedulerService {
         where: {
           parcelId,
           acquisitionDate: { in: adquisiciones.map((a) => new Date(a.acquisitionDate)) },
+          processingVersion: PROCESSING_VERSION,
           status: { in: ['ready', 'rejected_quality'] },
         },
         select: { acquisitionDate: true },

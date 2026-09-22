@@ -4,6 +4,7 @@ import {
   idTrabajoObservacion,
   idTrabajoRefresco,
 } from './satellite-queue';
+import { PROCESSING_VERSION } from '../../modules/satellite/providers/copernicus/evalscripts';
 
 /**
  * Identificadores de trabajo de la cola de satélite. BullMQ rechaza los que
@@ -48,6 +49,25 @@ describe('identificadores de la cola de satélite', () => {
     expect(idTrabajoObservacion(trabajo)).toBe(
       idTrabajoObservacion({ ...trabajo, sourceItemIds: ['a', 'b'] }),
     );
+  });
+
+  it('la versión de procesado entra en el id: al subirla, la misma pasada es otro trabajo', () => {
+    // BullMQ guarda un día los terminados y descarta un id repetido. Sin la
+    // versión, al pasar a ndvi-s2-v2 (2026-09-22) no se habría reprocesado
+    // nada de lo procesado ese mismo día.
+    const trabajo = {
+      organizationId: 'org-1',
+      parcelId,
+      provider: 'copernicus',
+      collection: 'sentinel-2-l2a',
+      acquisitionDate: '2026-09-15',
+      acquisitionTime: '2026-09-15T10:42:19.000Z',
+      sourceItemIds: [],
+    };
+    expect(idTrabajoObservacion(trabajo, 'ndvi-s2-v1')).not.toBe(
+      idTrabajoObservacion(trabajo, 'ndvi-s2-v2'),
+    );
+    expect(idTrabajoObservacion(trabajo)).toContain(PROCESSING_VERSION);
   });
 
   it('el refresco lleva la hora sin minutos: dos en la misma hora son el mismo', () => {

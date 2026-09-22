@@ -1,4 +1,5 @@
 import { TrabajoObservacion } from '../../modules/satellite/processing/satellite-processing.service';
+import { PROCESSING_VERSION } from '../../modules/satellite/providers/copernicus/evalscripts';
 
 /**
  * Cola del módulo de satélite, **separada de `telemetry-processing`** a
@@ -67,13 +68,22 @@ export function idDeTrabajo(...partes: string[]): string {
  * encolada dos veces (el repaso diario y el histórico, por ejemplo) es **un
  * solo** trabajo. Es la primera barrera contra el trabajo repetido; la segunda
  * es el índice único de la base (migración 0009).
+ *
+ * **Lleva la versión de procesado**, igual que esa clave de la base. BullMQ
+ * guarda un día los trabajos terminados y descarta un id repetido: sin la
+ * versión, al subirla no se reprocesaría lo que ya se hubiera procesado ese
+ * día (visto al pasar a `ndvi-s2-v2`, 2026-09-22).
  */
-export function idTrabajoObservacion(trabajo: TrabajoObservacion): string {
+export function idTrabajoObservacion(
+  trabajo: TrabajoObservacion,
+  version: string = PROCESSING_VERSION,
+): string {
   return idDeTrabajo(
     trabajo.parcelId,
     trabajo.provider,
     trabajo.collection,
     trabajo.acquisitionDate,
+    version,
   );
 }
 

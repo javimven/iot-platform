@@ -56,6 +56,7 @@ void main() {
     bool buscador = false,
     UbicacionDelDispositivo? ubicacion,
     BuscadorDeLugares? lugares,
+    ({String url, LatLngBounds bounds})? imagen,
   }) async {
     final controlador = MapController();
     await tester.pumpWidget(
@@ -73,6 +74,7 @@ void main() {
               height: 400,
               child: ParcelMap(
                 anillos: anillos,
+                imagen: imagen,
                 centro: const LatLng(39.5, -0.5),
                 controller: controlador,
                 buscador: buscador,
@@ -165,6 +167,26 @@ void main() {
 
     expect(controlador.camera.center.latitude, closeTo(centroParcela.latitude, 1e-3));
     expect(controlador.camera.zoom, greaterThan(14));
+  });
+
+  testWidgets('la imagen del NDVI se pinta con los píxeles nítidos, sin suavizar', (tester) async {
+    // Un píxel de Sentinel-2 son 10 m. Difuminada parecía tener más detalle
+    // del que tiene y no se veía qué quedaba fuera de la parcela.
+    await pump(
+      tester,
+      imagen: (
+        url: 'https://bucket.example/ndvi.png',
+        bounds: LatLngBounds(const LatLng(39.598, -0.600), const LatLng(39.600, -0.598)),
+      ),
+    );
+
+    final capa = tester.widget<OverlayImageLayer>(find.byType(OverlayImageLayer));
+    expect(capa.overlayImages.single.filterQuality, FilterQuality.none);
+
+    // En las pruebas no hay red y la imagen no llega a cargar: se mira cómo
+    // se pinta, no qué trae.
+    await tester.pump();
+    tester.takeException();
   });
 
   testWidgets('sin parcela no hay botón de volver a ella', (tester) async {

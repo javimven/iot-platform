@@ -44,12 +44,16 @@ export const CLASES_SCL_NUBE = [3, 8, 9, 10] as const;
  * Versión del procesado. Cambia si cambia el evalscript, la máscara, la
  * resolución o la fórmula: es lo que permite reprocesar el histórico y
  * distinguir lo viejo de lo nuevo sin pisarlo (BACKLOG.md #36).
+ *
+ * - `ndvi-s2-v1`: primera versión. La fracción válida se contaba sobre la caja
+ *   envolvente, no sobre la parcela; el NDVI sí era correcto.
+ * - `ndvi-s2-v2` (2026-09-22): fracción válida sobre los píxeles de la parcela.
  */
-export const PROCESSING_VERSION = 'ndvi-s2-v1';
+export const PROCESSING_VERSION = 'ndvi-s2-v2';
 
 const MASCARA = `
-  // Válido = clase de suelo o vegetación Y con dato (dataMask del propio
-  // producto, que marca lo que cae fuera de la escena).
+  // Válido = clase de suelo o vegetación Y con dato (dataMask de entrada, que
+  // vale 0 fuera de la escena y fuera del contorno de la parcela).
   function esValido(muestra) {
     var c = muestra.SCL;
     return muestra.dataMask === 1 && (c === 4 || c === 5) ? 1 : 0;
@@ -61,15 +65,19 @@ const MASCARA = `
  * (el `dataMask` con una banda por salida, como en la documentación oficial):
  *
  * - `ndvi`: el índice, contando solo los píxeles válidos (`esValido`).
- * - `recinto`: un 1 en cada píxel, sin más máscara que el contorno. Sirve para
- *   saber cuántos píxeles tiene la parcela.
+ * - `recinto`: un 1 en cada píxel, con el `dataMask` de entrada **tal cual**.
+ *   Sirve para saber cuántos píxeles tiene la parcela: la API marca el
+ *   contorno poniendo a 0 ese `dataMask` fuera de él, así que hay que
+ *   pasarlo. Con un 1 fijo (primera versión, `ndvi-s2-v1`) se contaba la caja
+ *   entera como si fuera la parcela: en la primera parcela real salía un 67 %
+ *   válido todos los días despejados, que era justo su parte de la caja.
+ *   Efecto conocido: si una pasada cubre solo parte de la parcela (borde de la
+ *   franja del satélite), la fracción se calcula sobre la parte cubierta.
  *
  * Hace falta la segunda porque la API cuenta en `sampleCount` los píxeles de
  * la **caja** que envuelve el recinto, y mete en `noDataCount` los que quedan
  * fuera del contorno. Con una sola salida, una parcela triangular no pasaría
- * nunca del 50 % "válido" aunque el día estuviera despejado. Visto en la
- * documentación antes del primer procesado real (2026-09-22), así que nada
- * calculado con `ndvi-s2-v1` usó la cuenta vieja.
+ * nunca del 50 % "válido" aunque el día estuviera despejado.
  */
 export const EVALSCRIPT_NDVI_ESTADISTICAS = `//VERSION=3
 function setup() {
@@ -85,7 +93,7 @@ function setup() {
 ${MASCARA}
 function evaluatePixel(muestra) {
   var ndvi = (muestra.B08 - muestra.B04) / (muestra.B08 + muestra.B04);
-  return { ndvi: [ndvi], recinto: [1], dataMask: [esValido(muestra), 1] };
+  return { ndvi: [ndvi], recinto: [1], dataMask: [esValido(muestra), muestra.dataMask] };
 }
 `;
 

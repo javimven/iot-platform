@@ -5,6 +5,7 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ParcelsRepository } from '../../parcels/parcels.repository';
 import { SatelliteProvider } from '../providers/satellite-provider.interface';
 import { Adquisicion } from '../providers/satellite.types';
+import { PROCESSING_VERSION } from '../providers/copernicus/evalscripts';
 
 /**
  * Quién decide qué se procesa (BACKLOG.md #36). Lo que se fija aquí es el
@@ -98,7 +99,9 @@ describe('SatelliteSchedulerService', () => {
     expect(cola.add).toHaveBeenCalledWith(
       'observacion',
       expect.objectContaining({ parcelId: 'parcela-1', acquisitionDate: '2026-09-20' }),
-      expect.objectContaining({ jobId: 'parcela-1__copernicus__sentinel-2-l2a__2026-09-20' }),
+      expect.objectContaining({
+        jobId: `parcela-1__copernicus__sentinel-2-l2a__2026-09-20__${PROCESSING_VERSION}`,
+      }),
     );
   });
 
@@ -134,6 +137,23 @@ describe('SatelliteSchedulerService', () => {
 
     const { desde } = (provider.buscarAdquisiciones as jest.Mock).mock.calls[0][0];
     expect(Math.round((AHORA.getTime() - desde.getTime()) / 86_400_000)).toBe(90);
+  });
+
+  it('al subir la versión de procesado, lo de la anterior no cuenta: se reprocesa todo', async () => {
+    // Pasó al corregir la fracción válida (ndvi-s2-v1 -> v2, 2026-09-22): si
+    // el repaso contara las observaciones viejas, la nueva versión solo
+    // tendría los días que vinieran después.
+    const { service, cola, tx } = build({});
+
+    await service.repasar(cola, AHORA);
+
+    const deVersion = expect.objectContaining({ processingVersion: PROCESSING_VERSION });
+    expect(tx.satelliteObservation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: deVersion }),
+    );
+    expect(tx.satelliteObservation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: deVersion }),
+    );
   });
 
   it('no vuelve a encolar una pasada ya procesada', async () => {
