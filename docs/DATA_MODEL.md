@@ -551,6 +551,41 @@ Dominio propio, **no canales de telemetría**: un `channel` cuelga de un `sensor
 
 Las cuatro tablas llevan RLS con la misma política que el resto del Directorio IoT.
 
+## 16 ter. Campañas y cuaderno de campo (BACKLOG.md #60, migraciones 0010-0012)
+
+Añadido el 2026-09-22. Decisiones en [ADR-0012](ADR/0012-campanas-unidades-de-cultivo-y-actividades.md) (modelo), [ADR-0013](ADR/0013-campana-sencilla-y-cuaderno-completo.md) (sencilla/completa) y [ADR-0014](ADR/0014-compatibilidad-con-siex-y-cue.md) (SIEX/CUE).
+
+```
+installations (+ holder_name, holder_nif, rea_code, address, region_code)
+└─ campaigns ─ crop_units ─ crop_unit_parcels ─► parcels
+   ├─ campaign_activities ─ activity_targets ─► crop_unit_parcels
+   │  └─ irrigation_details | fertilization_details | phytosanitary_details (+ phytosanitary_products)
+   │     | harvest_details | field_work_details
+   ├─ campaign_snapshots (inmutables)
+   └─ document_links ─► documents
+notebook_people, notebook_equipment (por organización; installation_id opcional)
+crops (catálogo global, sin RLS)
+```
+
+| Tabla | Qué es | Notas |
+|---|---|---|
+| `crops` | catálogo global de cultivos | `id` slug estable; `eppo_code`/`siex_code` vacíos hasta importar catálogos oficiales; lo siembra `seed.ts` |
+| `campaigns` | periodo productivo de una finca | fechas `DATE`; `status` (`draft`/`active`/`closed`/`archived`) y `management_mode` (`simple`/`complete`) son enums; `notebook_profile` JSONB validado en la app; cerrada ⇒ `end_date` y `closed_at` (CHECK) |
+| `crop_units` | unidad de cultivo | `crop_id` opcional + `crop_name` siempre; `water_regime`, `growing_environment`, `production_system` con CHECK |
+| `crop_unit_parcels` | parcelas de cada unidad | PK compuesta; `area_ha` nulo = parcela entera; trigger: parcela de la misma finca y organización que la campaña |
+| `campaign_activities` | lo que se hizo | `type` TEXT con CHECK (no enum: van a llegar más); `start_date` y `end_date` siempre; `start_time` `HH:mm` opcional; `origin` `manual`/`repeated`/`sensor_suggestion`; borrado lógico con quién y por qué |
+| `activity_targets` | sobre qué parcelas | FK compuesta a `crop_unit_parcels` (una parcela con actividades no se quita de la unidad); trigger: unidad de la misma campaña |
+| `*_details` | detalle por tipo | PK = la actividad; lo escrito (valor + unidad) y el normalizado por el backend (`volume_m3`, `n_kg_ha`, `quantity_kg`) |
+| `phytosanitary_products` | productos de un tratamiento | varios por tratamiento; `source` `manual`/`mapa_registry` + `source_updated_at` |
+| `notebook_people`, `notebook_equipment` | catálogos reutilizables | personas con nombre y apellidos o razón social (CHECK), ROPO; equipos con ROMA |
+| `documents` | un fichero en el bucket | índice único parcial (organización, SHA-256): no se guarda dos veces |
+| `document_links` | dónde se usa | una FK por destino (campaña, actividad, equipo, persona) y CHECK de exactamente uno; trigger de misma organización |
+| `campaign_snapshots` | cómo era todo al cerrar | inmutable (trigger que rechaza UPDATE/DELETE); una por cierre |
+
+**Campaña cerrada = cuaderno congelado**: un trigger (`check_campaign_open`) rechaza altas, cambios y borrados en actividades y en todo lo que cuelga de ellas mientras la campaña esté `closed` o `archived`. Para corregir, se reabre, y la reapertura queda auditada.
+
+Todas las tablas de organización llevan RLS con la misma política que el resto. Las comprobaciones de clave foránea no pasan por RLS, por eso los triggers de coherencia comprueban también la organización.
+
 ## 17. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |

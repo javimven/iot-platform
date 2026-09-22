@@ -169,6 +169,16 @@ model Installation {
   latitude     Float?
   longitude    Float?
   status       InstallationStatus @default(active)
+  /// Datos de la explotacion para el cuaderno completo (migracion 0010).
+  /// Opcionales: una campaña sencilla no los necesita.
+  holderName   String?            @map("holder_name")
+  holderNif    String?            @map("holder_nif")
+  /// Codigo de la explotacion en el REA.
+  reaCode      String?            @map("rea_code")
+  address      String?
+  /// ISO 3166-2 de la comunidad autonoma (`ES-AN`): zonas vulnerables y
+  /// extensiones autonomicas del cuaderno (ADR-0014).
+  regionCode   String?            @map("region_code")
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
   deletedAt    DateTime?          @map("deleted_at")
@@ -178,6 +188,7 @@ model Installation {
   gateways          Gateway[]
   parcels           Parcel[]
   memberScopes      MemberInstallationScope[]
+  campaigns         Campaign[]
 
   @@index([organizationId])
   @@map("installations")
@@ -219,6 +230,7 @@ model Parcel {
   installation Installation           @relation(fields: [installationId], references: [id])
   gateways     Gateway[]
   observations SatelliteObservation[]
+  cropUnits    CropUnitParcel[]
 
   @@index([organizationId])
   @@index([installationId])
@@ -689,4 +701,458 @@ model SatelliteAsset {
   @@unique([observationId, assetType])
   @@index([organizationId])
   @@map("satellite_assets")
+}
+
+// ---------------------------------------------------------------------------
+// Campañas y cuaderno de campo (BACKLOG.md #60, ADR-0012/0013/0014).
+// Migraciones 0010-0012, escritas a mano: RLS, CHECKs, triggers e indices
+// parciales viven alli, no aqui.
+// ---------------------------------------------------------------------------
+
+enum CampaignStatus {
+  draft
+  active
+  closed
+  archived
+}
+
+/// Cambia la experiencia y las validaciones, no la estructura (ADR-0013):
+/// pasar de sencilla a completa no copia ni borra nada.
+enum CampaignManagementMode {
+  simple
+  complete
+}
+
+/// Catalogo global de cultivos (sin organizacion, sin RLS). Codigos oficiales
+/// vacios hasta importar los catalogos (EPPO, SIEX): nunca a ojo.
+model Crop {
+  /// Slug estable: `aguacate`.
+  id                 String   @id
+  name               String
+  /// woody | herbaceous | horticultural | forage | other
+  category           String
+  eppoCode           String?  @map("eppo_code")
+  siexCode           String?  @map("siex_code")
+  siexCatalogVersion String?  @map("siex_catalog_version")
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  cropUnits CropUnit[]
+
+  @@map("crops")
+}
+
+/// Periodo productivo de una finca ("Aguacate Hass · 2026").
+model Campaign {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                 @map("organization_id") @db.Uuid
+  installationId       String                 @map("installation_id") @db.Uuid
+  name                 String
+  status               CampaignStatus         @default(active)
+  managementMode       CampaignManagementMode @default(simple) @map("management_mode")
+  /// Fechas sin hora: una campaña empieza "el 3 de febrero".
+  startDate            DateTime               @map("start_date") @db.Date
+  expectedEndDate      DateTime?              @map("expected_end_date") @db.Date
+  endDate              DateTime?              @map("end_date") @db.Date
+  notes                String?
+  /// Respuestas del asistente del cuaderno completo. Configuracion, no datos
+  /// regulados: JSON validado en la aplicacion.
+  notebookProfile      Json                   @default("{}") @map("notebook_profile")
+  declaredProductionKg Float?                 @map("declared_production_kg")
+  closingNotes         String?                @map("closing_notes")
+  closedAt             DateTime?              @map("closed_at")
+  closedBy             String?                @map("closed_by") @db.Uuid
+  createdBy            String                 @map("created_by") @db.Uuid
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  deletedAt            DateTime?              @map("deleted_at")
+
+  installation  Installation       @relation(fields: [installationId], references: [id])
+  cropUnits     CropUnit[]
+  activities    CampaignActivity[]
+  snapshots     CampaignSnapshot[]
+  documentLinks DocumentLink[]
+
+  @@index([organizationId])
+  @@index([installationId])
+  @@map("campaigns")
+}
+
+/// Unidad de cultivo: mismo cultivo y manejo sobre una o varias parcelas.
+model CropUnit {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  campaignId         String    @map("campaign_id") @db.Uuid
+  cropId             String?   @map("crop_id")
+  /// El nombre tal como se eligio: no cambia si se renombra el catalogo.
+  cropName           String    @map("crop_name")
+  variety            String?
+  previousCrop       String?   @map("previous_crop")
+  /// rainfed | irrigated
+  waterRegime        String?   @map("water_regime")
+  /// open_field | greenhouse | other
+  growingEnvironment String?   @map("growing_environment")
+  /// conventional | integrated | organic
+  productionSystem   String?   @map("production_system")
+  /// Superficie cultivada declarada; si es nula, la suma de sus parcelas.
+  areaHa             Float?    @map("area_ha")
+  expectedYieldKgHa  Float?    @map("expected_yield_kg_ha")
+  notes              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  campaign Campaign         @relation(fields: [campaignId], references: [id])
+  crop     Crop?            @relation(fields: [cropId], references: [id])
+  parcels  CropUnitParcel[]
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@map("crop_units")
+}
+
+/// Que parcelas ocupa una unidad, y cuanto de cada una (nulo = entera).
+model CropUnitParcel {
+  cropUnitId     String   @map("crop_unit_id") @db.Uuid
+  parcelId       String   @map("parcel_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  areaHa         Float?   @map("area_ha")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  cropUnit CropUnit         @relation(fields: [cropUnitId], references: [id])
+  parcel   Parcel           @relation(fields: [parcelId], references: [id])
+  targets  ActivityTarget[]
+
+  @@id([cropUnitId, parcelId])
+  @@index([organizationId])
+  @@index([parcelId])
+  @@map("crop_unit_parcels")
+}
+
+/// Lo que se ha hecho en la campaña. Fecha de inicio y de fin siempre, como
+/// en el CUE: un riego de un dia las tiene iguales.
+model CampaignActivity {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  campaignId     String    @map("campaign_id") @db.Uuid
+  /// irrigation | fertilization | phytosanitary | field_work | harvest |
+  /// observation | sowing | other (CHECK en la migracion 0011)
+  type           String
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime  @map("end_date") @db.Date
+  /// `HH:mm`, hora local de la finca. Solo tiene sentido en tratamientos.
+  startTime      String?   @map("start_time")
+  notes          String?
+  /// manual | repeated | sensor_suggestion
+  origin         String    @default("manual")
+  repeatedFromId String?   @map("repeated_from_id") @db.Uuid
+  createdBy      String    @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.Uuid
+  deleteReason   String?   @map("delete_reason")
+
+  campaign              Campaign               @relation(fields: [campaignId], references: [id])
+  repeatedFrom          CampaignActivity?      @relation("Repeticion", fields: [repeatedFromId], references: [id])
+  repetitions           CampaignActivity[]     @relation("Repeticion")
+  targets               ActivityTarget[]
+  irrigation            IrrigationDetail?
+  fertilization         FertilizationDetail?
+  phytosanitary         PhytosanitaryDetail?
+  phytosanitaryProducts PhytosanitaryProduct[]
+  harvest               HarvestDetail?
+  fieldWork             FieldWorkDetail?
+  documentLinks         DocumentLink[]
+
+  @@index([organizationId])
+  @@map("campaign_activities")
+}
+
+/// Sobre que parcela (de que unidad) se hizo una actividad, y cuanta superficie.
+model ActivityTarget {
+  activityId     String @map("activity_id") @db.Uuid
+  cropUnitId     String @map("crop_unit_id") @db.Uuid
+  parcelId       String @map("parcel_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  /// Nulo = toda la superficie de esa parcela en la unidad.
+  areaHa         Float? @map("area_ha")
+
+  activity       CampaignActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  cropUnitParcel CropUnitParcel   @relation(fields: [cropUnitId, parcelId], references: [cropUnitId, parcelId])
+
+  @@id([activityId, cropUnitId, parcelId])
+  @@index([organizationId])
+  @@index([parcelId])
+  @@map("activity_targets")
+}
+
+/// Riego (CUE bloque 10).
+model IrrigationDetail {
+  activityId     String  @id @map("activity_id") @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  system         String?
+  /// Lo que escribio el usuario: valor + unidad (m3 | m3_ha | l).
+  amount         Float?
+  amountUnit     String? @map("amount_unit")
+  /// Normalizado por el backend: m3 totales.
+  volumeM3       Float?  @map("volume_m3")
+  waterSource    String? @map("water_source")
+  meterNumber    String? @map("meter_number")
+  nitrateMgL     Float?  @map("nitrate_mg_l")
+  p2o5MgL        Float?  @map("p2o5_mg_l")
+
+  activity CampaignActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@map("irrigation_details")
+}
+
+/// Fertilizacion (CUE bloque 9, RD 1051/2022 art. 5).
+model FertilizationDetail {
+  activityId        String  @id @map("activity_id") @db.Uuid
+  organizationId    String  @map("organization_id") @db.Uuid
+  fertilizationType String? @map("fertilization_type")
+  materialType      String? @map("material_type")
+  productName       String? @map("product_name")
+  dose              Float?
+  doseUnit          String? @map("dose_unit")
+  applicationMethod String? @map("application_method")
+  nPct              Float?  @map("n_pct")
+  p2o5Pct           Float?  @map("p2o5_pct")
+  k2oPct            Float?  @map("k2o_pct")
+  organicMatterPct  Float?  @map("organic_matter_pct")
+  /// Normalizados por el backend, solo cuando las unidades lo permiten.
+  nKgHa             Float?  @map("n_kg_ha")
+  p2o5KgHa          Float?  @map("p2o5_kg_ha")
+  k2oKgHa           Float?  @map("k2o_kg_ha")
+  supplierName      String? @map("supplier_name")
+  supplierNif       String? @map("supplier_nif")
+  supplierRega      String? @map("supplier_rega")
+  supplierNima      String? @map("supplier_nima")
+  applicatorCompany String? @map("applicator_company")
+  regferCode        String? @map("regfer_code")
+  equipmentId       String? @map("equipment_id") @db.Uuid
+  /// Copia del equipo al registrar: el cuaderno de hoy no cambia si cambia su ficha.
+  equipmentSnapshot Json?   @map("equipment_snapshot")
+
+  activity  CampaignActivity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  equipment NotebookEquipment? @relation(fields: [equipmentId], references: [id])
+
+  @@map("fertilization_details")
+}
+
+/// Tratamiento fitosanitario (CUE bloque 8, Reglamento (UE) 2023/564).
+model PhytosanitaryDetail {
+  activityId             String   @id @map("activity_id") @db.Uuid
+  organizationId         String   @map("organization_id") @db.Uuid
+  problem                String?
+  /// weeds | diseases | arthropods | growth_regulators | other
+  problemCategory        String?  @map("problem_category")
+  justification          String?
+  /// Codigo BBCH por dentro; el nombre que vio el agricultor, al lado.
+  bbchCode               String?  @map("bbch_code")
+  phenologicalStageLabel String?  @map("phenological_stage_label")
+  applicatorId           String?  @map("applicator_id") @db.Uuid
+  applicatorSnapshot     Json?    @map("applicator_snapshot")
+  adviserId              String?  @map("adviser_id") @db.Uuid
+  adviserSnapshot        Json?    @map("adviser_snapshot")
+  equipmentId            String?  @map("equipment_id") @db.Uuid
+  equipmentSnapshot      Json?    @map("equipment_snapshot")
+  manualApplication      Boolean? @map("manual_application")
+  /// good | fair | poor
+  efficacy               String?
+
+  activity   CampaignActivity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  applicator NotebookPerson?    @relation("Aplicador", fields: [applicatorId], references: [id])
+  adviser    NotebookPerson?    @relation("Asesor", fields: [adviserId], references: [id])
+  equipment  NotebookEquipment? @relation(fields: [equipmentId], references: [id])
+
+  @@map("phytosanitary_details")
+}
+
+/// Un producto de un tratamiento (puede ser una mezcla de varios).
+model PhytosanitaryProduct {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  activityId        String    @map("activity_id") @db.Uuid
+  position          Int       @default(0) @db.SmallInt
+  productName       String    @map("product_name")
+  registryNumber    String?   @map("registry_number")
+  activeSubstances  String?   @map("active_substances")
+  dose              Float?
+  /// l_ha | kg_ha | l_hl | kg_hl
+  doseUnit          String?   @map("dose_unit")
+  totalQuantity     Float?    @map("total_quantity")
+  /// l | kg
+  totalQuantityUnit String?   @map("total_quantity_unit")
+  /// manual | mapa_registry
+  source            String    @default("manual")
+  sourceUpdatedAt   DateTime? @map("source_updated_at")
+
+  activity CampaignActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@index([organizationId])
+  @@map("phytosanitary_products")
+}
+
+/// Cosecha, recoleccion o siega (CUE bloque 11).
+model HarvestDetail {
+  activityId      String  @id @map("activity_id") @db.Uuid
+  organizationId  String  @map("organization_id") @db.Uuid
+  product         String?
+  quantity        Float?
+  /// kg | t | units
+  quantityUnit    String? @map("quantity_unit")
+  /// En kg, para sumar y sacar el rendimiento. Nulo si se conto en unidades.
+  quantityKg      Float?  @map("quantity_kg")
+  lotCode         String? @map("lot_code")
+  deliveryNote    String? @map("delivery_note")
+  customerName    String? @map("customer_name")
+  customerNif     String? @map("customer_nif")
+  customerAddress String? @map("customer_address")
+  customerRgseaa  String? @map("customer_rgseaa")
+  destination     String?
+  qualityGrade    String? @map("quality_grade")
+
+  activity CampaignActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@map("harvest_details")
+}
+
+/// Labores (CUE bloque 5).
+model FieldWorkDetail {
+  activityId           String   @id @map("activity_id") @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  workType             String   @map("work_type")
+  pruningResiduesLeft  Boolean? @map("pruning_residues_left")
+  clearingResiduesLeft Boolean? @map("clearing_residues_left")
+  hours                Float?
+  machinery            String?
+
+  activity CampaignActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@map("field_work_details")
+}
+
+/// Aplicadores, empresas de servicios y asesores: se dan de alta una vez.
+model NotebookPerson {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  /// Nulo = sirve para todas las fincas de la organizacion.
+  installationId String?   @map("installation_id") @db.Uuid
+  /// own_staff | service_company | adviser
+  kind           String
+  firstName      String?   @map("first_name")
+  surname1       String?   @map("surname_1")
+  surname2       String?   @map("surname_2")
+  companyName    String?   @map("company_name")
+  nif            String?
+  ropoNumber     String?   @map("ropo_number")
+  ropoCardType   String?   @map("ropo_card_type")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  treatmentsAsApplicator PhytosanitaryDetail[] @relation("Aplicador")
+  treatmentsAsAdviser    PhytosanitaryDetail[] @relation("Asesor")
+  documentLinks          DocumentLink[]
+
+  @@index([organizationId])
+  @@map("notebook_people")
+}
+
+/// Equipos de tratamiento y aplicacion.
+model NotebookEquipment {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  installationId   String?   @map("installation_id") @db.Uuid
+  description      String
+  brand            String?
+  model            String?
+  /// Inscripcion en el ROMA (o REGANIP).
+  romaNumber       String?   @map("roma_number")
+  acquiredOn       DateTime? @map("acquired_on") @db.Date
+  lastInspectionOn DateTime? @map("last_inspection_on") @db.Date
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  phytosanitaryDetails PhytosanitaryDetail[]
+  fertilizationDetails FertilizationDetail[]
+  documentLinks        DocumentLink[]
+
+  @@index([organizationId])
+  @@map("notebook_equipment")
+}
+
+/// Un fichero en el almacenamiento de objetos, guardado una sola vez por
+/// organizacion (indice unico parcial sobre el SHA-256).
+model Document {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  installationId String?   @map("installation_id") @db.Uuid
+  documentType   String    @map("document_type")
+  title          String?
+  filename       String
+  mediaType      String    @map("media_type")
+  byteSize       Int       @map("byte_size")
+  /// SHA-256 en hexadecimal.
+  checksum       String
+  objectKey      String    @unique @map("object_key")
+  uploadedBy     String    @map("uploaded_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.Uuid
+
+  links DocumentLink[]
+
+  @@index([organizationId])
+  @@map("documents")
+}
+
+/// Donde se usa un documento: exactamente uno de los cuatro destinos.
+model DocumentLink {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  documentId     String   @map("document_id") @db.Uuid
+  campaignId     String?  @map("campaign_id") @db.Uuid
+  activityId     String?  @map("activity_id") @db.Uuid
+  equipmentId    String?  @map("equipment_id") @db.Uuid
+  personId       String?  @map("person_id") @db.Uuid
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  document  Document           @relation(fields: [documentId], references: [id])
+  campaign  Campaign?          @relation(fields: [campaignId], references: [id])
+  activity  CampaignActivity?  @relation(fields: [activityId], references: [id])
+  equipment NotebookEquipment? @relation(fields: [equipmentId], references: [id])
+  person    NotebookPerson?    @relation(fields: [personId], references: [id])
+
+  @@index([organizationId])
+  @@index([documentId])
+  @@map("document_links")
+}
+
+/// Como era todo al cerrar la campaña. Inmutable (trigger en la migracion 0012).
+model CampaignSnapshot {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  campaignId     String   @map("campaign_id") @db.Uuid
+  /// `close`
+  reason         String
+  content        Json
+  contentVersion Int      @default(1) @map("content_version")
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@map("campaign_snapshots")
 }

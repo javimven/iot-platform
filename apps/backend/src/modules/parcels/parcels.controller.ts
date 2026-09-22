@@ -10,13 +10,14 @@ import { AccessTokenClaims } from '../../common/guards/jwt-auth.guard';
  * Parcelas (BACKLOG.md #36). Mismas rutas anidadas que las zonas
  * (`/installations/{id}/zones`) para no inventar un patron nuevo.
  *
- * Todo el controlador exige la funcion `satellite_imagery`: la parcela no es
- * una entidad del Directorio IoT que sirva para operar estaciones, es la
- * unidad del modulo de satelite. Una organizacion que no lo tiene contratado
- * no deberia poder crear ni listar parcelas, tampoco llamando a la API
- * directamente.
+ * Todo el controlador exige **Satelite o Campañas**: la parcela es la unidad
+ * de los dos modulos (el NDVI se calcula sobre su contorno, y una campaña
+ * dice que se cultiva en cada una). Hasta el 2026-09-22 exigia solo
+ * `satellite_imagery`; con Campañas, una organizacion sin satelite tiene que
+ * poder dibujar sus parcelas igual. Quien no tiene ninguno de los dos no
+ * puede crearlas ni listarlas, tampoco llamando a la API directamente.
  */
-@RequireFeature('satellite_imagery')
+@RequireFeature('satellite_imagery', 'campaigns')
 @Controller()
 export class ParcelsController {
   constructor(private readonly parcels: ParcelsService) {}

@@ -48,7 +48,11 @@ describe('ParcelsService', () => {
   };
 
   function build(
-    params: { alcance?: Array<{ installationId: string }>; existeFinca?: boolean } = {},
+    params: {
+      alcance?: Array<{ installationId: string }>;
+      existeFinca?: boolean;
+      conSatelite?: boolean;
+    } = {},
   ) {
     const tx = {
       installation: {
@@ -58,6 +62,13 @@ describe('ParcelsService', () => {
       },
       parcel: { update: jest.fn().mockResolvedValue({}) },
       gateway: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      organizationFeature: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue(
+            params.conSatelite === false ? null : { featureCode: 'satellite_imagery' },
+          ),
+      },
       $executeRaw: jest.fn().mockResolvedValue(1),
     };
     const prisma = {
@@ -204,6 +215,19 @@ describe('ParcelsService', () => {
       organizationId: 'org-1',
       parcelId: 'parcel-1',
     });
+  });
+
+  it('sin el satélite contratado no se encola nada: una parcela de Campañas no gasta cuota', async () => {
+    const { service, colaSatelite, tx } = build({ conSatelite: false });
+
+    await service.create(usuario, 'finca-1', { name: 'La Vega', geometry: geometriaEntrada });
+
+    expect(tx.organizationFeature.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ featureCode: 'satellite_imagery', enabled: true }),
+      }),
+    );
+    expect(colaSatelite.encolarHistorico).not.toHaveBeenCalled();
   });
 
   it('una parcela de otra organización no existe para quien pregunta', async () => {

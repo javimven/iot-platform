@@ -44,35 +44,47 @@ export class ParcelsService {
     await this.assertInstallationInScope(user, installationId);
     const geometry = this.geometria.normalizar(dto.geometry);
 
-    const parcela = await this.prisma.runInTenantContext(tenantContext, async (tx) => {
-      await this.assertInstallationExists(tx, installationId, organizationId);
-      const parcela = await this.conNombreLibre(installationId, dto.name, () =>
-        this.repositorio.crear(tx, {
+    const { parcela, conSatelite } = await this.prisma.runInTenantContext(
+      tenantContext,
+      async (tx) => {
+        await this.assertInstallationExists(tx, installationId, organizationId);
+        const parcela = await this.conNombreLibre(installationId, dto.name, () =>
+          this.repositorio.crear(tx, {
+            organizationId,
+            installationId,
+            name: dto.name,
+            notes: dto.notes ?? null,
+            geometry,
+          }),
+        );
+        await this.auditLog.record(tx, {
           organizationId,
-          installationId,
-          name: dto.name,
-          notes: dto.notes ?? null,
-          geometry,
-        }),
-      );
-      await this.auditLog.record(tx, {
-        organizationId,
-        actorUserId: user.sub,
-        action: 'parcels.create',
-        targetType: 'parcel',
-        targetId: parcela.id,
-        // Ni rastro de la geometria en la auditoria: son kilobytes de
-        // coordenadas que nadie va a leer en una tabla de eventos.
-        metadata: { name: parcela.name, installationId, areaM2: Math.round(parcela.areaM2) },
-      });
-      return parcela;
-    });
+          actorUserId: user.sub,
+          action: 'parcels.create',
+          targetType: 'parcel',
+          targetId: parcela.id,
+          // Ni rastro de la geometria en la auditoria: son kilobytes de
+          // coordenadas que nadie va a leer en una tabla de eventos.
+          metadata: { name: parcela.name, installationId, areaM2: Math.round(parcela.areaM2) },
+        });
+        const conSatelite = await tx.organizationFeature.findFirst({
+          where: { organizationId, featureCode: 'satellite_imagery', enabled: true },
+          select: { featureCode: true },
+        });
+        return { parcela, conSatelite: conSatelite !== null };
+      },
+    );
 
     // Fuera de la transaccion y sin bloquear la respuesta: si el encolado
     // falla, la parcela ya esta creada y el repaso diario la recogera igual.
     // Sin esto, una parcela recien dibujada no tendria ni un dato hasta la
     // manana siguiente.
-    await this.colaSatelite.encolarHistorico({ organizationId, parcelId: parcela.id });
+    //
+    // Solo con el satelite contratado: una parcela dibujada para Campañas no
+    // puede gastar cuota de Copernicus.
+    if (conSatelite) {
+      await this.colaSatelite.encolarHistorico({ organizationId, parcelId: parcela.id });
+    }
     return parcela;
   }
 

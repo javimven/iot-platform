@@ -50,6 +50,83 @@ const FEATURES = [
   { code: 'disease_risk', label: 'Afecciones y patógenos' },
 ];
 
+// Catálogo de cultivos (migración 0010, BACKLOG.md #60). El agricultor elige
+// de esta lista en vez de escribir el nombre, para que el día que se importen
+// los catálogos oficiales (EPPO, catálogo de productos del SIEX) se puedan
+// mapear sin reescribir los datos de nadie. Solo nombres y categoría: los
+// códigos oficiales se rellenan al importarlos, nunca a ojo. Lo que no esté
+// aquí se escribe a mano en la campaña ("otro cultivo").
+//
+// El `id` es estable: no se cambia aunque se retoque el nombre.
+const CROPS: Array<{ id: string; name: string; category: string }> = [
+  // Leñosos
+  { id: 'aguacate', name: 'Aguacate', category: 'woody' },
+  { id: 'albaricoquero', name: 'Albaricoquero', category: 'woody' },
+  { id: 'algarrobo', name: 'Algarrobo', category: 'woody' },
+  { id: 'almendro', name: 'Almendro', category: 'woody' },
+  { id: 'avellano', name: 'Avellano', category: 'woody' },
+  { id: 'caqui', name: 'Caqui', category: 'woody' },
+  { id: 'cerezo', name: 'Cerezo', category: 'woody' },
+  { id: 'chirimoyo', name: 'Chirimoyo', category: 'woody' },
+  { id: 'ciruelo', name: 'Ciruelo', category: 'woody' },
+  { id: 'granado', name: 'Granado', category: 'woody' },
+  { id: 'higuera', name: 'Higuera', category: 'woody' },
+  { id: 'kiwi', name: 'Kiwi', category: 'woody' },
+  { id: 'limonero', name: 'Limonero', category: 'woody' },
+  { id: 'mandarino', name: 'Mandarino', category: 'woody' },
+  { id: 'mango', name: 'Mango', category: 'woody' },
+  { id: 'manzano', name: 'Manzano', category: 'woody' },
+  { id: 'melocotonero', name: 'Melocotonero', category: 'woody' },
+  { id: 'naranjo', name: 'Naranjo', category: 'woody' },
+  { id: 'nectarino', name: 'Nectarino', category: 'woody' },
+  { id: 'nispero', name: 'Níspero', category: 'woody' },
+  { id: 'nogal', name: 'Nogal', category: 'woody' },
+  { id: 'olivo', name: 'Olivo', category: 'woody' },
+  { id: 'peral', name: 'Peral', category: 'woody' },
+  { id: 'pistachero', name: 'Pistachero', category: 'woody' },
+  { id: 'pomelo', name: 'Pomelo', category: 'woody' },
+  { id: 'vid_mesa', name: 'Vid (uva de mesa)', category: 'woody' },
+  { id: 'vid_vinificacion', name: 'Vid (uva de vinificación)', category: 'woody' },
+  // Herbáceos extensivos
+  { id: 'alfalfa', name: 'Alfalfa', category: 'forage' },
+  { id: 'algodon', name: 'Algodón', category: 'herbaceous' },
+  { id: 'arroz', name: 'Arroz', category: 'herbaceous' },
+  { id: 'avena', name: 'Avena', category: 'herbaceous' },
+  { id: 'cebada', name: 'Cebada', category: 'herbaceous' },
+  { id: 'centeno', name: 'Centeno', category: 'herbaceous' },
+  { id: 'colza', name: 'Colza', category: 'herbaceous' },
+  { id: 'garbanzo', name: 'Garbanzo', category: 'herbaceous' },
+  { id: 'girasol', name: 'Girasol', category: 'herbaceous' },
+  { id: 'guisante', name: 'Guisante', category: 'herbaceous' },
+  { id: 'haba', name: 'Haba', category: 'herbaceous' },
+  { id: 'lenteja', name: 'Lenteja', category: 'herbaceous' },
+  { id: 'maiz', name: 'Maíz', category: 'herbaceous' },
+  { id: 'remolacha_azucarera', name: 'Remolacha azucarera', category: 'herbaceous' },
+  { id: 'trigo_blando', name: 'Trigo blando', category: 'herbaceous' },
+  { id: 'trigo_duro', name: 'Trigo duro', category: 'herbaceous' },
+  { id: 'pastos', name: 'Pastos y praderas', category: 'forage' },
+  // Hortícolas
+  { id: 'ajo', name: 'Ajo', category: 'horticultural' },
+  { id: 'alcachofa', name: 'Alcachofa', category: 'horticultural' },
+  { id: 'berenjena', name: 'Berenjena', category: 'horticultural' },
+  { id: 'brocoli', name: 'Brócoli', category: 'horticultural' },
+  { id: 'calabacin', name: 'Calabacín', category: 'horticultural' },
+  { id: 'cebolla', name: 'Cebolla', category: 'horticultural' },
+  { id: 'col', name: 'Col', category: 'horticultural' },
+  { id: 'coliflor', name: 'Coliflor', category: 'horticultural' },
+  { id: 'esparrago', name: 'Espárrago', category: 'horticultural' },
+  { id: 'fresa', name: 'Fresa', category: 'horticultural' },
+  { id: 'judia_verde', name: 'Judía verde', category: 'horticultural' },
+  { id: 'lechuga', name: 'Lechuga', category: 'horticultural' },
+  { id: 'melon', name: 'Melón', category: 'horticultural' },
+  { id: 'patata', name: 'Patata', category: 'horticultural' },
+  { id: 'pepino', name: 'Pepino', category: 'horticultural' },
+  { id: 'pimiento', name: 'Pimiento', category: 'horticultural' },
+  { id: 'sandia', name: 'Sandía', category: 'horticultural' },
+  { id: 'tomate', name: 'Tomate', category: 'horticultural' },
+  { id: 'zanahoria', name: 'Zanahoria', category: 'horticultural' },
+];
+
 async function main(): Promise<void> {
   for (const role of ROLES) {
     await prisma.role.upsert({ where: { code: role.code }, update: role, create: role });
@@ -65,6 +142,16 @@ async function main(): Promise<void> {
 
   for (const feature of FEATURES) {
     await prisma.feature.upsert({ where: { code: feature.code }, update: feature, create: feature });
+  }
+
+  // Solo nombre y categoría: si algún día se rellenan los códigos oficiales
+  // al importar un catálogo, el seed no los pisa.
+  for (const crop of CROPS) {
+    await prisma.crop.upsert({
+      where: { id: crop.id },
+      update: { name: crop.name, category: crop.category },
+      create: crop,
+    });
   }
 
   const bootstrapEmail = process.env.PLATFORM_ADMIN_BOOTSTRAP_EMAIL;

@@ -25,11 +25,12 @@ export class FeatureGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const feature = this.reflector.getAllAndOverride<FeatureCode | undefined>(REQUIRE_FEATURE_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (!feature) {
+    const exigidas = this.reflector.getAllAndOverride<FeatureCode[] | FeatureCode | undefined>(
+      REQUIRE_FEATURE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    const features = exigidas === undefined ? [] : ([] as FeatureCode[]).concat(exigidas);
+    if (features.length === 0) {
       return true;
     }
 
@@ -52,12 +53,15 @@ export class FeatureGuard implements CanActivate {
       { userId: authContext.sub, organizationId },
       (tx) =>
         tx.organizationFeature.findFirst({
-          where: { organizationId, featureCode: feature, enabled: true },
+          // Cualquiera de ellas basta (ver `@RequireFeature`).
+          where: { organizationId, featureCode: { in: features }, enabled: true },
         }),
     );
 
     if (!contratada) {
-      throw new ForbiddenException(`Feature not enabled for this organization: ${feature}`);
+      throw new ForbiddenException(
+        `Feature not enabled for this organization: ${features.join(', ')}`,
+      );
     }
     return true;
   }

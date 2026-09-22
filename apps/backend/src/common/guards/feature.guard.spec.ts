@@ -12,7 +12,7 @@ import { AccessTokenClaims } from './jwt-auth.guard';
  */
 describe('FeatureGuard', () => {
   function build(params: {
-    feature?: string;
+    feature?: string[];
     user: Partial<AccessTokenClaims>;
     contratada?: boolean;
   }) {
@@ -44,7 +44,7 @@ describe('FeatureGuard', () => {
 
   it('deja pasar si la organización tiene la función contratada', async () => {
     const { guard, context, findFirst } = build({
-      feature: 'satellite_imagery',
+      feature: ['satellite_imagery'],
       user: { sub: 'u1', organizationId: 'org-1' },
       contratada: true,
     });
@@ -52,14 +52,17 @@ describe('FeatureGuard', () => {
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ featureCode: 'satellite_imagery', enabled: true }),
+        where: expect.objectContaining({
+          featureCode: { in: ['satellite_imagery'] },
+          enabled: true,
+        }),
       }),
     );
   });
 
   it('bloquea a una organización que no la tiene, aunque llame a la API directamente', async () => {
     const { guard, context } = build({
-      feature: 'satellite_imagery',
+      feature: ['satellite_imagery'],
       user: { sub: 'u1', organizationId: 'org-1' },
       contratada: false,
     });
@@ -67,9 +70,37 @@ describe('FeatureGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
+  it('con varias funciones, basta con tener una: las parcelas son de Satélite y de Campañas', async () => {
+    const { guard, context, findFirst } = build({
+      feature: ['satellite_imagery', 'campaigns'],
+      user: { sub: 'u1', organizationId: 'org-1' },
+      contratada: true,
+    });
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ featureCode: { in: ['satellite_imagery', 'campaigns'] } }),
+      }),
+    );
+  });
+
+  it('el mensaje dice qué funciones valdrían, y la app sigue reconociéndolo', async () => {
+    const { guard, context } = build({
+      feature: ['satellite_imagery', 'campaigns'],
+      user: { sub: 'u1', organizationId: 'org-1' },
+      contratada: false,
+    });
+
+    // La app detecta el 403 por el principio del título (esModuloNoContratado).
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      /^Feature not enabled for this organization: satellite_imagery, campaigns$/,
+    );
+  });
+
   it('el Admin de plataforma sin organización activa no se bloquea (ADR-0005)', async () => {
     const { guard, context, prisma } = build({
-      feature: 'satellite_imagery',
+      feature: ['satellite_imagery'],
       user: { sub: 'u1', isPlatformAdmin: true },
       contratada: false,
     });
@@ -80,7 +111,7 @@ describe('FeatureGuard', () => {
 
   it('un Admin de plataforma que además es miembro sí pasa por la comprobación de su organización', async () => {
     const { guard, context } = build({
-      feature: 'satellite_imagery',
+      feature: ['satellite_imagery'],
       user: { sub: 'u1', isPlatformAdmin: true, organizationId: 'org-1' },
       contratada: false,
     });
@@ -89,7 +120,7 @@ describe('FeatureGuard', () => {
   });
 
   it('sin organización activa, no hay función que comprobar', async () => {
-    const { guard, context } = build({ feature: 'satellite_imagery', user: { sub: 'u1' } });
+    const { guard, context } = build({ feature: ['satellite_imagery'], user: { sub: 'u1' } });
     await expect(guard.canActivate(context)).rejects.toThrow(/No active organization/);
   });
 });
