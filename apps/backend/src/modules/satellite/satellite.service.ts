@@ -32,7 +32,13 @@ export class SatelliteService {
     private readonly config: ConfigService,
   ) {}
 
-  /** La última observación utilizable: lo primero que enseña la pantalla. */
+  /**
+   * La última observación utilizable: lo primero que enseña la pantalla.
+   *
+   * **Con sus archivos**: la app saca de ahí la imagen que pinta sobre el mapa.
+   * La primera versión solo traía las métricas, y en la primera parcela real
+   * (2026-09-22) salían las cifras pero no la imagen.
+   */
   async ultima(user: AccessTokenClaims, parcelId: string) {
     await this.parcels.findOne(user, parcelId);
     const { tenantContext } = resolveOrgContext(user);
@@ -41,7 +47,7 @@ export class SatelliteService {
       tx.satelliteObservation.findFirst({
         where: { parcelId, status: 'ready' },
         orderBy: { acquisitionTime: 'desc' },
-        include: { metrics: true },
+        include: { metrics: true, assets: true },
       }),
     );
     return observacion ? this.comoDetalle(observacion) : null;

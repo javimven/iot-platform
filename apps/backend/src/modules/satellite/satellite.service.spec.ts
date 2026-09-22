@@ -119,6 +119,20 @@ describe('SatelliteService', () => {
     expect(ultima?.quality.validPixelPercent).toBe(92);
   });
 
+  it('la última observación trae sus archivos: de ahí saca la app la imagen del mapa', async () => {
+    // La simulación devuelve los archivos se pidan o no, así que se comprueba
+    // la consulta. Sin `assets`, en la primera parcela real salían las cifras
+    // pero no la imagen (2026-09-22).
+    const { service, tx } = build();
+
+    const ultima = await service.ultima(usuario, 'parcela-1');
+
+    expect(tx.satelliteObservation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ include: { metrics: true, assets: true } }),
+    );
+    expect(ultima?.assets?.map((a) => a.assetId)).toEqual(['asset-1']);
+  });
+
   it('una parcela sin observaciones todavía devuelve null, no un error', async () => {
     const { service } = build({ primera: null });
 
