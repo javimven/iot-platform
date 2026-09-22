@@ -1,10 +1,12 @@
 import { HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { SatelliteQueueProducer } from '../../common/queues/satellite-queue.producer';
 import { AccessTokenClaims } from '../../common/guards/jwt-auth.guard';
 import { resolveOrgContext } from '../../common/permissions/org-context';
 import { ParcelsService } from '../parcels/parcels.service';
+import { diasDeHistorico } from './processing/satellite-scheduler.service';
 
 /** Días que se vuelven a mirar en un refresco manual. */
 const DIAS_REFRESCO = 15;
@@ -27,6 +29,7 @@ export class SatelliteService {
     private readonly parcels: ParcelsService,
     private readonly storage: StorageService,
     private readonly cola: SatelliteQueueProducer,
+    private readonly config: ConfigService,
   ) {}
 
   /** La última observación utilizable: lo primero que enseña la pantalla. */
@@ -165,23 +168,29 @@ export class SatelliteService {
    * Refresco a mano. Útil cuando alguien acaba de dibujar una parcela y no
    * quiere esperar, o para diagnosticar. Como cada llamada puede acabar en
    * varias peticiones a Copernicus, solo se admite una por parcela y hora.
+   *
+   * En una parcela **sin ninguna observación**, refrescar es pedir el
+   * histórico entero. Si se miraran solo los últimos días, el repaso diario
+   * buscaría a partir de ellos y lo anterior no se rellenaría nunca. Se vio
+   * con la primera parcela real (2026-09-22), antes de que nadie lo pulsara.
    */
   async refrescar(user: AccessTokenClaims, parcelId: string) {
     await this.parcels.findOne(user, parcelId);
-    const { organizationId } = resolveOrgContext(user);
+    const { organizationId, tenantContext } = resolveOrgContext(user);
 
-    const encolado = await this.cola.encolarRefresco({
-      organizationId,
-      parcelId,
-      dias: DIAS_REFRESCO,
-    });
+    const tieneAlguna = await this.prisma.runInTenantContext(tenantContext, (tx) =>
+      tx.satelliteObservation.findFirst({ where: { parcelId }, select: { id: true } }),
+    );
+    const dias = tieneAlguna ? DIAS_REFRESCO : diasDeHistorico(this.config);
+
+    const encolado = await this.cola.encolarRefresco({ organizationId, parcelId, dias });
     if (!encolado) {
       throw new HttpException(
         'Esta parcela ya se ha actualizado hace menos de una hora.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    return { estado: 'encolado', dias: DIAS_REFRESCO };
+    return { estado: 'encolado', dias };
   }
 
   private ventana(from?: Date, to?: Date) {

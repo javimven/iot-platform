@@ -16,6 +16,16 @@ import { TrabajoObservacion } from './satellite-processing.service';
 const DIAS_HISTORICO_POR_DEFECTO = 90;
 
 /**
+ * Días del histórico completo de una parcela (`SATELLITE_BACKFILL_DAYS`). Lo
+ * usan el repaso y el refresco manual: los dos tienen que estar de acuerdo en
+ * qué es "todo el histórico".
+ */
+export function diasDeHistorico(config: ConfigService): number {
+  const valor = Number(config.get<string>('SATELLITE_BACKFILL_DAYS'));
+  return Number.isFinite(valor) && valor > 0 ? valor : DIAS_HISTORICO_POR_DEFECTO;
+}
+
+/**
  * Margen del repaso diario: se mira algo más atrás que un día por si una
  * pasada aparece en el catálogo con retraso, o por si el repaso de ayer no
  * llegó a correr.
@@ -224,7 +234,6 @@ export class SatelliteSchedulerService {
   }
 
   private diasHistorico(): number {
-    const valor = Number(this.config.get<string>('SATELLITE_BACKFILL_DAYS'));
-    return Number.isFinite(valor) && valor > 0 ? valor : DIAS_HISTORICO_POR_DEFECTO;
+    return diasDeHistorico(this.config);
   }
 }

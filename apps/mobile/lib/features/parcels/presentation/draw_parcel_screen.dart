@@ -109,6 +109,9 @@ class _DrawParcelScreenState extends ConsumerState<DrawParcelScreen> {
                 orElse: () => null,
               ),
               verticesEnCurso: _vertices,
+              // Buscar pueblo, calle o coordenadas, y mi ubicación: para
+              // llegar a la parcela antes de dibujarla.
+              buscador: true,
               onTap: (punto) => setState(() => _vertices.add(punto)),
             ),
           ),
@@ -120,7 +123,8 @@ class _DrawParcelScreenState extends ConsumerState<DrawParcelScreen> {
                 children: [
                   Text(
                     _vertices.length < _minimoVertices
-                        ? 'Toca el mapa para marcar las esquinas de la parcela (mínimo 3).'
+                        ? 'Busca el sitio arriba o usa tu ubicación, y toca el mapa para marcar las '
+                            'esquinas de la parcela (mínimo 3).'
                         : '${_vertices.length} vértices. El contorno se cierra solo al guardar.',
                     style: theme.textTheme.bodyMedium,
                   ),

@@ -42,9 +42,20 @@ La primera versión salió con OpenStreetMap, que vale para desarrollo pero **no
 
 Primero se quitó la rueda y se pusieron botones (+ y −), porque en la ficha de la parcela el mapa está dentro de una página con scroll y la rueda acercaba el mapa en vez de bajar. El usuario lo corrigió el mismo día: los botones eran para **afinar**, no para sustituir la rueda. Quedan los dos. El precio es el que se sabía: con el cursor encima del mapa de la ficha, la rueda hace zoom; para bajar por la página hay que sacarlo del mapa. En pantallas táctiles, pellizcar.
 
+### Llegar a la parcela: nombres, buscador y "mi ubicación"
+
+Con la foto sola se reconoce la parcela, pero **no se sabe dónde se está** para ir a buscarla: faltan pueblos, carreteras, algo con lo que orientarse. Lo dijo el usuario al dibujar la primera parcela real (2026-09-22). Tres piezas, todas comprobadas contra el servicio antes de usarlas:
+
+- **Capa de nombres y carreteras** encima de la ortofoto: `IGNBaseOrto`, del servicio WMTS `ign-base` del IGN. Son teselas PNG transparentes (pueblos, carreteras con su código, calles al acercarse), con imagen hasta el nivel 20 como la ortofoto, CORS abierto y licencia **CC BY 4.0 scne.es**, que es lo que declara el propio servicio en su `GetCapabilities`. Se puede apagar: al dibujar, a veces estorba.
+- **Buscador sobre CartoCiudad**, el geocodificador oficial del IGN: pueblos, municipios, calles, portales, puntos kilométricos, parajes, códigos postales y **referencias catastrales**. Gratuito, sin clave ni cuota, datos CC BY 4.0 y CORS abierto, así que la app lo llama directamente. Dos llamadas: `candidates` sugiere mientras se escribe, y `find` da las coordenadas, porque las sugerencias de pueblos y calles vienen con `0, 0` (los portales y los puntos kilométricos sí las traen). **Va con un cliente HTTP propio, no con el de la API**: el de la API pone el token de sesión en cada petición, y ese token no puede salir hacia un servidor que no es el nuestro.
+- **Coordenadas en la misma caja**: si lo escrito se lee como coordenadas (grados decimales con punto o coma, o grados-minutos-segundos como los copia Google Maps), se va directo, sin preguntar a nadie. No se adivinan coordenadas UTM: no son grados, y leerlas como tales llevaría a otro sitio sin avisar.
+- **"Mi ubicación"** con `geolocator`: GPS en el móvil, la API del navegador en la web (pide HTTPS, que staging y producción tienen). Se pinta el círculo de incertidumbre y, si pasa de 100 m, se avisa: en un ordenador la ubicación suele salir de la red y puede ser de kilómetros, que vale para acercarse pero no para dibujar.
+
+El buscador y "mi ubicación" solo están al **dibujar**. En la ficha de una parcela ya dibujada el mapa es pequeño (260 px) y lo que hace falta es **volver a la parcela** después de moverse, que es un botón propio; además, el mapa se encuadra en la parcela entera al abrirse, sea del tamaño que sea, en vez de un zoom fijo.
+
 ## Consecuencias
 
-- La app gana dos dependencias (`flutter_map`, `latlong2`) y ninguna nativa.
+- La app gana tres dependencias: `flutter_map` y `latlong2`, sin código nativo, y `geolocator`, que sí lo tiene. Esta es la primera con permisos del sistema: ubicación en `AndroidManifest.xml` e `Info.plist`. De paso se añadió al manifiesto principal de Android el permiso de Internet, que la plantilla de Flutter solo pone en debug: sin él, una APK de release no llegaba ni a la API.
 - `ParcelMap` es deliberadamente tonto: recibe anillos, una imagen opcional y vértices en curso, y los pinta. No sabe de NDVI ni de observaciones, así que sirve igual para la ficha de una parcela y para el dibujo de una nueva.
 - El NDVI va **entre** el mapa base y el contorno, para que el borde de la parcela siempre se vea, y con un control de opacidad: el usuario querrá comparar lo que ve con lo que hay debajo.
 - Las pruebas de widget no comprueban el mapa tesela a tesela: eso pediría red y no diría nada útil. Se prueban los estados de la pantalla, que es donde están las decisiones.

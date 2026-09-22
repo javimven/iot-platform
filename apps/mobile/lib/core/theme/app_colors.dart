@@ -84,4 +84,14 @@ abstract final class AppColors {
   // oscuro), simulando con Machado-Oliveira-Fernandes.
   static const chartOchre = Color(0xFF8A6A00);
   static const chartOchreDark = Color(0xFFBD8A0A);
+
+  // Marcas sobre el mapa (satélite, 2026-09-22). Van encima de una foto aérea,
+  // no de una superficie del tema, así que son iguales en claro y oscuro.
+  // Los colores de siempre en cualquier mapa, para que se lean sin leyenda:
+  // punto azul = dónde estás; chincheta roja = lo que has buscado. Mismos
+  // valores que `ok`/`critical`, pero como constantes propias: aquí no
+  // significan "bien" ni "fallo".
+  static const mapaMiPosicion = Color(0xFF2B7FD1);
+  static const mapaPuntoBuscado = Color(0xFFC13A2E);
+  static const mapaContornoMarca = Color(0xFFFFFFFF);
 }

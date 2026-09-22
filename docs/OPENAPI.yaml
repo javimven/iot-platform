@@ -721,8 +721,10 @@ paths:
       tags: [satellite]
       summary: Fuerza una busqueda de pasadas nuevas (satellite.refresh)
       description: >
-        Encola un repaso corto de esa parcela. Gasta cuota de Copernicus, asi
-        que solo se admite **uno por parcela y hora**.
+        Encola un repaso corto (15 dias) de esa parcela, o el historico
+        completo (`SATELLITE_BACKFILL_DAYS`, 90 por defecto) si todavia no
+        tiene ninguna observacion; `dias` dice cual. Gasta cuota de
+        Copernicus, asi que solo se admite **uno por parcela y hora**.
       parameters: [{ $ref: "#/components/parameters/PathId" }]
       responses:
         "201":

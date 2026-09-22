@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sin esto, una compilacion de release no llega ni a la API ni a los mapas:
+         la plantilla de Flutter solo lo pone en debug y profile. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Boton "Mi ubicacion" del mapa de parcelas. Android 12+ exige pedir la
+         aproximada junto a la precisa. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:label="iot_platform_app"
         android:name="${applicationName}"

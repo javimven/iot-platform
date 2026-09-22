@@ -1,4 +1,5 @@
 import { ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SatelliteService } from './satellite.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
@@ -95,8 +96,11 @@ describe('SatelliteService', () => {
       encolarRefresco: jest.fn().mockResolvedValue(params.refrescoAdmitido ?? true),
     } as unknown as SatelliteQueueProducer;
 
+    // Sin SATELLITE_BACKFILL_DAYS: vale el de por defecto, 90.
+    const config = { get: jest.fn().mockReturnValue(undefined) } as unknown as ConfigService;
+
     return {
-      service: new SatelliteService(prisma, parcels, storage, cola),
+      service: new SatelliteService(prisma, parcels, storage, cola, config),
       tx,
       parcels,
       storage,
@@ -219,6 +223,21 @@ describe('SatelliteService', () => {
       organizationId: 'org-1',
       parcelId: 'parcela-1',
       dias: 15,
+    });
+  });
+
+  it('en una parcela sin ninguna observación, actualizar pide el histórico entero', async () => {
+    // Con solo 15 días, el repaso diario seguiría desde ahí y los 75
+    // anteriores no llegarían nunca.
+    const { service, cola } = build({ primera: null });
+
+    const resultado = await service.refrescar(usuario, 'parcela-1');
+
+    expect(resultado).toEqual({ estado: 'encolado', dias: 90 });
+    expect(cola.encolarRefresco).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      parcelId: 'parcela-1',
+      dias: 90,
     });
   });
 
