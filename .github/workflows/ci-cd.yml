@@ -198,6 +198,84 @@ jobs:
           chmod +x deploy.sh
           IMAGE_TAG=${{ github.sha }} ./deploy.sh
 
+  # 9 bis: la app web (Flutter). Hasta 2026-09-22 se compilaba y se subía a
+  # mano por SSH, y eso ya costó dos incidentes: Caddy siguió sirviendo la
+  # carpeta anterior tras cambiarla (el bind mount se resuelve al crear el
+  # contenedor) y una limpieza de copias ordenada por nombre borró la copia
+  # recién hecha. Además dependía de que la IP de quien despliega pudiera
+  # entrar por SSH.
+  #
+  # Se compila una vez aquí y la despliega el runner de staging, que corre
+  # **en el propio servidor**: no hace falta SSH desde ninguna parte.
+  web-build:
+    if: github.ref == 'refs/heads/master'
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.8"
+          channel: "stable"
+      - run: flutter pub get
+      # Las pruebas y el analisis de la app corren en `mobile-ios-build.yml`.
+      - name: Compilar la web (WebAssembly)
+        run: flutter build web --wasm --release --dart-define=API_BASE_URL=https://staging-api.jmvsoluciones.com
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-staging
+          path: apps/mobile/build/web
+          retention-days: 7
+
+  deploy-web-staging:
+    if: github.ref == 'refs/heads/master'
+    needs: [web-build, deploy-staging]
+    runs-on: [self-hosted, staging]
+    environment: staging
+    env:
+      DEPLOY_PATH: /opt/iot-platform
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-staging
+          path: web-nueva
+      - name: Publicar la web (cambio atomico, copia de la anterior y Caddy al dia)
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          rm -rf web.nueva
+          mv "$GITHUB_WORKSPACE/web-nueva" web.nueva
+          test -f web.nueva/index.html
+          TS=$(date +%Y%m%d-%H%M%S)
+          if [ -d web ]; then mv web "web.anterior-$TS"; fi
+          mv web.nueva web
+          # Caddy resuelve el bind mount al crear el contenedor: sin este
+          # reinicio seguiria sirviendo la carpeta vieja.
+          CADDY=$(docker ps --filter name=caddy --format '{{.Names}}' | head -1)
+          if [ -n "$CADDY" ]; then docker restart "$CADDY" >/dev/null; fi
+          # Las dos copias mas recientes POR FECHA, no por nombre: ordenar por
+          # nombre pone las de fecha antes que las antiguas con sufijo de
+          # texto y borra justo la recien hecha. Si alguna copia antigua es de
+          # otro usuario (las subidas a mano por SSH eran de root), no se puede
+          # borrar; es cosmetico y no debe tumbar un despliegue ya hecho.
+          ls -dt web.anterior-* 2>/dev/null | tail -n +3 | xargs -r rm -rf || true
+          echo "Publicada la web $(md5sum web/main.dart.wasm | cut -c1-8)"
+      # No basta un 200: se compara lo servido con lo que hay en disco.
+      - name: Comprobar que Caddy sirve la version nueva
+        run: |
+          set -euo pipefail
+          EN_DISCO=$(md5sum "$DEPLOY_PATH/web/main.dart.wasm" | cut -d' ' -f1)
+          for i in $(seq 1 10); do
+            SERVIDO=$(curl -fsS https://staging-app.jmvsoluciones.com/main.dart.wasm | md5sum | cut -d' ' -f1) || SERVIDO=""
+            if [ "$SERVIDO" = "$EN_DISCO" ]; then echo "Servida la version nueva ($i)"; exit 0; fi
+            sleep 3
+          done
+          echo "Caddy sigue sirviendo otra version: en disco $EN_DISCO, servido $SERVIDO" >&2
+          exit 1
+
   # 10: Pruebas end-to-end contra staging
   e2e-staging:
     needs: deploy-staging
