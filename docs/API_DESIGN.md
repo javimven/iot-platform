@@ -144,6 +144,19 @@ Contrato completo en `OPENAPI.yaml`. Lo que conviene saber al leerlo:
 - **Los archivos no se sirven desde la API**: `/assets/{id}/url` devuelve una URL firmada con caducidad. El bucket es privado y sus credenciales no salen del backend.
 - **`POST /satellite/refresh` responde 429** si esa parcela ya se refrescó hace menos de una hora. No es un límite de tráfico genérico: es que cada llamada gasta cuota de Copernicus.
 
+## 17 ter. Rutas de campañas (BACKLOG.md #60)
+
+Contrato completo en `OPENAPI.yaml`. Lo que conviene saber al leerlo:
+
+- **El alta cuelga de la finca** (`POST /installations/{id}/campaigns`), como parcelas y zonas; el resto, de la campaña (`/campaigns/{id}`). El listado (`GET /campaigns`) cruza fincas y respeta el alcance del miembro; se filtra por `status`, `installationId`, `year` (campañas que tocan ese año) y `cropId`.
+- **Una campaña se crea de una vez con sus unidades de cultivo y parcelas.** Una campaña sin cultivo ni sitio no sirve para nada, y así el asistente de la app hace una sola llamada. El nombre es opcional: sin él sale "Aguacate Hass · 2026", o "Olivo · 2026/27" si cruza de año.
+- **Fechas sin hora como `AAAA-MM-DD`**, en la entrada y en la salida (`startDate`, `endDate`...). Son fechas del campo, no instantes: un `2026-02-03T00:00:00Z` saldría como el 2 de febrero en cualquier huso al oeste de Greenwich.
+- **Superficies en hectáreas, calculadas en el servidor**: la de cada parcela (del contorno), la declarada si no se usa entera, la de cada unidad (la declarada o la suma de sus parcelas) y la de la campaña. El cliente no suma nada.
+- **El estado y el modo tienen rutas propias**, no un `PATCH`: `POST /campaigns/{id}/upgrade` (sencilla → completa), `/close` (con fecha de fin; guarda la instantánea) y `/reopen` (con motivo obligatorio). Cada una es una decisión que queda auditada, y así no se cuela un cambio de estado dentro de una edición cualquiera.
+- **Toda acción sobre la campaña o sus unidades devuelve la ficha completa**: cambia la superficie, las parcelas y los cultivos, y la app se refresca de una vez.
+- **409 con el motivo en español** cuando la acción choca con el estado: campaña cerrada ("reábrela para modificarla"), última unidad de cultivo, parcela con actividades registradas (dice cuál).
+- **`GET /crops` devuelve el catálogo entero** (es pequeño) y la app filtra mientras se escribe, sin distinguir tildes.
+
 ## 18. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |

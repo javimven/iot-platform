@@ -180,6 +180,27 @@ Hasta 2026-09-21, `satellite_imagery` y el resto de funciones de la sección 14 
 
 `FeatureGuard` + `@RequireFeature('satellite_imagery')` resuelven eso con una anotación en la clase del controlador, que cubre todas sus rutas. Complementa al permiso, no lo sustituye: **el permiso dice que ese rol puede hacerlo; la función dice que esa organización lo tiene contratado**. Un Admin de plataforma sin organización activa no se bloquea (ADR-0005).
 
+**Varias funciones = cualquiera de ellas** (2026-09-22). Las parcelas son de Satélite y de Campañas, así que su controlador lleva `@RequireFeature('satellite_imagery', 'campaigns')`: basta con tener una de las dos. Crear una parcela solo encola el histórico de Copernicus si la organización tiene el satélite contratado.
+
+## 14 ter. Campañas y cuaderno de campo (BACKLOG.md #60)
+
+Acciones añadidas a la matriz de la sección 4. Todas exigen además la función `campaigns` en el backend y el alcance por finca (una campaña es de una finca).
+
+| Acción | org_admin | technician | operator | read_only |
+|---|:--:|:--:|:--:|:--:|
+| `campaigns.read` (incluye exportar el cuaderno) | ✔ | ✔ | ✔ | ✔ |
+| `campaigns.record` (registrar actividades, fotos, documentos) | ✔ | ✔ | ✔ | |
+| `campaigns.create` | ✔ | ✔ | | |
+| `campaigns.update` (la campaña, sus unidades de cultivo, pasar a completa, catálogos) | ✔ | ✔ | | |
+| `campaigns.close` (cerrar y reabrir) | ✔ | ✔ | | |
+| `campaigns.delete` | ✔ | | | |
+
+Los criterios:
+
+- **`campaigns.record` va aparte de `campaigns.update`.** Quien trabaja en el campo apunta lo que hace (un riego, una cosecha, una foto) sin poder cambiar cómo está montada la campaña. Por eso el Operador lo tiene y no puede crear, editar ni cerrar campañas.
+- **Exportar es leer**: no tiene permiso propio. Quien ve un cuaderno puede sacarlo en PDF.
+- **Borrar, solo el Admin de organización**, como las parcelas: borrar una campaña se lleva su cuaderno. Además, una campaña cerrada no se borra: primero hay que reabrirla, y la reapertura queda auditada con su motivo.
+
 ## 15. Historial de decisiones de esta etapa
 
 | Fecha | Decisión | Alternativas consideradas |

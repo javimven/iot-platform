@@ -24,6 +24,7 @@ tags:
   - name: zones
   - name: parcels
   - name: satellite
+  - name: campaigns
   - name: gateways
   - name: devices
   - name: sensors
@@ -524,8 +525,8 @@ paths:
       tags: [parcels]
       summary: Parcelas de una finca, con su contorno en GeoJSON
       description: >
-        Requiere la funcion `satellite_imagery` contratada por la organizacion
-        (FeatureGuard): sin ella responde 403 aunque el rol tenga el permiso.
+        Requiere la funcion `satellite_imagery` o `campaigns` contratada por la
+        organizacion (FeatureGuard): sin ninguna, 403 aunque el rol tenga el permiso.
       parameters: [{ $ref: "#/components/parameters/PathId" }]
       responses:
         "200":
@@ -739,6 +740,227 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429":
           description: Ya se refresco esta parcela hace menos de una hora
+
+  /campaigns:
+    get:
+      tags: [campaigns]
+      summary: Campañas de la organización, dentro del alcance del miembro (campaigns.read)
+      description: >
+        Requiere la función `campaigns`. Cruza fincas y respeta el alcance por
+        finca. Ordenadas por fecha de inicio, las más recientes primero.
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, active, closed, archived] } }
+        - { name: installationId, in: query, schema: { type: string, format: uuid } }
+        - name: year
+          in: query
+          description: Campañas que tocan ese año (empiezan antes de que acabe y no se cerraron antes de que empiece).
+          schema: { type: integer, minimum: 2000, maximum: 2100 }
+        - { name: cropId, in: query, schema: { type: string, pattern: "^[a-z0-9_]+$" } }
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CampaignListItem" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /installations/{installationId}/campaigns:
+    post:
+      tags: [campaigns]
+      summary: Crea una campaña con sus unidades de cultivo y parcelas (campaigns.create)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignCreate" }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "400":
+          description: Datos incoherentes (parcela de otra finca, superficie mayor que la parcela, cultivo desconocido, fechas al revés)
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /campaigns/{campaignId}:
+    get:
+      tags: [campaigns]
+      summary: Ficha de una campaña (campaigns.read)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [campaigns]
+      summary: Cambia los datos generales (campaigns.update)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignUpdate" }
+      responses:
+        "200":
+          description: Ficha actualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "409":
+          description: La campaña está cerrada
+    delete:
+      tags: [campaigns]
+      summary: Borrado lógico (campaigns.delete). Una campaña cerrada no se borra.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "204": { description: Borrada }
+        "409":
+          description: La campaña está cerrada
+
+  /campaigns/{campaignId}/upgrade:
+    post:
+      tags: [campaigns]
+      summary: Pasa de sencilla a cuaderno completo sin copiar nada (campaigns.update)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notebookProfile: { $ref: "#/components/schemas/NotebookProfile" }
+      responses:
+        "200":
+          description: Ficha en modo completo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "409":
+          description: Ya era completa, o está cerrada
+
+  /campaigns/{campaignId}/close:
+    post:
+      tags: [campaigns]
+      summary: Cierra la campaña y guarda la instantánea de cierre (campaigns.close)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endDate]
+              properties:
+                endDate: { type: string, format: date }
+                declaredProductionKg: { type: number, minimum: 0 }
+                closingNotes: { type: string, maxLength: 4000 }
+      responses:
+        "200":
+          description: Campaña cerrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "409":
+          description: Ya estaba cerrada
+
+  /campaigns/{campaignId}/reopen:
+    post:
+      tags: [campaigns]
+      summary: Reabre una campaña cerrada, con motivo (campaigns.close)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 1000 }
+      responses:
+        "200":
+          description: Campaña activa otra vez
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "409":
+          description: No estaba cerrada
+
+  /campaigns/{campaignId}/crop-units:
+    post:
+      tags: [campaigns]
+      summary: Añade una unidad de cultivo (campaigns.update)
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CropUnitCreate" }
+      responses:
+        "201":
+          description: Ficha de la campaña con la unidad nueva
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+
+  /campaigns/{campaignId}/crop-units/{unitId}:
+    patch:
+      tags: [campaigns]
+      summary: Cambia una unidad; `parcels`, si viene, es la lista completa (campaigns.update)
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: unitId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CropUnitUpdate" }
+      responses:
+        "200":
+          description: Ficha de la campaña
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "409":
+          description: Se quita una parcela con actividades registradas (el mensaje dice cuál)
+    delete:
+      tags: [campaigns]
+      summary: Quita una unidad (borrado lógico). No la última ni una con actividades.
+      parameters:
+        - $ref: "#/components/parameters/PathId"
+        - { name: unitId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Quitada }
+        "409":
+          description: Es la última unidad, o tiene actividades registradas
+
+  /crops:
+    get:
+      tags: [campaigns]
+      summary: Catálogo de cultivos activos (campaigns.read)
+      description: Entero y ordenado por nombre; es pequeño y la app filtra mientras se escribe.
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, example: aguacate }
+                    name: { type: string, example: Aguacate }
+                    category: { type: string, enum: [woody, herbaceous, horticultural, forage, other] }
 
   /installations/{installationId}/latest-readings:
     get:
@@ -2196,3 +2418,143 @@ components:
         name: { type: string }
         contactEmail: { type: string, format: email }
         firstAdminEmail: { type: string, format: email }
+
+    NotebookProfile:
+      type: object
+      description: >
+        Respuestas del asistente del cuaderno completo (ADR-0013). Solo estas
+        claves; al guardarse se añade `version`.
+      properties:
+        usesPlantProtectionProducts: { type: boolean }
+        appliesFertilizers: { type: boolean }
+        usesFertigation: { type: boolean }
+        participatesInEcoSchemes: { type: boolean }
+        usesValorizableWaste: { type: boolean }
+        postHarvestTreatments: { type: boolean }
+        storageTreatments: { type: boolean }
+        transportTreatments: { type: boolean }
+        treatedSeed: { type: boolean }
+
+    CropUnitParcelInput:
+      type: object
+      required: [parcelId]
+      properties:
+        parcelId: { type: string, format: uuid }
+        areaHa: { type: number, minimum: 0.0001, description: "Omitido = la parcela entera." }
+
+    CropUnitCreate:
+      type: object
+      required: [parcels]
+      description: El cultivo, del catálogo (`cropId`) o escrito (`cropName`); uno de los dos.
+      properties:
+        cropId: { type: string, pattern: "^[a-z0-9_]+$" }
+        cropName: { type: string, maxLength: 120 }
+        variety: { type: string, maxLength: 120 }
+        previousCrop: { type: string, maxLength: 120 }
+        waterRegime: { type: string, enum: [rainfed, irrigated] }
+        growingEnvironment: { type: string, enum: [open_field, greenhouse, other] }
+        productionSystem: { type: string, enum: [conventional, integrated, organic] }
+        areaHa: { type: number, minimum: 0.0001 }
+        expectedYieldKgHa: { type: number, minimum: 0 }
+        notes: { type: string, maxLength: 4000 }
+        parcels:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/CropUnitParcelInput" }
+
+    CropUnitUpdate:
+      allOf:
+        - $ref: "#/components/schemas/CropUnitCreate"
+      description: Todo opcional. `parcels`, si viene, sustituye a la lista entera.
+
+    CampaignCreate:
+      type: object
+      required: [managementMode, startDate, cropUnits]
+      properties:
+        managementMode: { type: string, enum: [simple, complete] }
+        name: { type: string, maxLength: 160, description: "Opcional: sin él, 'Aguacate Hass · 2026'." }
+        startDate: { type: string, format: date }
+        expectedEndDate: { type: string, format: date }
+        notes: { type: string, maxLength: 4000 }
+        cropUnits:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: "#/components/schemas/CropUnitCreate" }
+        notebookProfile: { $ref: "#/components/schemas/NotebookProfile" }
+
+    CampaignUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 160 }
+        startDate: { type: string, format: date }
+        expectedEndDate: { type: string, format: date, nullable: true }
+        notes: { type: string, maxLength: 4000 }
+        notebookProfile: { $ref: "#/components/schemas/NotebookProfile" }
+
+    CampaignListItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: "Aguacate Hass · 2026" }
+        status: { type: string, enum: [draft, active, closed, archived] }
+        managementMode: { type: string, enum: [simple, complete] }
+        installation:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        startDate: { type: string, format: date }
+        expectedEndDate: { type: string, format: date, nullable: true }
+        endDate: { type: string, format: date, nullable: true }
+        crops: { type: array, items: { type: string }, example: ["Aguacate Hass"] }
+        parcelCount: { type: integer }
+        areaHa: { type: number, description: "Hectáreas, con cuatro decimales." }
+        lastActivity:
+          type: object
+          nullable: true
+          properties:
+            type: { type: string }
+            date: { type: string, format: date }
+
+    Campaign:
+      allOf:
+        - $ref: "#/components/schemas/CampaignListItem"
+        - type: object
+          properties:
+            notes: { type: string, nullable: true }
+            notebookProfile: { type: object, additionalProperties: true }
+            declaredProductionKg: { type: number, nullable: true }
+            closingNotes: { type: string, nullable: true }
+            closedAt: { type: string, format: date-time, nullable: true }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            cropUnits:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  cropId: { type: string, nullable: true }
+                  cropName: { type: string }
+                  variety: { type: string, nullable: true }
+                  previousCrop: { type: string, nullable: true }
+                  waterRegime: { type: string, nullable: true }
+                  growingEnvironment: { type: string, nullable: true }
+                  productionSystem: { type: string, nullable: true }
+                  areaHa: { type: number, nullable: true, description: Declarada }
+                  parcelsAreaHa: { type: number, description: Suma de sus parcelas }
+                  effectiveAreaHa: { type: number, description: "La declarada o, si no, la de sus parcelas" }
+                  expectedYieldKgHa: { type: number, nullable: true }
+                  notes: { type: string, nullable: true }
+                  parcels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        parcelId: { type: string, format: uuid }
+                        name: { type: string }
+                        parcelAreaHa: { type: number }
+                        areaHa: { type: number, nullable: true, description: "Declarada; nula = la parcela entera" }
+                        effectiveAreaHa: { type: number }
+                        deleted: { type: boolean, description: "La parcela se borró después; sigue por su historia" }

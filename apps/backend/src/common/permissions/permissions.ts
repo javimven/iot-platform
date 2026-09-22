@@ -61,6 +61,18 @@ export const PERMISSION_ACTIONS = [
   // la tiene quien solo consulta.
   'satellite.read',
   'satellite.refresh',
+  // Campañas y cuaderno de campo (BACKLOG.md #60). `campaigns.record` es
+  // registrar lo que se ha hecho (actividades, fotos, documentos) y va aparte
+  // de `campaigns.update` (la campaña en si, sus unidades de cultivo, los
+  // catalogos): quien trabaja en el campo apunta lo que hace sin poder
+  // cambiar como esta montada la campaña. Exportar el cuaderno es leerlo:
+  // entra en `campaigns.read`.
+  'campaigns.read',
+  'campaigns.record',
+  'campaigns.create',
+  'campaigns.update',
+  'campaigns.close',
+  'campaigns.delete',
   'alerts.read',
   'alerts.acknowledge',
   'alerts.resolve',
@@ -118,6 +130,12 @@ export const ROLE_PERMISSIONS: Record<RoleCode, PermissionAction[]> = {
     'telemetry.read_history',
     'satellite.read',
     'satellite.refresh',
+    'campaigns.read',
+    'campaigns.record',
+    'campaigns.create',
+    'campaigns.update',
+    'campaigns.close',
+    'campaigns.delete',
     'alerts.read',
     'alerts.acknowledge',
     'alerts.resolve',
@@ -163,6 +181,13 @@ export const ROLE_PERMISSIONS: Record<RoleCode, PermissionAction[]> = {
     'telemetry.read_history',
     'satellite.read',
     'satellite.refresh',
+    // Sin `campaigns.delete`, como con las parcelas: borrar una campaña se
+    // lleva su cuaderno.
+    'campaigns.read',
+    'campaigns.record',
+    'campaigns.create',
+    'campaigns.update',
+    'campaigns.close',
     'alerts.read',
     'alerts.acknowledge',
     'alerts.resolve',
@@ -182,6 +207,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, PermissionAction[]> = {
     'telemetry.read_latest',
     'telemetry.read_history',
     'satellite.read',
+    // El operario registra lo que hace en campo; no monta ni cierra campañas.
+    'campaigns.read',
+    'campaigns.record',
     'alerts.read',
     'alerts.acknowledge',
     'alerts.resolve',
@@ -200,6 +228,7 @@ export const ROLE_PERMISSIONS: Record<RoleCode, PermissionAction[]> = {
     'telemetry.read_latest',
     'telemetry.read_history',
     'satellite.read',
+    'campaigns.read',
     'alerts.read',
     'sessions.read_own',
     'sessions.revoke_own',
