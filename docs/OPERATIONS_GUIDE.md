@@ -45,8 +45,8 @@ Antes de asumir lo peor, seguir este orden — resuelve la gran mayoría de prob
 El ordenador que corre la aplicación día y noche. Todo lo demás (base de datos, correo, DNS) vive fuera; este servidor solo ejecuta el código.
 - **Tareas habituales**: comprobar que está "Running"; revisar CPU/memoria/disco en *Monitoring*; ampliar tamaño vía Terraform si el tráfico crece (nunca a mano en la consola).
 - **Problemas frecuentes**:
-  - *Disco lleno*: imágenes Docker antiguas acumuladas — `deploy.sh` ya limpia las de más de 72h; si persiste, revisar con `docker system df`.
-  - *No se puede entrar por SSH*: el firewall solo admite la IP de administración configurada. Si se cambia de red, hay que actualizar esa IP vía Terraform.
+  - *Disco lleno*: imágenes Docker antiguas acumuladas — `deploy.sh` conserva las cuatro más recientes y borra el resto; si persiste, revisar con `docker system df` y `du -xh --max-depth=2 / | sort -rh | head`.
+  - *No se puede entrar por SSH*: el firewall solo admite la IP de administración configurada. Si se cambia de red —o si el operador cambia la IP dinámica de casa, que es lo que pasó el 2026-09-23— hay que actualizarla: `admin_ssh_cidrs` en `infra/terraform/environments/staging/terraform.tfvars` (no versionado) y `terraform apply -target=module.compute.hcloud_firewall.this`. La IP de ahora se mira con `curl -s https://api.ipify.org`.
   - *Va lento*: revisar primero Grafana antes de asumir que hace falta un servidor más grande.
 
 ### 4.2 DigitalOcean — la base de datos

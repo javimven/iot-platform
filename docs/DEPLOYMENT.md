@@ -110,7 +110,7 @@ Ver [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) para la refe
 ## 9 bis. Espacio en disco de la VPS (aprendido a golpes, 2026-09-21)
 Cada despliegue deja en la VPS la imagen anterior, etiquetada con el SHA del commit. `docker image prune -f` **no** las borra (solo las que no tienen etiqueta): hace falta `-a`. Sin eso se acumularon 33 GB, el disco llegó al 100 % y la plataforma dejó de recibir datos durante tres días (`BACKLOG.md` #54). Hoy:
 
-- `infra/docker/deploy.sh` termina con `docker image prune -af --filter "until=72h"`.
+- `infra/docker/deploy.sh` limpia **por número, no por antigüedad**: conserva las cuatro imágenes más recientes (el despliegue actual y el anterior, cada uno con su imagen de servicio y la del migrador) y borra las demás. Antes borraba lo que pasara de 72 h, y eso aguanta un despliegue al día pero no doce: el 2026-09-23 quedaron 53 imágenes y 27 GB, el disco llegó al 82 % y saltó el aviso (`BACKLOG.md` #62). Cada despliegue suma ~1,3 GB (≈480 MB la de servicio y ≈860 MB la del migrador), se usen o no.
 - El script del puente (`rs485-tool/scripts/desplegar-puente-staging.sh`) borra las imágenes del puente por su etiqueta.
 - Todos los servicios de `docker-compose.deploy.yml` llevan `logging` con 20 MB × 3, y el demonio de Docker tiene el mismo tope por defecto en `/etc/docker/daemon.json` (creado a mano en la VPS; si se reinstala el servidor, hay que volver a ponerlo).
 - Comprobación rápida en la VPS: `df -h /` y `docker system df`.

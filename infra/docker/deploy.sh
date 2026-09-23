@@ -127,10 +127,26 @@ if [ -f .env ] && grep -q '^IMAGE_TAG=' .env; then
   sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
 fi
 
-# -a: sin él solo borra las que no tienen etiqueta, y las de cada despliegue
-# sí la llevan (el SHA del commit) — así se acumularon 82 imágenes y 33 GB
-# hasta llenar el disco y tirar la plataforma (BACKLOG.md #54, 2026-09-21).
-echo "==> Limpiando imágenes sin usar (más de 72h)"
-docker image prune -af --filter "until=72h" >/dev/null
+# Limpieza por NÚMERO, no por antigüedad. La versión anterior borraba lo que
+# pasara de 72 h (`docker image prune -af --filter until=72h`), y eso aguanta
+# un despliegue al día pero no doce: el 2026-09-23 quedaron 53 imágenes y
+# 27 GB, el disco llegó al 82 % y saltó el aviso. Cada despliegue deja dos
+# imágenes (la de servicio, ~480 MB, y la del migrador, ~860 MB), así que la
+# cuenta sube 1,3 GB por despliegue hagan falta o no.
+#
+# Se guardan las cuatro más recientes = el despliegue actual y el anterior,
+# para poder volver atrás sin esperar a una descarga. Las demás salen del
+# registro con un `docker pull` si alguna vez hacen falta.
+#
+# Sin `-f` a propósito: Docker se niega a borrar una imagen en uso, y esa
+# negativa es justo la red de seguridad que queremos.
+echo "==> Limpiando imágenes antiguas (se guardan las 4 más recientes)"
+# El mismo repositorio que `docker-compose.deploy.yml`; si allí cambia, aquí.
+docker images --filter "reference=ghcr.io/javimven/iot-platform" \
+  --format '{{.CreatedAt}}|{{.ID}}' |
+  sort -r | tail -n +5 | cut -d'|' -f2 | sort -u |
+  xargs -r docker rmi >/dev/null 2>&1 || true
+# Y las que se quedan sin etiqueta tras lo anterior.
+docker image prune -f >/dev/null
 
 echo "==> Despliegue completo (${IMAGE_TAG})"
