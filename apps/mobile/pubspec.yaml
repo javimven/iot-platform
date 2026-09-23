@@ -33,6 +33,9 @@ dependencies:
   # Fotos del cuaderno (BACKLOG.md #60, fase 6): camara y galeria, el mismo
   # codigo en web, iOS y Android.
   image_picker: ^1.1.2
+  # Guardar el cuaderno exportado en el navegador (fase 7). Solo se usa en la
+  # compilacion web, detras de una importacion condicional.
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

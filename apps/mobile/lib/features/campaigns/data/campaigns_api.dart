@@ -154,6 +154,19 @@ class CampaignsApi {
     );
   }
 
+  /// El cuaderno exportado, ya generado por el servidor: los bytes y el nombre
+  /// con el que guardarlo. `layout` solo se usa en el PDF.
+  Future<({List<int> bytes, String? nombre, String mediaType})> exportar(
+    String campaignId, {
+    required String formato,
+    String? layout,
+  }) {
+    return _client.getBytes('/campaigns/$campaignId/export', query: {
+      'format': formato,
+      if (layout != null) 'layout': layout,
+    });
+  }
+
   Future<void> quitarDocumento(String campaignId, String documentId, {String? activityId}) {
     final ruta = activityId == null
         ? '/campaigns/$campaignId/documents/$documentId'

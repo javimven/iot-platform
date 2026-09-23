@@ -12,6 +12,8 @@ import { CropUnitsService } from './crop-units.service';
 import { CropsController } from './crops.controller';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
+import { CampaignExportController } from './export/export.controller';
+import { CampaignExportService } from './export/export.service';
 import { NotebookCompletenessService } from './notebook-completeness';
 import { NotebookController } from './notebook.controller';
 import { NotebookCatalogService } from './notebook.service';
@@ -28,6 +30,7 @@ import { NotebookCatalogService } from './notebook.service';
     CropsController,
     NotebookController,
     DocumentsController,
+    CampaignExportController,
   ],
   providers: [
     PrismaService,
@@ -41,6 +44,7 @@ import { NotebookCatalogService } from './notebook.service';
     NotebookCompletenessService,
     StorageService,
     DocumentsService,
+    CampaignExportService,
   ],
   exports: [CampaignAccess, CampaignsService],
 })

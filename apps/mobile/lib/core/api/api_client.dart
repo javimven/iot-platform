@@ -120,6 +120,28 @@ class ApiClient {
     await _guard(() => _dio.delete<dynamic>(path));
   }
 
+  /// Descarga de un fichero generado por la API (el cuaderno exportado). Se
+  /// piden los bytes con la sesión puesta, porque el token va en la cabecera y
+  /// una descarga del navegador no la llevaría.
+  Future<({List<int> bytes, String? nombre, String mediaType})> getBytes(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final response = await _guard(
+      () => _dio.get<List<int>>(
+        path,
+        queryParameters: query,
+        options: Options(responseType: ResponseType.bytes),
+      ),
+    );
+    final cabecera = response.headers.value('content-disposition');
+    return (
+      bytes: (response.data as List<int>?) ?? const <int>[],
+      nombre: nombreDeLaCabecera(cabecera),
+      mediaType: response.headers.value('content-type') ?? 'application/octet-stream',
+    );
+  }
+
   /// Subida de un archivo (`multipart/form-data`): las fotos y documentos del
   /// cuaderno. El archivo va en memoria y en el campo `file`, que es el que
   /// espera el backend; el resto de campos viajan como texto, porque en un
@@ -168,4 +190,20 @@ Map<String, dynamic>? comoObjetoOVacio(Object? data) {
   if (data is String && data.trim().isEmpty) return null;
   if (data is Map<String, dynamic>) return data;
   throw const FormatException('Respuesta inesperada del servidor: se esperaba un objeto o nada');
+}
+
+/// El nombre con el que guardar una descarga, sacado de `Content-Disposition`:
+/// `attachment; filename="x.pdf"; filename*=UTF-8''x%20con%20acentos.pdf`.
+///
+/// Se prefiere `filename*`, que es el que trae los acentos bien; `filename` a
+/// secas es la reserva para clientes antiguos y viene sin ellos.
+@visibleForTesting
+String? nombreDeLaCabecera(String? cabecera) {
+  if (cabecera == null) return null;
+  final utf8 = RegExp(r"filename\*=UTF-8''([^;]+)").firstMatch(cabecera);
+  if (utf8 != null) {
+    return Uri.decodeComponent(utf8.group(1)!.trim());
+  }
+  final simple = RegExp('filename="([^"]+)"').firstMatch(cabecera);
+  return simple?.group(1);
 }

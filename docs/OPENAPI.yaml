@@ -1170,6 +1170,53 @@ paths:
         "204":
           description: Quitado
 
+  /campaigns/{campaignId}/export:
+    get:
+      tags: [campaigns]
+      summary: Descarga el cuaderno de la campaña (campaigns.read)
+      description: >
+        Exportar es leer, así que no tiene permiso propio. Devuelve el fichero
+        generado en el momento, con Content-Disposition; no un enlace, para no
+        dejar copias que envejecen. **Una campaña cerrada se exporta desde su
+        instantánea de cierre** (ADR-0012): el titular y las parcelas son los de
+        aquel día. El PDF va en dos disposiciones y ninguna es el formulario
+        oficial ni una validación de la normativa.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - name: format
+          in: query
+          schema: { type: string, enum: [pdf, json, csv], default: pdf }
+        - name: layout
+          in: query
+          description: Solo para PDF. informe = para leerlo; cue = en el orden de los apartados del Cuaderno Único de Explotación.
+          schema: { type: string, enum: [informe, cue], default: informe }
+      responses:
+        "200":
+          description: El cuaderno
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: Con el nombre del fichero, en UTF-8 (filename*)
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                type: object
+                description: El cuaderno entero con su schemaVersion (modelo propio, ADR-0014)
+                properties:
+                  schemaVersion: { type: string, example: cuaderno-1 }
+                  generatedAt: { type: string, format: date-time }
+                  source: { type: string, enum: [live, snapshot] }
+                  installation: { type: object }
+                  campaign: { type: object }
+                  cropUnits: { type: array, items: { type: object } }
+                  activities: { type: array, items: { type: object } }
+                  summary: { $ref: "#/components/schemas/CampaignSummary" }
+                  pending: { $ref: "#/components/schemas/NotebookCompleteness" }
+            text/csv:
+              schema: { type: string }
+
   /campaigns/{campaignId}/completeness:
     get:
       tags: [campaigns]

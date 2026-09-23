@@ -15,6 +15,7 @@ import 'campaigns_screen.dart' show MensajeDeCampanas;
 import 'cerrar_campana.dart';
 import 'completeness_view.dart';
 import 'documents_screen.dart';
+import 'exportar_cuaderno.dart';
 import 'notebook_catalog_screen.dart';
 import 'notebook_wizard.dart';
 
@@ -208,6 +209,8 @@ class _MenuDeCampana extends ConsumerWidget {
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const NotebookCatalogScreen()),
             );
+          case 'exportar':
+            await exportarCuaderno(context, ref, campana);
           case 'documentos':
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => DocumentsScreen(campana: campana)),
@@ -219,6 +222,7 @@ class _MenuDeCampana extends ConsumerWidget {
           const PopupMenuItem(value: 'cuaderno', child: Text('Pasar a cuaderno completo')),
         if (permisos.puedeCrear && !cerrada && campana.resumen.esCompleta)
           const PopupMenuItem(value: 'cuestionario', child: Text('Cuestionario del cuaderno')),
+        const PopupMenuItem(value: 'exportar', child: Text('Exportar el cuaderno')),
         const PopupMenuItem(value: 'documentos', child: Text('Fotos y documentos')),
         const PopupMenuItem(value: 'catalogos', child: Text('Personas y equipos')),
         if (permisos.puedeCerrar && !cerrada)
