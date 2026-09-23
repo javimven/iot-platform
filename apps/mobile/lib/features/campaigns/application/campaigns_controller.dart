@@ -4,6 +4,7 @@ import '../../auth/application/auth_controller.dart';
 import '../data/activity_models.dart';
 import '../data/campaign_models.dart';
 import '../data/campaigns_api.dart';
+import '../data/document_models.dart';
 import '../data/notebook_models.dart';
 
 final campaignsApiProvider = Provider<CampaignsApi>(
@@ -61,6 +62,14 @@ final equiposDelCuadernoProvider = FutureProvider<List<EquipoCuaderno>>((ref) {
   return ref.watch(campaignsApiProvider).equipos();
 });
 
+/// Las fotos y documentos de la campaña, incluidos los de sus actividades. Una
+/// sola petición: la línea de tiempo marca con ella qué actividades llevan
+/// foto, sin pedir una lista por actividad.
+final documentosProvider =
+    FutureProvider.autoDispose.family<List<DocumentoDelCuaderno>, String>((ref, id) {
+  return ref.watch(campaignsApiProvider).documentos(id);
+});
+
 void refrescarCatalogos(WidgetRef ref) {
   ref.invalidate(personasDelCuadernoProvider);
   ref.invalidate(equiposDelCuadernoProvider);
@@ -73,6 +82,7 @@ void refrescarCampana(WidgetRef ref, String campaignId) {
   ref.invalidate(actividadesProvider(campaignId));
   ref.invalidate(resumenCampanaProvider(campaignId));
   ref.invalidate(revisionDelCuadernoProvider(campaignId));
+  ref.invalidate(documentosProvider(campaignId));
   ref.invalidate(campanasProvider);
 }
 

@@ -202,6 +202,7 @@ Los criterios:
 - **Borrar, solo el Admin de organización**, como las parcelas: borrar una campaña se lleva su cuaderno. Además, una campaña cerrada no se borra: primero hay que reabrirla, y la reapertura queda auditada con su motivo.
 - **Los catálogos del cuaderno** (personas y equipos, `/notebook/...`) se **eligen con `campaigns.read`** y se **mantienen con `campaigns.update`**: el Operador tiene que poder decir quién hizo el tratamiento, pero dar de alta a un aplicador con su número de ROPO es configurar la explotación. Su alcance es el del miembro: ve las entradas de sus fincas y las comunes (`installationId` nulo), y no puede tocar las de una finca fuera de su alcance.
 - **La revisión del cuaderno (`/completeness`) es lectura**, como el resumen: dice qué información falta, no cambia nada.
+- **Adjuntar una foto es registrar lo que se hace**, así que va con `campaigns.record` y lo tiene el Operador: quien está en el campo hace la foto del albarán en el momento, que es cuando se puede hacer. Verlas entra en `campaigns.read`. Quitarlas también es `campaigns.record`: quitar un adjunto no borra el fichero mientras siga en otro sitio del cuaderno, y todo queda en la auditoría.
 
 ## 15. Historial de decisiones de esta etapa
 

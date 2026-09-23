@@ -70,3 +70,31 @@ export function claveObjetoSatelite(datos: ClaveSatelite): string {
 export function prefijoParcela(organizationId: string, parcelId: string): string {
   return `satellite/${organizationId}/${parcelId}/`;
 }
+
+/**
+ * Clave de un documento del cuaderno (BACKLOG.md #60, fase 6):
+ *
+ *   documents/{organizationId}/{YYYY}/{MM}/{documentId}.{extensión}
+ *
+ * La organización primero, por lo mismo que en el satélite. Año y mes, porque
+ * un cuaderno se consulta por campaña y las campañas van por año. El nombre es
+ * el identificador del documento y **no el del fichero que subió el usuario**:
+ * ese puede traer acentos, barras o repetirse, y aquí no aporta nada — el
+ * nombre original se guarda en la base y es el que se ve al descargarlo.
+ */
+export function claveDocumento(datos: {
+  organizationId: string;
+  documentId: string;
+  extension: string;
+  subidoEl?: Date;
+}): string {
+  const fecha = datos.subidoEl ?? new Date();
+  const mes = String(fecha.getUTCMonth() + 1).padStart(2, '0');
+  return [
+    'documents',
+    datos.organizationId,
+    String(fecha.getUTCFullYear()),
+    mes,
+    `${datos.documentId}.${datos.extension}`,
+  ].join('/');
+}

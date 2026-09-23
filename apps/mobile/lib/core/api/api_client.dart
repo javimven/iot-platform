@@ -120,6 +120,24 @@ class ApiClient {
     await _guard(() => _dio.delete<dynamic>(path));
   }
 
+  /// Subida de un archivo (`multipart/form-data`): las fotos y documentos del
+  /// cuaderno. El archivo va en memoria y en el campo `file`, que es el que
+  /// espera el backend; el resto de campos viajan como texto, porque en un
+  /// `multipart` no hay tipos.
+  Future<Map<String, dynamic>> postArchivo(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+    Map<String, String> campos = const {},
+  }) async {
+    final formulario = FormData.fromMap({
+      ...campos,
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final response = await _guard(() => _dio.post<dynamic>(path, data: formulario));
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<Response<dynamic>> _guard(Future<Response<dynamic>> Function() request) async {
     try {
       return await request();

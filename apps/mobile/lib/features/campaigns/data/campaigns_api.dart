@@ -1,6 +1,7 @@
 import '../../../core/api/api_client.dart';
 import 'activity_models.dart';
 import 'campaign_models.dart';
+import 'document_models.dart';
 import 'notebook_models.dart';
 
 /// Campañas y cuaderno de campo (BACKLOG.md #60). Contrato en OPENAPI.yaml
@@ -120,4 +121,43 @@ class CampaignsApi {
       EquipoCuaderno.fromJson(await _client.patchJson('/notebook/equipment/$id', body: cuerpo));
 
   Future<void> borrarEquipo(String id) => _client.delete('/notebook/equipment/$id');
+
+  /// Los documentos de la campaña y los de sus actividades, de una vez: así la
+  /// línea de tiempo puede marcar cuáles llevan foto sin una petición por cada
+  /// actividad.
+  Future<List<DocumentoDelCuaderno>> documentos(String campaignId) async {
+    final lista = await _client.getJsonList('/campaigns/$campaignId/documents');
+    return lista.map((e) => DocumentoDelCuaderno.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<DocumentoDelCuaderno> adjuntar(
+    String campaignId, {
+    String? activityId,
+    required List<int> bytes,
+    required String filename,
+    String documentType = 'photo',
+    String? title,
+  }) async {
+    final ruta = activityId == null
+        ? '/campaigns/$campaignId/documents'
+        : '/campaigns/$campaignId/activities/$activityId/documents';
+    return DocumentoDelCuaderno.fromJson(
+      await _client.postArchivo(
+        ruta,
+        bytes: bytes,
+        filename: filename,
+        campos: {
+          'documentType': documentType,
+          if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        },
+      ),
+    );
+  }
+
+  Future<void> quitarDocumento(String campaignId, String documentId, {String? activityId}) {
+    final ruta = activityId == null
+        ? '/campaigns/$campaignId/documents/$documentId'
+        : '/campaigns/$campaignId/activities/$activityId/documents/$documentId';
+    return _client.delete(ruta);
+  }
 }

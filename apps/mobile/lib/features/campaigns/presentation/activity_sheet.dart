@@ -6,6 +6,7 @@ import '../application/campaigns_controller.dart';
 import '../data/activity_models.dart';
 import '../data/campaign_models.dart';
 import 'activity_form_screen.dart';
+import 'adjuntos.dart';
 import 'campaign_labels.dart';
 
 /// Una actividad al tocarla en la línea de tiempo: qué se hizo, dónde y con
@@ -77,6 +78,12 @@ class _HojaDeActividad extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text('Copiada de otra actividad', style: theme.textTheme.labelSmall),
                 ),
+              const SizedBox(height: 16),
+              Adjuntos(
+                campaignId: campana.id,
+                activityId: actividad.id,
+                sePuedeTocar: sePuedeTocar,
+              ),
               if (sePuedeTocar) ...[
                 const SizedBox(height: 16),
                 Row(

@@ -1057,6 +1057,119 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CampaignSummary" }
 
+  /campaigns/{campaignId}/documents:
+    get:
+      tags: [campaigns]
+      summary: Fotos y documentos de la campaña y de sus actividades (campaigns.read)
+      description: >
+        Todo de una vez, para que la línea de tiempo pueda marcar qué
+        actividades llevan foto sin una petición por cada una. Cada documento
+        viene con una **URL firmada que caduca** (15 minutos): no se guarda ni
+        se comparte, se vuelve a pedir la lista.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      responses:
+        "200":
+          description: Éxito
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/NotebookDocument" }
+    post:
+      tags: [campaigns]
+      summary: Adjunta una foto o un documento a la campaña (campaigns.record)
+      description: >
+        `multipart/form-data` con el archivo en el campo `file`. Máximo 15 MB.
+        **El tipo lo decide el contenido**, no el `Content-Type` que mande el
+        cliente: se admiten JPG, PNG, WEBP, HEIC y PDF. Un mismo fichero
+        (mismo SHA-256) no se guarda dos veces en la organización: se reutiliza
+        y solo se añade el vínculo. Una campaña cerrada no admite adjuntos.
+      parameters: [{ $ref: "#/components/parameters/PathId" }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                documentType:
+                  type: string
+                  default: photo
+                  enum: [photo, invoice, contract, inspection_certificate, container_management, analysis, advice, delivery_note, fertilization_plan, other]
+                title: { type: string, maxLength: 200 }
+      responses:
+        "201":
+          description: Adjuntado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookDocument" }
+        "400":
+          description: No llegó archivo, pasa de 15 MB o no es una foto ni un PDF
+        "409":
+          description: La campaña está cerrada
+
+  /campaigns/{campaignId}/documents/{documentId}:
+    delete:
+      tags: [campaigns]
+      summary: Quita el documento de la campaña (campaigns.record)
+      description: >
+        Quita el vínculo. Si el documento no queda en ningún otro sitio del
+        cuaderno, se da de baja; el objeto se conserva, que es lo que permite
+        auditar qué se subió.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { name: documentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204":
+          description: Quitado
+        "404":
+          description: Ese documento no estaba aquí
+
+  /campaigns/{campaignId}/activities/{activityId}/documents:
+    post:
+      tags: [campaigns]
+      summary: Adjunta una foto o un documento a una actividad (campaigns.record)
+      description: Igual que el de la campaña; la actividad tiene que ser de esa campaña.
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { name: activityId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                documentType:
+                  type: string
+                  default: photo
+                  enum: [photo, invoice, contract, inspection_certificate, container_management, analysis, advice, delivery_note, fertilization_plan, other]
+                title: { type: string, maxLength: 200 }
+      responses:
+        "201":
+          description: Adjuntado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotebookDocument" }
+        "400":
+          description: Archivo no admitido, o la actividad no es de esta campaña
+
+  /campaigns/{campaignId}/activities/{activityId}/documents/{documentId}:
+    delete:
+      tags: [campaigns]
+      summary: Quita el documento de la actividad (campaigns.record)
+      parameters:
+        - { $ref: "#/components/parameters/PathId" }
+        - { name: activityId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: documentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204":
+          description: Quitado
+
   /campaigns/{campaignId}/completeness:
     get:
       tags: [campaigns]
@@ -2210,6 +2323,24 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    NotebookDocument:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        documentType:
+          type: string
+          enum: [photo, invoice, contract, inspection_certificate, container_management, analysis, advice, delivery_note, fertilization_plan, other]
+        title: { type: string, nullable: true }
+        filename: { type: string, description: El nombre original, que es el que se ve al descargarlo }
+        mediaType: { type: string, example: image/jpeg, description: Detectado del contenido, no el declarado }
+        byteSize: { type: integer }
+        campaignId: { type: string, format: uuid }
+        activityId: { type: string, format: uuid, nullable: true, description: Nulo = cuelga de la campaña }
+        uploadedBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        url: { type: string, description: Enlace firmado y temporal; nunca se guarda }
+        urlExpiresAt: { type: string, format: date-time }
+
     NotebookPerson:
       type: object
       properties:

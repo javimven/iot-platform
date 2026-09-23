@@ -14,6 +14,7 @@ import 'campaign_summary_view.dart';
 import 'campaigns_screen.dart' show MensajeDeCampanas;
 import 'cerrar_campana.dart';
 import 'completeness_view.dart';
+import 'documents_screen.dart';
 import 'notebook_catalog_screen.dart';
 import 'notebook_wizard.dart';
 
@@ -207,6 +208,10 @@ class _MenuDeCampana extends ConsumerWidget {
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const NotebookCatalogScreen()),
             );
+          case 'documentos':
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => DocumentsScreen(campana: campana)),
+            );
         }
       },
       itemBuilder: (context) => [
@@ -214,6 +219,7 @@ class _MenuDeCampana extends ConsumerWidget {
           const PopupMenuItem(value: 'cuaderno', child: Text('Pasar a cuaderno completo')),
         if (permisos.puedeCrear && !cerrada && campana.resumen.esCompleta)
           const PopupMenuItem(value: 'cuestionario', child: Text('Cuestionario del cuaderno')),
+        const PopupMenuItem(value: 'documentos', child: Text('Fotos y documentos')),
         const PopupMenuItem(value: 'catalogos', child: Text('Personas y equipos')),
         if (permisos.puedeCerrar && !cerrada)
           const PopupMenuItem(value: 'cerrar', child: Text('Cerrar campaña')),
@@ -281,17 +287,24 @@ class _LineaDeTiempo extends ConsumerWidget {
   }
 }
 
-class _FilaDeActividad extends StatelessWidget {
+class _FilaDeActividad extends ConsumerWidget {
   const _FilaDeActividad({required this.actividad, required this.campana});
 
   final Actividad actividad;
   final Campana campana;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final detalle = resumenDeActividad(actividad);
     final parcelas = actividad.targets.map((d) => d.parcelName).join(', ');
+    // Los documentos de toda la campaña llegan en una sola petición (la
+    // comparten todas las filas), así que marcar cuáles llevan foto no cuesta
+    // una petición por actividad.
+    final adjuntos = ref.watch(documentosProvider(campana.id)).maybeWhen(
+          data: (lista) => lista.where((d) => d.activityId == actividad.id).length,
+          orElse: () => 0,
+        );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -332,6 +345,20 @@ class _FilaDeActividad extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall,
                     ),
+                  if (adjuntos > 0) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.attach_file,
+                            size: 14, color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                        Text(
+                          adjuntos == 1 ? '1 adjunto' : '$adjuntos adjuntos',
+                          style: theme.textTheme.labelSmall,
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

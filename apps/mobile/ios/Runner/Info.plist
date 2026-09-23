@@ -49,6 +49,10 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Para llevar el mapa a donde estás y encontrar tu parcela.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Para hacer la foto de un albarán, una etiqueta o lo que veas en la parcela y guardarla en el cuaderno.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Para adjuntar al cuaderno fotos que ya tengas en el carrete.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

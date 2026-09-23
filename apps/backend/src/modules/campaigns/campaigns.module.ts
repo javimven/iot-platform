@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { StorageService } from '../../common/storage/storage.service';
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
 import { CampaignAccess } from './campaign-access';
@@ -9,6 +10,8 @@ import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { CropUnitsService } from './crop-units.service';
 import { CropsController } from './crops.controller';
+import { DocumentsController } from './documents.controller';
+import { DocumentsService } from './documents.service';
 import { NotebookCompletenessService } from './notebook-completeness';
 import { NotebookController } from './notebook.controller';
 import { NotebookCatalogService } from './notebook.service';
@@ -19,7 +22,13 @@ import { NotebookCatalogService } from './notebook.service';
  * depender del módulo de satélite.
  */
 @Module({
-  controllers: [CampaignsController, ActivitiesController, CropsController, NotebookController],
+  controllers: [
+    CampaignsController,
+    ActivitiesController,
+    CropsController,
+    NotebookController,
+    DocumentsController,
+  ],
   providers: [
     PrismaService,
     AuditLogService,
@@ -30,6 +39,8 @@ import { NotebookCatalogService } from './notebook.service';
     CampaignSummaryService,
     NotebookCatalogService,
     NotebookCompletenessService,
+    StorageService,
+    DocumentsService,
   ],
   exports: [CampaignAccess, CampaignsService],
 })
