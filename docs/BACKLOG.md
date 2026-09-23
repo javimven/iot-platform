@@ -375,7 +375,8 @@ Tras terminar de aplicar el sistema de diseño a las pantallas ya existentes, el
   - La descarga en el navegador va con un `Blob` y no abriendo la URL, porque el token va en la cabecera. **Pendiente**: guardar o compartir el fichero desde el móvil; ahora la hoja lo dice en vez de fingir que se ha guardado.
   - **El controlador no estaba dado de alta en el módulo** y las pruebas del servicio pasaban igual: lo cazó el linter. Ahora hay una prueba que comprueba que la ruta existe en el módulo, no solo la clase.
   - `pdfkit` es la única dependencia nueva del backend; no añade ninguna vulnerabilidad al `npm audit` de producción.
-  - 14 pruebas unitarias, 5 de integración contra Postgres real y 6 de la app. 280 unitarias, 100 de integración y 212 de la app en verde.
+  - **Corregido al mirar el CSV generado (mismo día)**: la columna `detalle` y las unidades salían con los códigos en inglés (`fertilizer_product · broadcast`, `kg_ha`) en una hoja que se abre para leerla. Ahora pasan por las mismas etiquetas que el PDF, y hay una prueba que lo fija.
+  - 15 pruebas unitarias, 5 de integración contra Postgres real y 6 de la app. 280 unitarias, 100 de integración y 212 de la app en verde.
 
 ### 59. Satélite: parcelas con geometría real (fase 1 de #36)
 **En construcción (2026-09-21).** Primera pieza del módulo de teledetección: la entidad que faltaba para poder pedirle nada a Copernicus. Decisiones de producto cerradas con el usuario antes de empezar: la parcela cuelga de la **finca**; una parcela puede tener 0, 1 o varias estaciones y una estación pertenece como mucho a una parcela; el contorno se **dibuja a mano** en el mapa (nada de SIGPAC ni ficheros en la v1); de cada pasada se guardan **agregados y el ráster completo** en el bucket S3 ya aprovisionado; revisión **diaria** de si hay imagen nueva; **solo NDVI**; el módulo se cobra con el flag `satellite_imagery` que ya existía; sin alertas ni cruce con sensores en la v1.

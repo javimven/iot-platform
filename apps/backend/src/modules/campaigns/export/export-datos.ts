@@ -1,3 +1,12 @@
+import {
+  etiqueta,
+  MATERIALES_FERTILIZANTES,
+  METODOS_DE_APLICACION,
+  SISTEMAS_DE_RIEGO,
+  TIPOS_DE_ACTIVIDAD,
+  TIPOS_DE_LABOR,
+  UNIDADES,
+} from './etiquetas';
 import { ActividadExportada, CuadernoExportado } from './export-model';
 
 /**
@@ -33,17 +42,6 @@ const COLUMNAS = [
   'notas',
 ] as const;
 
-const TIPOS_EN_ESPANOL: Record<string, string> = {
-  irrigation: 'Riego',
-  fertilization: 'Fertilización',
-  phytosanitary: 'Tratamiento fitosanitario',
-  field_work: 'Labor agrícola',
-  harvest: 'Recolección',
-  observation: 'Observación',
-  sowing: 'Siembra o plantación',
-  other: 'Otra actividad',
-};
-
 function texto(valor: unknown): string {
   return valor === null || valor === undefined ? '' : String(valor);
 }
@@ -60,7 +58,7 @@ function filasDe(actividad: ActividadExportada): Array<Record<string, string>> {
     fecha_inicio: actividad.startDate,
     fecha_fin: actividad.endDate,
     hora: texto(actividad.startTime),
-    tipo: TIPOS_EN_ESPANOL[actividad.type] ?? actividad.type,
+    tipo: etiqueta(TIPOS_DE_ACTIVIDAD, actividad.type),
     cultivo: [...new Set(actividad.targets.map((d) => d.cropName))].join(' / '),
     parcelas: actividad.targets.map((d) => d.parcelName).join(' / '),
     superficie_ha: numero(Math.round(actividad.areaHa * 10000) / 10000),
@@ -74,8 +72,11 @@ function filasDe(actividad: ActividadExportada): Array<Record<string, string>> {
         {
           ...comun,
           cantidad: numero(d.amount),
-          unidad_cantidad: texto(d.amountUnit),
-          detalle: [texto(d.system), d.volumeM3 == null ? '' : `${numero(d.volumeM3)} m3 totales`]
+          unidad_cantidad: etiqueta(UNIDADES, d.amountUnit),
+          detalle: [
+            etiqueta(SISTEMAS_DE_RIEGO, d.system),
+            d.volumeM3 == null ? '' : `${numero(d.volumeM3)} m3 totales`,
+          ]
             .filter(Boolean)
             .join(' · '),
         },
@@ -93,8 +94,12 @@ function filasDe(actividad: ActividadExportada): Array<Record<string, string>> {
           ...comun,
           producto: texto(d.productName),
           dosis: numero(d.dose),
-          unidad_dosis: texto(d.doseUnit),
-          detalle: [texto(d.materialType), texto(d.applicationMethod), ...riqueza]
+          unidad_dosis: etiqueta(UNIDADES, d.doseUnit),
+          detalle: [
+            etiqueta(MATERIALES_FERTILIZANTES, d.materialType),
+            etiqueta(METODOS_DE_APLICACION, d.applicationMethod),
+            ...riqueza,
+          ]
             .filter(Boolean)
             .join(' · '),
         },
@@ -117,9 +122,9 @@ function filasDe(actividad: ActividadExportada): Array<Record<string, string>> {
         producto: texto(producto.productName),
         numero_registro: texto(producto.registryNumber),
         dosis: numero(producto.dose),
-        unidad_dosis: texto(producto.doseUnit),
+        unidad_dosis: etiqueta(UNIDADES, producto.doseUnit),
         cantidad: numero(producto.totalQuantity),
-        unidad_cantidad: texto(producto.totalQuantityUnit),
+        unidad_cantidad: etiqueta(UNIDADES, producto.totalQuantityUnit),
         detalle: contexto,
       }));
     }
@@ -130,7 +135,7 @@ function filasDe(actividad: ActividadExportada): Array<Record<string, string>> {
           ...comun,
           producto: texto(d.product),
           cantidad: numero(d.quantity),
-          unidad_cantidad: texto(d.quantityUnit),
+          unidad_cantidad: etiqueta(UNIDADES, d.quantityUnit),
           detalle: [texto(d.destination), texto(d.lotCode)].filter(Boolean).join(' · '),
         },
       ];
@@ -138,7 +143,12 @@ function filasDe(actividad: ActividadExportada): Array<Record<string, string>> {
     case 'field_work': {
       const d = actividad.fieldWork ?? {};
       return [
-        { ...comun, detalle: [texto(d.workType), texto(d.machinery)].filter(Boolean).join(' · ') },
+        {
+          ...comun,
+          detalle: [etiqueta(TIPOS_DE_LABOR, d.workType), texto(d.machinery)]
+            .filter(Boolean)
+            .join(' · '),
+        },
       ];
     }
     default:

@@ -181,6 +181,33 @@ describe('Cuaderno exportado', () => {
       expect(filaDeRiego).toContain('"Quincena con ""calor"""');
     });
 
+    it('lo lee una persona: nada de códigos en inglés ni unidades crudas', () => {
+      // La primera versión sacaba "fertilizer_product · broadcast" y "kg_ha"
+      // en una hoja que se abre en Excel para leerla.
+      const csv = aCsv(
+        cuaderno({
+          activities: [
+            {
+              ...cuaderno().activities[1],
+              type: 'fertilization',
+              irrigation: null,
+              fertilization: {
+                materialType: 'fertilizer_product',
+                applicationMethod: 'broadcast',
+                dose: 350,
+                doseUnit: 'kg_ha',
+              },
+            },
+          ],
+        }),
+      ).toString('utf8');
+
+      expect(csv).toContain('Producto fertilizante · A voleo');
+      expect(csv).toContain('kg/ha');
+      expect(csv).not.toContain('fertilizer_product');
+      expect(csv).not.toContain('kg_ha');
+    });
+
     it('lo que no aplica se queda vacío, nunca a cero', () => {
       const filaDeRiego = texto()
         .split('\r\n')
